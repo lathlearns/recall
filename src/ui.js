@@ -40,7 +40,7 @@ import {
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
 import { summarizeNow, regenerateSummary, previewRequest, RecallError, isGenerating } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
-import { isLegacyFallbackActive } from './legacy.js';
+import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import { listProfiles, getActiveProfile, describeTarget, isConnectionManagerAvailable } from './connection.js';
 import { previewContextBlocks } from './context-blocks.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
@@ -227,6 +227,7 @@ function wireManager({ onSummarize }) {
     });
 
     on('[data-recall="preview"]', 'click', showPreview);
+    on('[data-recall="view-legacy"]', 'click', showLegacySummary);
 
     on('[data-recall="error-dismiss"]', 'click', () => hideBanner('error'));
     on('[data-recall="notice-dismiss"]', 'click', () => hideBanner('notice'));
@@ -287,9 +288,19 @@ function hideBanner(kind) {
 }
 
 function renderAll() {
+    renderFallbackBanner();
     renderList();
     renderDetail();
     renderSettings();
+}
+
+/**
+ * The standing condition: something other than a Recall summary is reaching the
+ * prompt. Shown in both tabs, since the setting that governs it lives in one and
+ * the consequence shows in the other.
+ */
+function renderFallbackBanner() {
+    q('[data-recall="fallback-banner"]')?.toggleAttribute('hidden', !isLegacyFallbackActive());
 }
 
 // --- Master list ------------------------------------------------------------
@@ -624,6 +635,45 @@ async function doSync() {
     showBanner('notice', parts.length
         ? `Synced: ${parts.join(', ')} message${hidden.length + unhidden.length === 1 ? '' : 's'}.`
         : 'Nothing to sync.');
+}
+
+/**
+ * Shows the built-in's summary, read-only.
+ *
+ * It was visible before only by accident — the macro in the help text was
+ * expanding into it. Being able to read the text that is currently reaching the
+ * prompt is genuinely useful, so it is a deliberate action now. Read-only, because
+ * Recall does not write to `extra.memory` and an editable box would imply it does.
+ */
+async function showLegacySummary() {
+    const text = getLegacyMemory();
+    if (!text) {
+        showBanner('notice', 'There is no built-in summary in this chat.');
+        return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'recall-preview';
+    wrapper.innerHTML = `
+        <p class="recall-dim">
+            Left by the built-in Summarize, stored in this chat's file. Recall reads it and
+            never writes to it, so this is not editable here.
+        </p>
+        <div class="recall-editor-head">
+            <span class="recall-editor-label">Currently standing in for a Recall summary</span>
+            <i class="editor_maximize fa-solid fa-maximize right_menu_button"
+                data-for="recall_legacy_view" title="Expand the editor"></i>
+        </div>
+        <textarea id="recall_legacy_view" class="text_pole textarea_compact recall-preview-text"
+            rows="20" readonly></textarea>`;
+
+    wrapper.querySelector('#recall_legacy_view').value = text;
+
+    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', {
+        large: true,
+        wide: true,
+        allowVerticalScrolling: true,
+    }).show();
 }
 
 /**

@@ -54,6 +54,23 @@
         </div>
     </div>
 
+    <!--
+        Not dismissable, and not in the empty state's small print: which summary is
+        reaching the prompt is the single most consequential thing this panel knows,
+        and while it is someone else's summary that is a standing condition rather
+        than a note. It clears itself the moment a Recall summary exists.
+    -->
+    <div class="recall-banner recall-banner-warn" data-recall="fallback-banner" hidden>
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>
+            No Recall summary for this chat yet, so the one left by the built-in Summarize is
+            standing in. The first summary you generate will revise it rather than start over.
+        </span>
+        <div class="recall-banner-actions">
+            <div class="menu_button" data-recall="view-legacy">Read it</div>
+        </div>
+    </div>
+
     <!-- ============================ ARCHIVE ============================ -->
 
     <div class="recall-pane recall-pane-active" data-recall-pane="archive">
@@ -73,9 +90,7 @@
                         <b>Summarize now</b>.
                     </p>
                     <p class="recall-dim recall-empty-fallback" data-recall="empty-fallback" hidden>
-                        This chat has a summary left by the built-in Summarize.
-                        <b>&#123;&#123;recall&#125;&#125;</b> is resolving to it in the meantime, and the
-                        first summary you generate will revise it rather than start over.
+                        The banner above explains what is standing in for it in the meantime.
                     </p>
                 </div>
             </div>

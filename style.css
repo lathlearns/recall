@@ -298,6 +298,16 @@
 }
 
 /*
+ * With no summaries the list is literally empty, but it still claimed all the
+ * free space in the column — which pushed the empty state to the very bottom of a
+ * tall panel, where it read as a stray footnote rather than the thing the panel
+ * is currently saying.
+ */
+.recall-list:empty {
+    flex: 0 0 auto;
+}
+
+/*
  * Rows stay compact: a long chat with regeneration siblings accumulates entries,
  * and the list has to remain usable at forty.
  */
@@ -341,6 +351,7 @@
 }
 
 .recall-empty {
+    flex: 1 1 auto;
     padding: 1em 0.25em;
 }
 
