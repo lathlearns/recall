@@ -1,0 +1,291 @@
+<div class="recall-manager" data-recall-view="list">
+
+    <div class="recall-topbar">
+        <div class="recall-tabs">
+            <div class="recall-tab recall-tab-active" data-recall-tab="archive">Archive</div>
+            <div class="recall-tab" data-recall-tab="settings">
+                <i class="fa-solid fa-gear"></i>
+                <span>Settings</span>
+            </div>
+        </div>
+        <div class="recall-topbar-actions">
+            <div class="menu_button menu_button_icon recall-action-primary" data-recall="summarize-now">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Summarize now</span>
+            </div>
+        </div>
+    </div>
+
+    <!--
+        Errors are persistent and inline, not only toasts: generation can take a
+        while and the user may not be looking at the screen when it fails.
+    -->
+    <div class="recall-banner recall-banner-error" data-recall="error" hidden>
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span data-recall="error-text"></span>
+        <div class="recall-banner-dismiss" data-recall="error-dismiss" title="Dismiss">
+            <i class="fa-solid fa-xmark"></i>
+        </div>
+    </div>
+
+    <div class="recall-banner recall-banner-notice" data-recall="notice" hidden>
+        <i class="fa-solid fa-circle-info"></i>
+        <span data-recall="notice-text"></span>
+        <div class="recall-banner-dismiss" data-recall="notice-dismiss" title="Dismiss">
+            <i class="fa-solid fa-xmark"></i>
+        </div>
+    </div>
+
+    <!-- ============================ ARCHIVE ============================ -->
+
+    <div class="recall-pane recall-pane-active" data-recall-pane="archive">
+        <div class="recall-split">
+
+            <div class="recall-master">
+                <div class="recall-master-head">
+                    <span class="recall-master-title">Summaries</span>
+                    <span class="recall-dim" data-recall="summary-count"></span>
+                </div>
+                <div class="recall-list" data-recall="list"></div>
+                <div class="recall-empty" data-recall="empty" hidden>
+                    <p class="recall-empty-title">No summaries yet.</p>
+                    <p class="recall-dim">
+                        Recall summarises everything currently visible in this chat.
+                        Hide the messages you want left out, then press
+                        <b>Summarize now</b>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="recall-detail" data-recall="detail">
+                <div class="recall-detail-placeholder" data-recall="detail-placeholder">
+                    <p class="recall-dim">Select a summary to read or edit it.</p>
+                </div>
+
+                <div class="recall-detail-body" data-recall="detail-body" hidden>
+
+                    <div class="recall-detail-head">
+                        <div class="recall-back" data-recall="back" title="Back to the list">
+                            <i class="fa-solid fa-chevron-left"></i>
+                            <span>Summaries</span>
+                        </div>
+                        <input class="text_pole recall-name-input" data-recall="detail-name" placeholder="Summary name">
+                    </div>
+
+                    <div class="recall-badges" data-recall="detail-badges"></div>
+
+                    <div class="recall-meta" data-recall="detail-meta"></div>
+
+                    <div class="recall-banner recall-banner-warn" data-recall="stale-banner" hidden>
+                        <i class="fa-solid fa-link-slash"></i>
+                        <span>
+                            The message this summary was anchored to was edited or deleted, so its
+                            coverage range can no longer be trusted.
+                        </span>
+                        <div class="recall-banner-actions">
+                            <div class="menu_button" data-recall="reanchor">Re-anchor…</div>
+                            <div class="menu_button recall-action-destructive" data-recall="delete-stale">Delete</div>
+                        </div>
+                    </div>
+
+                    <div class="recall-banner recall-banner-warn" data-recall="mismatch-banner" hidden>
+                        <i class="fa-solid fa-eye-slash"></i>
+                        <span data-recall="mismatch-text"></span>
+                        <div class="recall-banner-actions">
+                            <div class="menu_button" data-recall="sync">Sync chat to this summary</div>
+                        </div>
+                    </div>
+
+                    <div class="recall-banner recall-banner-info" data-recall="redo-banner" hidden>
+                        <i class="fa-solid fa-code-branch"></i>
+                        <span>
+                            Every later summary was built on top of this one, so redoing it will not
+                            retroactively improve them.
+                        </span>
+                    </div>
+
+                    <textarea class="text_pole textarea_compact recall-content" data-recall="detail-content" rows="16"
+                        placeholder="Summary text"></textarea>
+
+                    <div class="recall-dirty" data-recall="detail-dirty" hidden>
+                        <span class="recall-dirty-label">Unsaved changes</span>
+                        <div class="menu_button recall-action-secondary" data-recall="detail-save">Save</div>
+                        <div class="menu_button" data-recall="detail-revert">Revert</div>
+                    </div>
+
+                    <div class="recall-detail-actions">
+                        <div class="menu_button menu_button_icon" data-recall="make-active">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span>Make active</span>
+                        </div>
+                        <div class="menu_button menu_button_icon recall-action-secondary" data-recall="regenerate">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>Regenerate</span>
+                        </div>
+                        <div class="menu_button menu_button_icon recall-action-destructive" data-recall="delete">
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>Delete</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================ SETTINGS ============================ -->
+
+    <div class="recall-pane" data-recall-pane="settings" hidden>
+        <div class="recall-settings">
+
+            <section class="recall-section">
+                <h4 class="recall-section-title">Workflow</h4>
+
+                <label class="checkbox_label recall-row">
+                    <input type="checkbox" data-recall="auto-hide">
+                    <span>Hide covered messages after summarizing</span>
+                </label>
+
+                <div class="recall-row recall-row-field">
+                    <label for="recall-tail-pin">Keep the newest</label>
+                    <input id="recall-tail-pin" class="text_pole recall-number" type="number" min="0" max="200"
+                        data-recall="tail-pin">
+                    <label for="recall-tail-pin">messages visible</label>
+                </div>
+                <p class="recall-help">
+                    Message&nbsp;0 is never hidden, whatever this is set to. The pinned tail keeps the
+                    chat from going blank the moment a summary is generated, and leaves the model some
+                    verbatim recent context.
+                </p>
+
+                <label class="checkbox_label recall-row">
+                    <input type="checkbox" data-recall="blocking">
+                    <span>Block sending while a summary generates</span>
+                </label>
+            </section>
+
+            <section class="recall-section">
+                <h4 class="recall-section-title">Context nudge</h4>
+
+                <label class="checkbox_label recall-row">
+                    <input type="checkbox" data-recall="nudge-enabled">
+                    <span>Warn me when context is filling up</span>
+                </label>
+
+                <div class="recall-row recall-row-field">
+                    <label for="recall-nudge-threshold">Threshold</label>
+                    <input id="recall-nudge-threshold" class="text_pole recall-number" type="number" min="0" step="500"
+                        data-recall="nudge-threshold">
+                    <span class="recall-dim" data-recall="nudge-threshold-hint"></span>
+                </div>
+                <p class="recall-help">
+                    In tokens, measured against the last prompt actually sent. Leave at 0 to track 80% of
+                    the current context limit. Fires once per crossing, then stays quiet until a summary
+                    brings usage back down.
+                </p>
+            </section>
+
+            <section class="recall-section">
+                <div class="recall-section-head">
+                    <h4 class="recall-section-title">Summary prompt</h4>
+                    <span class="recall-badge" data-recall="prompt-scope"></span>
+                </div>
+
+                <div class="recall-banner recall-banner-warn" data-recall="oos-banner" hidden>
+                    <i class="fa-solid fa-code-compare"></i>
+                    <span>
+                        The global prompt has changed since this character's copy was taken.
+                    </span>
+                    <div class="recall-banner-actions">
+                        <div class="menu_button" data-recall="resync-override">Take the global copy again</div>
+                    </div>
+                </div>
+
+                <div class="recall-blocks" data-recall="blocks"></div>
+
+                <div class="recall-row recall-blocks-actions">
+                    <div class="menu_button menu_button_icon" data-recall="add-block">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Add block</span>
+                    </div>
+                    <div class="menu_button" data-recall="restore-defaults">Restore defaults</div>
+                </div>
+
+                <div class="recall-dirty" data-recall="blocks-dirty" hidden>
+                    <span class="recall-dirty-label">Unsaved changes to the prompt</span>
+                    <div class="menu_button recall-action-secondary" data-recall="blocks-save">Save</div>
+                    <div class="menu_button" data-recall="blocks-discard">Discard</div>
+                </div>
+
+                <div class="recall-row recall-override-row">
+                    <div class="menu_button" data-recall="toggle-override"></div>
+                    <span class="recall-help recall-inline-help" data-recall="override-help"></span>
+                </div>
+            </section>
+
+            <section class="recall-section">
+                <div class="recall-section-head recall-advanced-toggle" data-recall="advanced-toggle">
+                    <h4 class="recall-section-title">Advanced</h4>
+                    <i class="fa-solid fa-circle-chevron-down"></i>
+                </div>
+
+                <div class="recall-advanced" data-recall="advanced" hidden>
+
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-response-reserve">Response reserve</label>
+                        <input id="recall-response-reserve" class="text_pole recall-number" type="number" min="0"
+                            step="100" data-recall="response-reserve">
+                    </div>
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-output-budget">Output budget</label>
+                        <input id="recall-output-budget" class="text_pole recall-number" type="number" min="0"
+                            step="500" data-recall="output-budget">
+                    </div>
+                    <p class="recall-help">
+                        Two settings, because one number cannot do both jobs. The <b>reserve</b> is how much
+                        context room to hold back when budgeting the buffer — set it high and summarization
+                        starts refusing chats it could handle. The <b>output budget</b> is the generation
+                        limit sent to the API. On OpenAI-compatible sources that budget covers reasoning and
+                        visible output together, which makes it the only thing stopping a model that thinks
+                        without end; on Claude sources at high reasoning effort, a low budget starves the
+                        summary instead.
+                    </p>
+
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-framing-prefix">Framing prefix</label>
+                        <input id="recall-framing-prefix" class="text_pole" type="text" data-recall="framing-prefix">
+                    </div>
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-framing-suffix">Framing suffix</label>
+                        <input id="recall-framing-suffix" class="text_pole" type="text" data-recall="framing-suffix">
+                    </div>
+                    <p class="recall-help">
+                        Wraps the previous summary in the buffer. The prompt branches on whether this block
+                        is empty, so it is always emitted — an empty one included. Match whatever your preset
+                        uses.
+                    </p>
+
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-min-response">Minimum summary length</label>
+                        <input id="recall-min-response" class="text_pole recall-number" type="number" min="0" step="50"
+                            data-recall="min-response">
+                        <span class="recall-dim">characters</span>
+                    </div>
+                    <p class="recall-help">
+                        Anything shorter is treated as a generation failure rather than saved as a stub.
+                    </p>
+
+                    <label class="checkbox_label recall-row">
+                        <input type="checkbox" data-recall="deep-integrity">
+                        <span>Deep integrity check</span>
+                    </label>
+                    <p class="recall-help">
+                        Also hashes the whole covered range, catching edits below a summary's anchor. Off by
+                        default: it flags on any edit anywhere in history, which is noisy in normal use.
+                    </p>
+                </div>
+            </section>
+
+        </div>
+    </div>
+</div>

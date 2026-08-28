@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Editor and OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and scratch
+*.log
+npm-debug.log*
+.cache/
+tmp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# Anything resembling a credential never belongs in this repo
+.env
+.env.*
+*.pem
+*.key
+*_token
+*_token.txt

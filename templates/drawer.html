@@ -1,0 +1,44 @@
+<div id="recall_drawer" class="recall-drawer">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <div class="flex-container alignitemscenter margin0">
+                <b>Recall</b>
+            </div>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+
+        <div class="inline-drawer-content">
+            <!--
+                A thin status strip and launcher. It earns its space by being the
+                at-a-glance view available without opening anything.
+            -->
+            <div class="recall-strip">
+                <div class="recall-strip-row">
+                    <span class="recall-strip-label">Active</span>
+                    <span class="recall-strip-value" data-recall="active-name">None</span>
+                </div>
+                <div class="recall-strip-row">
+                    <span class="recall-strip-label">Covers</span>
+                    <span class="recall-strip-value recall-dim" data-recall="active-coverage">—</span>
+                </div>
+                <div class="recall-strip-row">
+                    <span class="recall-strip-label">Context</span>
+                    <span class="recall-strip-value recall-dim" data-recall="context-usage">—</span>
+                </div>
+            </div>
+
+            <div class="recall-strip-notice" data-recall="strip-notice" hidden></div>
+
+            <div class="recall-strip-actions">
+                <div class="menu_button menu_button_icon recall-action-primary" data-recall="summarize-now" title="Summarize the currently visible chat.">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Summarize now</span>
+                </div>
+                <div class="menu_button menu_button_icon" data-recall="open-manager" title="Open the Recall manager.">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span>Open manager</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

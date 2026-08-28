@@ -1,0 +1,348 @@
+/**
+ * Recall — global settings, block library, per-character overrides.
+ *
+ * Everything in this file lives in `extension_settings[MODULE]`, which is global
+ * and shared across every chat. Per-chat data (summaries, the active pointer,
+ * hide records) lives in `chat_metadata` and belongs to store.js.
+ *
+ * Prompt configuration is global by default: the summary prompt describes *how to
+ * summarise a roleplay*, which is universal in practice. A character may override
+ * it, and doing so takes an owned copy of the blocks and stops tracking the
+ * global set.
+ */
+
+import { extension_settings, saveMetadataDebounced } from '../../../../extensions.js';
+import { characters, this_chid, saveSettingsDebounced } from '../../../../../script.js';
+import { DEFAULT_BLOCKS, DEFAULT_SET_NAME } from './default-prompt.js';
+import { uuid } from './util.js';
+
+export const MODULE = 'recall';
+
+/**
+ * The fraction of the context limit used as the nudge threshold when the user
+ * has not set one explicitly. Stored thresholds of 0 mean "derive it".
+ */
+export const AUTO_NUDGE_FRACTION = 0.8;
+
+/**
+ * @typedef {object} RecallBlock
+ * @property {string} id
+ * @property {string} name        User-facing label.
+ * @property {string} content     The actual prompt text.
+ * @property {boolean} enabled
+ */
+
+/**
+ * @typedef {object} RecallBlockSet
+ * @property {string} name
+ * @property {RecallBlock[]} blocks
+ * @property {number} updatedAt   Bumped on every save; overrides compare against it.
+ */
+
+/**
+ * @typedef {object} RecallCharacterConfig
+ * @property {'global'|'override'} mode
+ * @property {RecallBlock[]} blocks       Owned copy. Only meaningful when overriding.
+ * @property {string} basedOnSet          Which set the copy was taken from.
+ * @property {number} basedOnUpdatedAt    That set's updatedAt at copy time.
+ */
+
+function freshDefaultSet() {
+    return {
+        name: DEFAULT_SET_NAME,
+        blocks: structuredClone(DEFAULT_BLOCKS),
+        updatedAt: Date.now(),
+    };
+}
+
+const DEFAULT_SETTINGS = {
+    /** Bumped when the stored shape changes, so migrations have something to read. */
+    schemaVersion: 1,
+
+    library: {
+        activeSetName: DEFAULT_SET_NAME,
+        /** @type {Record<string, RecallBlockSet>} */
+        sets: {},
+    },
+
+    /** @type {Record<string, RecallCharacterConfig>} */
+    characters: {},
+
+    // --- Generation ---
+
+    /**
+     * Context room held back when budgeting the buffer. Passed to
+     * getMaxPromptTokens(). This is NOT the generation limit — see outputBudget.
+     */
+    responseReserve: 2000,
+
+    /**
+     * The generation limit sent to the API, via generateRawData({ responseLength }).
+     * On OpenAI-compatible sources this covers reasoning *and* visible output, so it
+     * doubles as the killswitch for a model that thinks without end.
+     */
+    outputBudget: 15000,
+
+    /** Deactivate send buttons while a summary generates. */
+    blocking: true,
+
+    /** Framing around the previous summary in the buffer. Must survive being empty. */
+    framingPrefix: '[Summary: ',
+    framingSuffix: ']',
+
+    /** Responses shorter than this after reasoning is stripped are a failure, not a summary. */
+    minResponseChars: 200,
+
+    // --- Hiding ---
+
+    /** Hide the covered range after a successful summary. */
+    autoHide: true,
+
+    /** How many of the newest messages auto-hide always skips. Message 0 is always skipped. */
+    tailPin: 5,
+
+    // --- Nudge ---
+
+    nudgeEnabled: true,
+
+    /** In tokens. 0 means "derive from the context limit" — see AUTO_NUDGE_FRACTION. */
+    nudgeThreshold: 0,
+
+    // --- Advanced ---
+
+    /**
+     * Also hash the whole covered range, catching edits below the anchor. Off by
+     * default: it flags on any edit anywhere in history, which is noisy in normal use.
+     */
+    deepIntegrityCheck: false,
+};
+
+/**
+ * Ensures `extension_settings[MODULE]` exists and has every key we expect.
+ * Safe to call repeatedly.
+ * @returns {typeof DEFAULT_SETTINGS}
+ */
+export function getSettings() {
+    if (!extension_settings[MODULE]) {
+        extension_settings[MODULE] = {};
+    }
+
+    const settings = extension_settings[MODULE];
+
+    for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+        if (settings[key] === undefined) {
+            settings[key] = structuredClone(value);
+        }
+    }
+
+    // Nested defaults that structuredClone above would not repair on a partial object.
+    if (!settings.library || typeof settings.library !== 'object') {
+        settings.library = structuredClone(DEFAULT_SETTINGS.library);
+    }
+    if (!settings.library.sets || typeof settings.library.sets !== 'object') {
+        settings.library.sets = {};
+    }
+    if (!settings.characters || typeof settings.characters !== 'object') {
+        settings.characters = {};
+    }
+
+    // Seed the default set on first run.
+    if (!Object.keys(settings.library.sets).length) {
+        settings.library.sets[DEFAULT_SET_NAME] = freshDefaultSet();
+        settings.library.activeSetName = DEFAULT_SET_NAME;
+    }
+
+    // A missing or dangling active pointer falls back to whatever set exists.
+    if (!settings.library.sets[settings.library.activeSetName]) {
+        settings.library.activeSetName = Object.keys(settings.library.sets)[0];
+    }
+
+    return settings;
+}
+
+export function saveSettings() {
+    saveSettingsDebounced();
+}
+
+/**
+ * The avatar filename of the current character, or null in a group chat / no chat.
+ * Per-character config is keyed on this, so changing a character's image orphans
+ * its override — the character then falls back to the global set, which is almost
+ * always the right prompt anyway.
+ * @returns {string|null}
+ */
+export function getAvatarKey() {
+    if (this_chid === undefined || this_chid === null) {
+        return null;
+    }
+    return characters[this_chid]?.avatar ?? null;
+}
+
+/**
+ * @returns {RecallBlockSet} The globally active block set.
+ */
+export function getActiveSet() {
+    const settings = getSettings();
+    return settings.library.sets[settings.library.activeSetName];
+}
+
+/**
+ * @returns {RecallCharacterConfig|null} The current character's config, if any.
+ */
+export function getCharacterConfig() {
+    const key = getAvatarKey();
+    if (!key) {
+        return null;
+    }
+    return getSettings().characters[key] ?? null;
+}
+
+/**
+ * Whether the current character overrides the global set.
+ * Group chats have no avatar key and therefore always use the global set — that is
+ * the answer, not a fallback.
+ */
+export function isOverriding() {
+    return getCharacterConfig()?.mode === 'override';
+}
+
+/**
+ * The blocks that will actually be assembled for the current chat, plus enough
+ * context for the UI and for a summary's `generatedWith` record.
+ * @returns {{ blocks: RecallBlock[], setName: string, isOverride: boolean, outOfSync: boolean }}
+ */
+export function resolveBlocks() {
+    const config = getCharacterConfig();
+    const activeSet = getActiveSet();
+
+    if (config?.mode === 'override') {
+        const source = getSettings().library.sets[config.basedOnSet];
+        return {
+            blocks: config.blocks ?? [],
+            setName: config.basedOnSet,
+            isOverride: true,
+            // Quiet marker only. Never prompts, never merges.
+            outOfSync: !!source && source.updatedAt !== config.basedOnUpdatedAt,
+        };
+    }
+
+    return {
+        blocks: activeSet?.blocks ?? [],
+        setName: activeSet?.name ?? '',
+        isOverride: false,
+        outOfSync: false,
+    };
+}
+
+/**
+ * Joins the enabled blocks in order. This becomes the `systemPrompt` for generation.
+ * @returns {string}
+ */
+export function assemblePrompt() {
+    return resolveBlocks().blocks
+        .filter(block => block.enabled)
+        .map(block => block.content)
+        .join('\n\n');
+}
+
+/**
+ * Saves edited blocks back to the global set, bumping updatedAt so that any
+ * character overriding this set starts showing an out-of-sync marker.
+ * @param {RecallBlock[]} blocks
+ */
+export function saveGlobalBlocks(blocks) {
+    const set = getActiveSet();
+    set.blocks = structuredClone(blocks);
+    set.updatedAt = Date.now();
+    saveSettings();
+}
+
+/**
+ * Turns the current character into an overrider, taking an owned copy of the
+ * blocks it is currently resolving to.
+ */
+export function startOverride() {
+    const key = getAvatarKey();
+    if (!key) {
+        return false;
+    }
+
+    const set = getActiveSet();
+    getSettings().characters[key] = {
+        mode: 'override',
+        blocks: structuredClone(set.blocks),
+        basedOnSet: set.name,
+        basedOnUpdatedAt: set.updatedAt,
+    };
+    saveSettings();
+    return true;
+}
+
+/**
+ * Drops the current character's override. The owned copy is discarded, so this is
+ * destructive and belongs behind a confirm.
+ */
+export function endOverride() {
+    const key = getAvatarKey();
+    if (!key) {
+        return false;
+    }
+    delete getSettings().characters[key];
+    saveSettings();
+    return true;
+}
+
+/**
+ * Saves edited blocks to the current character's override.
+ * @param {RecallBlock[]} blocks
+ */
+export function saveOverrideBlocks(blocks) {
+    const key = getAvatarKey();
+    const config = key ? getSettings().characters[key] : null;
+    if (!config || config.mode !== 'override') {
+        return false;
+    }
+    config.blocks = structuredClone(blocks);
+    saveSettings();
+    return true;
+}
+
+/**
+ * Re-copies the global set over this character's override, clearing the
+ * out-of-sync marker and discarding the character's own edits.
+ */
+export function resyncOverride() {
+    const key = getAvatarKey();
+    const config = key ? getSettings().characters[key] : null;
+    if (!config || config.mode !== 'override') {
+        return false;
+    }
+    const set = getActiveSet();
+    config.blocks = structuredClone(set.blocks);
+    config.basedOnSet = set.name;
+    config.basedOnUpdatedAt = set.updatedAt;
+    saveSettings();
+    return true;
+}
+
+/**
+ * Restores the shipped default blocks into the global set.
+ */
+export function restoreDefaultBlocks() {
+    const set = getActiveSet();
+    set.blocks = structuredClone(DEFAULT_BLOCKS);
+    set.updatedAt = Date.now();
+    saveSettings();
+}
+
+/** @returns {RecallBlock} A blank block, ready to be inserted and edited. */
+export function makeEmptyBlock() {
+    return {
+        id: uuid(),
+        name: 'New block',
+        content: '',
+        enabled: true,
+    };
+}
+
+export { saveMetadataDebounced };

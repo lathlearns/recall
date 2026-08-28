@@ -1,0 +1,634 @@
+/*
+ * Recall — styles.
+ *
+ * Every colour goes through one of SillyTavern's theme custom properties, so the
+ * extension inherits the user's theme and keeps matching when it changes. Nothing
+ * here hardcodes a colour value.
+ *
+ * Density: more breathing room and clearer grouping than the built-in Summarize,
+ * which loses legibility by cramming a manager, an editor and a settings block
+ * into one narrow accordion column.
+ */
+
+/* ========================================================================== */
+/* Shared                                                                     */
+/* ========================================================================== */
+
+.recall-dim {
+    color: var(--SmartThemeEmColor);
+    opacity: 0.85;
+}
+
+.recall-badge {
+    display: inline-block;
+    padding: 0.1em 0.5em;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 0.75em;
+    font-size: calc(var(--mainFontSize) * 0.8);
+    line-height: 1.6;
+    color: var(--SmartThemeEmColor);
+    white-space: nowrap;
+}
+
+.recall-badge-active {
+    color: var(--SmartThemeQuoteColor);
+    border-color: var(--SmartThemeQuoteColor);
+}
+
+.recall-badge-warn {
+    border-style: dashed;
+}
+
+/*
+ * Destructive actions. ST has no dedicated danger token, but it does define
+ * --crimson70a for its own .redWarningBG, so this reuses that rather than
+ * inventing a red. Restrained by default, unmistakable on hover, and always
+ * behind a confirm step.
+ */
+.recall-action-destructive {
+    opacity: 0.75;
+}
+
+.recall-action-destructive:hover {
+    opacity: 1;
+    background-color: var(--crimson70a);
+}
+
+.recall-action-primary {
+    border-color: var(--SmartThemeQuoteColor);
+    color: var(--SmartThemeQuoteColor);
+}
+
+.recall-action-secondary {
+    border-color: var(--SmartThemeQuoteColor);
+}
+
+.menu_button.disabled,
+.menu_button[disabled] {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+/* ========================================================================== */
+/* Drawer strip                                                               */
+/* ========================================================================== */
+
+.recall-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+    padding: 0.5em 0;
+}
+
+.recall-strip-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75em;
+}
+
+.recall-strip-label {
+    flex: 0 0 4.5em;
+    color: var(--SmartThemeEmColor);
+    font-size: calc(var(--mainFontSize) * 0.9);
+}
+
+.recall-strip-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recall-strip-notice {
+    margin: 0.5em 0;
+    padding: 0.5em 0.75em;
+    border-left: 2px solid var(--SmartThemeQuoteColor);
+    background-color: var(--black30a);
+    font-size: calc(var(--mainFontSize) * 0.9);
+    color: var(--SmartThemeEmColor);
+}
+
+.recall-strip-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    margin-top: 0.5em;
+}
+
+/* ========================================================================== */
+/* Manager shell                                                              */
+/* ========================================================================== */
+
+.recall-manager {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75em;
+    height: 100%;
+    /*
+     * The popup body does not always stretch its content, and a master–detail
+     * layout with no height collapses to nothing. This floor guarantees both
+     * panes get a real scroll area whether or not the parent cooperates.
+     */
+    min-height: min(70vh, 40em);
+    text-align: left;
+    color: var(--SmartThemeBodyColor);
+}
+
+.recall-topbar-actions {
+    display: flex;
+    gap: 0.5em;
+    flex-wrap: wrap;
+}
+
+.recall-detail-placeholder {
+    padding: 1.5em 0.5em;
+}
+
+.recall-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    flex-wrap: wrap;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.recall-tabs {
+    display: flex;
+    gap: 0.25em;
+}
+
+.recall-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.4em 0.9em;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    color: var(--SmartThemeEmColor);
+    user-select: none;
+}
+
+.recall-tab:hover {
+    color: var(--SmartThemeBodyColor);
+}
+
+.recall-tab-active {
+    color: var(--SmartThemeBodyColor);
+    border-bottom-color: var(--SmartThemeQuoteColor);
+}
+
+.recall-pane {
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.recall-pane-active {
+    display: block;
+}
+
+/* --- Banners ------------------------------------------------------------- */
+
+.recall-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6em;
+    flex-wrap: wrap;
+    padding: 0.6em 0.8em;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-left-width: 3px;
+    border-radius: 4px;
+    background-color: var(--black30a);
+    font-size: calc(var(--mainFontSize) * 0.92);
+}
+
+.recall-banner > span {
+    flex: 1 1 14em;
+    min-width: 0;
+}
+
+.recall-banner-error {
+    border-left-color: var(--crimson70a);
+}
+
+.recall-banner-warn {
+    border-left-color: var(--SmartThemeQuoteColor);
+}
+
+.recall-banner-notice,
+.recall-banner-info {
+    border-left-color: var(--SmartThemeUnderlineColor);
+    color: var(--SmartThemeEmColor);
+}
+
+.recall-banner-actions {
+    display: flex;
+    gap: 0.4em;
+    flex-wrap: wrap;
+}
+
+.recall-banner-dismiss {
+    cursor: pointer;
+    opacity: 0.6;
+    padding: 0 0.2em;
+}
+
+.recall-banner-dismiss:hover {
+    opacity: 1;
+}
+
+/* ========================================================================== */
+/* Archive: master–detail                                                     */
+/* ========================================================================== */
+
+.recall-split {
+    display: flex;
+    gap: 1em;
+    height: 100%;
+    min-height: 0;
+}
+
+.recall-master {
+    flex: 0 0 17em;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--SmartThemeBorderColor);
+    padding-right: 1em;
+}
+
+.recall-master-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5em;
+    padding-bottom: 0.5em;
+}
+
+.recall-master-title {
+    font-weight: bold;
+}
+
+.recall-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+}
+
+/*
+ * Rows stay compact: a long chat with regeneration siblings accumulates entries,
+ * and the list has to remain usable at forty.
+ */
+.recall-row-item {
+    padding: 0.45em 0.6em;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.recall-row-item:hover {
+    border-color: var(--SmartThemeBorderColor);
+}
+
+.recall-row-selected {
+    border-color: var(--SmartThemeQuoteColor);
+    background-color: var(--black30a);
+}
+
+.recall-row-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5em;
+}
+
+.recall-row-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recall-row-badges {
+    display: flex;
+    gap: 0.25em;
+    flex: 0 0 auto;
+}
+
+.recall-row-sub {
+    font-size: calc(var(--mainFontSize) * 0.85);
+}
+
+.recall-empty {
+    padding: 1em 0.25em;
+}
+
+.recall-empty-title {
+    margin: 0 0 0.4em;
+    font-weight: bold;
+}
+
+/* --- Detail -------------------------------------------------------------- */
+
+.recall-detail {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75em;
+}
+
+.recall-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75em;
+}
+
+.recall-detail-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.recall-name-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.recall-back {
+    display: none;
+    align-items: center;
+    gap: 0.3em;
+    cursor: pointer;
+    color: var(--SmartThemeQuoteColor);
+    white-space: nowrap;
+}
+
+.recall-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3em;
+}
+
+.recall-badges:empty {
+    display: none;
+}
+
+.recall-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13em, 1fr));
+    gap: 0.2em 1em;
+    font-size: calc(var(--mainFontSize) * 0.88);
+}
+
+.recall-meta-row {
+    display: flex;
+    gap: 0.5em;
+}
+
+.recall-meta-label {
+    flex: 0 0 8em;
+    color: var(--SmartThemeEmColor);
+}
+
+.recall-meta-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.recall-content {
+    width: 100%;
+    min-height: 14em;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.recall-dirty {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    flex-wrap: wrap;
+    padding: 0.4em 0.6em;
+    border: 1px dashed var(--SmartThemeQuoteColor);
+    border-radius: 4px;
+}
+
+.recall-dirty-label {
+    flex: 1 1 auto;
+    color: var(--SmartThemeQuoteColor);
+    font-size: calc(var(--mainFontSize) * 0.9);
+}
+
+.recall-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    padding-top: 0.25em;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+}
+
+/* ========================================================================== */
+/* Settings                                                                   */
+/* ========================================================================== */
+
+.recall-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25em;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25em;
+}
+
+.recall-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.recall-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.recall-section-title {
+    margin: 0;
+    font-size: calc(var(--mainFontSize) * 1.05);
+}
+
+.recall-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75em;
+}
+
+.recall-advanced-toggle {
+    cursor: pointer;
+    user-select: none;
+}
+
+.recall-advanced-toggle i {
+    transition: transform 0.15s ease;
+}
+
+.recall-advanced-toggle.recall-open i {
+    transform: rotate(180deg);
+}
+
+.recall-advanced {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    padding-top: 0.5em;
+}
+
+.recall-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    flex-wrap: wrap;
+    margin: 0;
+}
+
+.recall-row-field label {
+    color: var(--SmartThemeEmColor);
+}
+
+.recall-number {
+    width: 8em;
+    flex: 0 0 auto;
+}
+
+/*
+ * Progressive disclosure: every control is kept. Help text explains the ones with
+ * consequences that are not obvious from the label.
+ */
+.recall-help {
+    margin: 0;
+    font-size: calc(var(--mainFontSize) * 0.85);
+    color: var(--SmartThemeEmColor);
+    line-height: 1.5;
+}
+
+.recall-inline-help {
+    flex: 1 1 14em;
+}
+
+/* --- Prompt blocks ------------------------------------------------------- */
+
+.recall-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+}
+
+.recall-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    padding: 0.6em;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+}
+
+.recall-block-off {
+    opacity: 0.55;
+}
+
+.recall-block-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.recall-block-enable {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.recall-block-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.recall-block-buttons {
+    display: flex;
+    gap: 0.25em;
+    flex: 0 0 auto;
+}
+
+.recall-block-summary {
+    font-size: calc(var(--mainFontSize) * 0.85);
+    line-height: 1.4;
+}
+
+.recall-block-content {
+    width: 100%;
+    min-height: 12em;
+    resize: vertical;
+    font-family: monospace;
+    font-size: calc(var(--mainFontSize) * 0.9);
+}
+
+.recall-blocks-actions {
+    margin-top: 0.25em;
+}
+
+.recall-override-row {
+    padding-top: 0.5em;
+    border-top: 1px dashed var(--SmartThemeBorderColor);
+}
+
+/* ========================================================================== */
+/* Responsive                                                                 */
+/* ========================================================================== */
+
+/*
+ * Standard navigation-stack collapse. Same components, same state: the list fills
+ * the screen and tapping a row slides the detail over it. "Mobile technically
+ * renders" is not the bar.
+ */
+@media (max-width: 800px) {
+    .recall-master {
+        flex: 1 1 auto;
+        border-right: none;
+        padding-right: 0;
+    }
+
+    .recall-manager[data-recall-view="list"] .recall-detail {
+        display: none;
+    }
+
+    .recall-manager[data-recall-view="detail"] .recall-master {
+        display: none;
+    }
+
+    .recall-back {
+        display: flex;
+    }
+
+    .recall-meta-label {
+        flex-basis: 7em;
+    }
+
+    .recall-topbar {
+        gap: 0.5em;
+    }
+
+    .recall-detail-actions .menu_button,
+    .recall-strip-actions .menu_button {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}
