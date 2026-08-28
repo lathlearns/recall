@@ -418,26 +418,61 @@
     display: none;
 }
 
+/*
+ * Each cell holds a label and a value side by side, so the column has to be wide
+ * enough for both. At 13em with a fixed 8em label the value was left about 60px
+ * and broke to one word per line — the grid was sized for the label alone.
+ */
 .recall-meta {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(13em, 1fr));
-    gap: 0.2em 1em;
+    grid-template-columns: repeat(auto-fit, minmax(19em, 1fr));
+    gap: 0.25em 1.5em;
     font-size: calc(var(--mainFontSize) * 0.88);
 }
 
 .recall-meta-row {
     display: flex;
     gap: 0.5em;
+    min-width: 0;
 }
 
 .recall-meta-label {
-    flex: 0 0 8em;
+    /* Shrinkable, so a narrow cell takes it out of the value's space rather than
+       squeezing the value to nothing. */
+    flex: 0 1 7.5em;
+    min-width: 4.5em;
     color: var(--SmartThemeEmColor);
 }
 
 .recall-meta-value {
+    flex: 1 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
+}
+
+/* --- Guidance ------------------------------------------------------------- */
+
+.recall-guidance {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+    padding: 0.5em 0.75em;
+    border-left: 2px solid var(--SmartThemeBorderColor);
+    background-color: var(--black30a);
+    border-radius: 0 4px 4px 0;
+}
+
+.recall-guidance-label {
+    color: var(--SmartThemeEmColor);
+    font-size: calc(var(--mainFontSize) * 0.82);
+}
+
+.recall-guidance-text {
+    margin: 0;
+    font-size: calc(var(--mainFontSize) * 0.9);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .recall-content {

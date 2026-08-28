@@ -126,6 +126,16 @@
 
                     <div class="recall-meta" data-recall="detail-meta"></div>
 
+                    <!--
+                        The guidance is freeform text of any length, so it gets its own
+                        full-width block rather than a cell in the metadata grid, where a
+                        fixed label beside it left too little room to wrap on anything.
+                    -->
+                    <div class="recall-guidance" data-recall="detail-guidance" hidden>
+                        <span class="recall-guidance-label">Guidance given for this pass</span>
+                        <p class="recall-guidance-text" data-recall="detail-guidance-text"></p>
+                    </div>
+
                     <div class="recall-banner recall-banner-warn" data-recall="stale-banner" hidden>
                         <i class="fa-solid fa-link-slash"></i>
                         <span>

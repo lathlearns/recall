@@ -169,8 +169,9 @@ later summaries drift for a reason invisible at the moment you press the button,
 regenerated sibling carrying the original's note would be indistinguishable from one
 without it — which defeats the point of keeping both. If you want it again, type it again.
 
-It *is* recorded on the resulting summary and shown in the detail pane, so you can see
-which note produced which result. That record is bookkeeping only; nothing replays it.
+It *is* recorded on the resulting summary and shown in the detail pane as its own
+full-width block, so you can see which note produced which result. That record is
+bookkeeping only; nothing replays it.
 
 The note goes last in the request, after the chat, fenced and marked as applying to this
 pass alone. Recency is the point: it is a correction to emphasis competing with a long

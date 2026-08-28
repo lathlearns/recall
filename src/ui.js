@@ -478,12 +478,19 @@ function renderDetail() {
         ['Generated with', `${escapeHtml(summary.generatedWith?.setName || 'unknown')}${summary.generatedWith?.isOverride ? ' (character override)' : ''}`],
         ['Hides', summary.hiddenIndices?.length ? `${summary.hiddenIndices.length} message${summary.hiddenIndices.length === 1 ? '' : 's'}` : 'nothing'],
         ['Read', describeReadSet(summary)],
-        ...(summary.steeringNote ? [['Guidance', escapeHtml(summary.steeringNote)]] : []),
     ].map(([label, value]) => `
         <div class="recall-meta-row">
             <span class="recall-meta-label">${label}</span>
             <span class="recall-meta-value">${value}</span>
         </div>`).join('');
+
+    // textContent, not interpolation: this is text the user typed, and it is being
+    // put back on the page.
+    const guidance = q('[data-recall="detail-guidance"]');
+    if (guidance) {
+        guidance.toggleAttribute('hidden', !summary.steeringNote);
+        q('[data-recall="detail-guidance-text"]').textContent = summary.steeringNote ?? '';
+    }
 
     q('[data-recall="stale-banner"]').toggleAttribute('hidden', !summary.stale);
 

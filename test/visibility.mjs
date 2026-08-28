@@ -146,7 +146,61 @@ if (emptyPlacement.gapBelowHeader > 40) {
         + `in a ${Math.round(emptyPlacement.columnHeight)}px column — it is being pushed down`);
 }
 
+// 11. Metadata values must have room to read.
+//
+//     `auto-fit` COLLAPSES EMPTY TRACKS, so the column count follows the number of
+//     items: a three-row sample proves nothing about an eight-row panel. The real
+//     bug produced five 175px columns with 63px values wrapping to 13 lines, and
+//     only appears with the full row set — so the full row set is used here.
+await p.setViewportSize({ width: 1250, height: 1000 });
+const metrics = await p.evaluate(() => {
+    const rows = [
+        ['Covers', 'messages 0-107'],
+        ['New this time', 'the whole chat'],
+        ['Created', '28/08/2026, 10:07:09 am'],
+        ['Edited', 'never'],
+        ['Generated with', 'Standard'],
+        ['Hides', '43 messages'],
+        ['Read', '49 messages, recorded'],
+    ];
+    document.querySelector('[data-recall="detail-body"]').removeAttribute('hidden');
+    const meta = document.querySelector('[data-recall="detail-meta"]');
+    meta.innerHTML = rows.map(([l, v]) =>
+        '<div class="recall-meta-row"><span class="recall-meta-label">' + l + '</span>' +
+        '<span class="recall-meta-value">' + v + '</span></div>').join('');
+    return [...meta.querySelectorAll('.recall-meta-row')].map(row => {
+        const value = row.querySelector('.recall-meta-value');
+        const box = value.getBoundingClientRect();
+        // line-height computes to "normal" here and parseFloat("normal") is NaN,
+        // which made an earlier version of this check silently never fire.
+        const style = getComputedStyle(value);
+        const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+        return {
+            label: row.querySelector('.recall-meta-label').textContent,
+            width: Math.round(box.width),
+            lines: Math.round(box.height / lineHeight),
+        };
+    });
+});
+for (const m of metrics) {
+    if (m.width < 120) failures.push(`meta value for "${m.label}" is only ${m.width}px wide`);
+    if (m.lines > 1) failures.push(`meta value for "${m.label}" wraps to ${m.lines} lines`);
+}
+
+// 12. Long freeform guidance gets its own full-width block, not a metadata cell.
+const guidanceWidth = await p.evaluate(() => {
+    const block = document.querySelector('[data-recall="detail-guidance"]');
+    block.removeAttribute('hidden');
+    const text = document.querySelector('[data-recall="detail-guidance-text"]');
+    text.textContent = "don't modify existing core memories; don't make new core "
+        + 'memories out of the sex between Sylvia and Vasilica';
+    return Math.round(text.getBoundingClientRect().width);
+});
+if (guidanceWidth < 400) {
+    failures.push(`guidance block is only ${guidanceWidth}px wide - it needs the full pane`);
+}
+
 await browser.close();
 
 if (failures.length) { console.log('FAIL:'); failures.forEach(f => console.log('  -', f)); process.exit(1); }
-console.log('All 10 visibility, layout and editor-wiring checks pass.');
+console.log('All 12 visibility, layout and editor-wiring checks pass.');
