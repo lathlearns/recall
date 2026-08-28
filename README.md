@@ -199,9 +199,12 @@ competes for — each one enabled means less history fits in a single pass. The 
 panel shows how many characters each would contribute for the current character, so a
 block that is empty here is visibly empty rather than silently doing nothing.
 
-They are prepended to the buffer under a header marking them as background rather than
-events, so the model does not fold the character card into the summary as though it
-happened. Group chats use ST's own combined group cards, falling back to walking the
+They are prepended to the buffer inside explicit `--- BEGIN/END REFERENCE MATERIAL ---`
+fences, with a line marking them as background rather than events, so the model does not
+fold the character card into the summary as though it happened. The fences are named
+rather than bare rules because a lone `---` is ambiguous here — the summary format uses
+`---` between its own sections and character cards are often markdown with rules of their
+own, so an unlabelled one is just another horizontal line among several. Group chats use ST's own combined group cards, falling back to walking the
 members and labelling each contribution by name.
 
 ---

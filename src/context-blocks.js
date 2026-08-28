@@ -29,6 +29,24 @@ const PREAMBLE = 'The following is reference material about the participants and
     + 'It is background for understanding the chat, not events to be summarised.';
 
 /**
+ * Explicit fences around the reference material.
+ *
+ * A blank line is not a boundary, it is a paragraph break — and a character card
+ * is prose in the same register as the chat it precedes, so the model has nothing
+ * but the preamble to tell it where background stops and material to be summarised
+ * begins. One sentence is doing structural work that punctuation should do.
+ *
+ * Named rather than bare rules on purpose. A `---` alone would be ambiguous here:
+ * this user's own summary format uses `---` between its sections, and character
+ * cards are frequently markdown containing rules of their own, so an unlabelled
+ * one is just another horizontal line among several. These two lines cannot be
+ * mistaken for card content, and the closing one marks the end unambiguously even
+ * if a description ends mid-list.
+ */
+const FENCE_OPEN = '--- BEGIN REFERENCE MATERIAL ---';
+const FENCE_CLOSE = '--- END REFERENCE MATERIAL ---';
+
+/**
  * @typedef {object} ContextBlockDef
  * @property {string} key      Settings key under `contextBlocks`.
  * @property {string} label    Shown in settings and as the block heading.
@@ -186,7 +204,12 @@ export function buildContextBlocks() {
     }
 
     return {
-        text: `${PREAMBLE}\n\n${sections.join('\n\n')}`,
+        text: [
+            FENCE_OPEN,
+            PREAMBLE,
+            ...sections,
+            FENCE_CLOSE,
+        ].join('\n\n'),
         included,
     };
 }
