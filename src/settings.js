@@ -93,6 +93,50 @@ const DEFAULT_SETTINGS = {
     /** Responses shorter than this after reasoning is stripped are a failure, not a summary. */
     minResponseChars: 200,
 
+    // --- Where summarization runs ---
+
+    /**
+     * Connection Manager profile id to summarise through. Empty means the main
+     * API, which is the default and the fallback. Choosing one never changes the
+     * user's selected profile.
+     */
+    profileId: '',
+
+    /**
+     * Model id overriding the profile's own. A connection profile stores a single
+     * model string and ST enumerates models only for the source it is currently
+     * connected to, so there is no list to validate this against.
+     */
+    modelOverride: '',
+
+    /**
+     * Context size of the profile, in tokens. 0 means "use the main API's", which
+     * is wrong whenever the profile's window differs — see connection.js.
+     */
+    profileContextSize: 0,
+
+    /**
+     * Apply the profile's own generation preset. Off by default: a preset tuned
+     * for roleplay prose is the wrong sampler set for an editing task, and it can
+     * carry a max_tokens that displaces the output budget.
+     */
+    profileUsePreset: false,
+
+    // --- Reference material sent alongside the chat ---
+
+    /**
+     * Which parts of the character card and persona to include in the buffer.
+     * All off by default: they cost tokens from the same budget the chat history
+     * competes for.
+     */
+    contextBlocks: {
+        description: false,
+        personality: false,
+        scenario: false,
+        persona: false,
+        examples: false,
+    },
+
     // --- Hiding ---
 
     /** Hide the covered range after a successful summary. */
@@ -161,6 +205,17 @@ export function getSettings() {
     }
     if (!settings.characters || typeof settings.characters !== 'object') {
         settings.characters = {};
+    }
+    if (!settings.contextBlocks || typeof settings.contextBlocks !== 'object') {
+        settings.contextBlocks = structuredClone(DEFAULT_SETTINGS.contextBlocks);
+    } else {
+        // A block added in a later version must default to off rather than
+        // undefined, or it reads as enabled nowhere and disabled nowhere.
+        for (const [key, value] of Object.entries(DEFAULT_SETTINGS.contextBlocks)) {
+            if (typeof settings.contextBlocks[key] !== 'boolean') {
+                settings.contextBlocks[key] = value;
+            }
+        }
     }
 
     // Seed the default set on first run.

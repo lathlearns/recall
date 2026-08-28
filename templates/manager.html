@@ -109,8 +109,18 @@
                         </span>
                     </div>
 
-                    <textarea class="text_pole textarea_compact recall-content" data-recall="detail-content" rows="16"
-                        placeholder="Summary text"></textarea>
+                    <div class="recall-editor-head">
+                        <span class="recall-editor-label">Summary text</span>
+                        <!--
+                            ST's own expand control. The click handler is delegated from
+                            document, so it works on markup created after page load; it only
+                            needs data-for to name an element id.
+                        -->
+                        <i class="editor_maximize fa-solid fa-maximize right_menu_button"
+                            data-for="recall_detail_content" title="Expand the editor"></i>
+                    </div>
+                    <textarea id="recall_detail_content" class="text_pole textarea_compact recall-content"
+                        data-recall="detail-content" rows="16" placeholder="Summary text"></textarea>
 
                     <div class="recall-dirty" data-recall="detail-dirty" hidden>
                         <span class="recall-dirty-label">Unsaved changes</span>
@@ -167,6 +177,56 @@
                     <input type="checkbox" data-recall="blocking">
                     <span>Block sending while a summary generates</span>
                 </label>
+            </section>
+
+            <section class="recall-section">
+                <h4 class="recall-section-title">Where summarization runs</h4>
+
+                <div class="recall-row recall-row-field">
+                    <label for="recall-profile">Connection profile</label>
+                    <select id="recall-profile" class="text_pole recall-grow" data-recall="profile"></select>
+                </div>
+
+                <div class="recall-row recall-row-field" data-recall="profile-extras" hidden>
+                    <label for="recall-model-override">Model</label>
+                    <input id="recall-model-override" class="text_pole recall-grow" type="text"
+                        data-recall="model-override" placeholder="Leave blank to use the profile's model">
+                </div>
+
+                <div class="recall-row recall-row-field" data-recall="profile-context-row" hidden>
+                    <label for="recall-profile-context">Its context size</label>
+                    <input id="recall-profile-context" class="text_pole recall-number" type="number" min="0"
+                        step="1000" data-recall="profile-context">
+                    <span class="recall-dim">tokens — 0 uses the main API's</span>
+                </div>
+
+                <label class="checkbox_label recall-row" data-recall="profile-preset-row" hidden>
+                    <input type="checkbox" data-recall="profile-preset">
+                    <span>Apply that profile's generation preset</span>
+                </label>
+
+                <p class="recall-help" data-recall="profile-status"></p>
+
+                <p class="recall-help">
+                    Summarising is a different job from roleplaying and often wants a different model.
+                    Picking a profile here sends only Recall's requests through it — your selected
+                    profile is untouched. A profile stores one model, and ST can only list models for
+                    the source it is currently connected to, so the model field is free text and a
+                    typo surfaces as the provider's own error.
+                </p>
+            </section>
+
+            <section class="recall-section">
+                <h4 class="recall-section-title">Reference material</h4>
+
+                <div class="recall-context-blocks" data-recall="context-blocks"></div>
+
+                <p class="recall-help">
+                    Sent alongside the chat so the summariser knows who the participants are rather
+                    than inferring it. Marked as background, not as events to summarise. These come out
+                    of the same token budget as the chat history, so each one enabled means less
+                    history fits in a single pass.
+                </p>
             </section>
 
             <section class="recall-section">

@@ -601,6 +601,46 @@
     margin-top: 0.25em;
 }
 
+.recall-grow {
+    flex: 1 1 12em;
+    min-width: 0;
+}
+
+/* --- Reference material toggles ------------------------------------------ */
+
+.recall-context-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+}
+
+.recall-context-row {
+    justify-content: flex-start;
+}
+
+.recall-context-name {
+    flex: 1 1 auto;
+}
+
+.recall-context-size {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.85);
+}
+
+/* --- Expand-editor control ------------------------------------------------ */
+
+.recall-editor-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5em;
+}
+
+.recall-editor-label {
+    color: var(--SmartThemeEmColor);
+    font-size: calc(var(--mainFontSize) * 0.9);
+}
+
 .recall-override-row {
     padding-top: 0.5em;
     border-top: 1px dashed var(--SmartThemeBorderColor);

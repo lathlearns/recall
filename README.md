@@ -92,6 +92,10 @@ start looking for a stopping point.
 | **Output budget** | The generation limit sent to the API. |
 | Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
 | Minimum summary length | Shorter responses are treated as generation failures, not saved as stubs. |
+| Connection profile | Summarise through a different profile than the chat uses. Blank = main API. |
+| Model | Overrides the profile's stored model. Free text — see below. |
+| Its context size | The profile's context window, so the buffer is budgeted against the right number. |
+| Reference material | Which parts of the character card and persona to send alongside the chat. |
 | Use the built-in's old summary | Stand in `extra.memory` until Recall has a summary of its own, and seed the first generation with it. |
 | Also answer to `{{summary}}` | Register `{{summary}}` as a second name for the Recall summary — only while the built-in Summarize is disabled. |
 | Deep integrity check | Also hash the whole covered range, catching edits below a summary's anchor. Off by default — it flags on any edit anywhere in history. |
@@ -137,6 +141,55 @@ a function of load order. The condition is re-evaluated every page load, so re-e
 Summarize hands the name straight back.
 
 `{{recall}}` always works regardless, and remains the name worth putting in a preset.
+
+---
+
+## Where summarization runs
+
+By default Recall uses the main API — the same connection as your chat. Picking a
+Connection Manager profile sends **only Recall's requests** through it, via
+`ConnectionManagerRequestService`; your selected profile is never changed. Summarising is
+a different job from roleplaying and often wants a different model: cheaper,
+longer-context, less florid.
+
+**The model field is free text, and that is not laziness.** A connection profile stores a
+single `model` string, captured from whatever was selected when the profile was made.
+ST's model dropdowns are populated only for the source you are *currently connected to* —
+there is no per-profile enumeration to read, so a real dropdown cannot be built for a
+profile you are not connected to. Leave the field blank to use the profile's own model, or
+type an id to override it. A typo surfaces as the provider's error, reported verbatim.
+
+**Set the context size when you pick a profile.** `getMaxPromptTokens()` describes the
+*active* connection. Summarising through a 200k profile while roleplaying on 32k would
+refuse work that fits; the reverse would build a buffer the API rejects. Neither failure
+looks like it is about the profile when you hit it.
+
+The profile's own generation preset is **not** applied by default — a preset tuned for
+roleplay prose is the wrong sampler set for an editing task, and it can carry a
+`max_tokens` that displaces the output budget.
+
+---
+
+## Reference material
+
+The chat alone is ambiguous to a summariser: names without roles, relationships without
+history, a setting it has to infer. Optionally sent alongside the chat:
+
+- Character description
+- Character personality
+- Scenario
+- User persona
+- Example dialogue
+
+All off by default, because they come out of the same token budget the chat history
+competes for — each one enabled means less history fits in a single pass. The settings
+panel shows how many characters each would contribute for the current character, so a
+block that is empty here is visibly empty rather than silently doing nothing.
+
+They are prepended to the buffer under a header marking them as background rather than
+events, so the model does not fold the character card into the summary as though it
+happened. Group chats use ST's own combined group cards, falling back to walking the
+members and labelling each contribution by name.
 
 ---
 

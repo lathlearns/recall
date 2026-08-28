@@ -41,6 +41,8 @@ import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js'
 import { summarizeNow, regenerateSummary, RecallError, isGenerating } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive } from './legacy.js';
+import { listProfiles, getActiveProfile, describeTarget, isConnectionManagerAvailable } from './connection.js';
+import { previewContextBlocks } from './context-blocks.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
 
 const EXTENSION_PATH = 'third-party/recall';
@@ -666,6 +668,16 @@ function wireSettings() {
     bindText('framing-prefix', 'framingPrefix');
     bindText('framing-suffix', 'framingSuffix');
 
+    bindText('model-override', 'modelOverride', renderProfile);
+    bindNumber('profile-context', 'profileContextSize', 0, 10_000_000);
+    bindCheckbox('profile-preset', 'profileUsePreset');
+
+    on('[data-recall="profile"]', 'change', event => {
+        getSettings().profileId = event.target.value;
+        saveSettings();
+        renderProfile();
+    });
+
     on('[data-recall="advanced-toggle"]', 'click', () => {
         const advanced = q('[data-recall="advanced"]');
         const hidden = advanced.hasAttribute('hidden');
@@ -783,11 +795,81 @@ function bindNumber(hook, key, min, max, after) {
     });
 }
 
-function bindText(hook, key) {
+function bindText(hook, key, after) {
     on(`[data-recall="${hook}"]`, 'input', event => {
         getSettings()[key] = event.target.value;
         saveSettings();
+        after?.();
     });
+}
+
+/**
+ * The profile picker, the model override, and a plain sentence saying where
+ * summarization will actually run — because "which model summarised this" is not
+ * something the user should have to infer from a dropdown plus a text field.
+ */
+function renderProfile() {
+    const select = q('[data-recall="profile"]');
+    const settings = getSettings();
+
+    if (select) {
+        const profiles = listProfiles();
+        const available = isConnectionManagerAvailable();
+
+        select.innerHTML = [
+            `<option value="">Main API — same connection as the chat</option>`,
+            ...profiles.map(profile =>
+                `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}${profile.model ? ` — ${escapeHtml(profile.model)}` : ''}</option>`),
+        ].join('');
+
+        select.value = settings.profileId ?? '';
+        select.disabled = !available;
+    }
+
+    setValue('model-override', settings.modelOverride ?? '');
+    setValue('profile-context', settings.profileContextSize ?? 0);
+    setChecked('profile-preset', settings.profileUsePreset);
+
+    // The model, context-size and preset controls only mean anything once a
+    // profile is chosen, so they are not shown until one is.
+    const usingProfile = !!getActiveProfile();
+    for (const hook of ['profile-extras', 'profile-context-row', 'profile-preset-row']) {
+        q(`[data-recall="${hook}"]`)?.toggleAttribute('hidden', !usingProfile);
+    }
+
+    const status = q('[data-recall="profile-status"]');
+    if (status) {
+        status.textContent = describeTarget();
+    }
+}
+
+/**
+ * The reference-material toggles, each showing how much it would actually
+ * contribute — an enabled block that is empty for this character otherwise looks
+ * identical to one that is working.
+ */
+function renderContextBlocks() {
+    const container = q('[data-recall="context-blocks"]');
+    if (!container) {
+        return;
+    }
+
+    const enabled = getSettings().contextBlocks ?? {};
+    const preview = previewContextBlocks();
+
+    container.innerHTML = preview.map(block => `
+        <label class="checkbox_label recall-row recall-context-row">
+            <input type="checkbox" data-context-block="${escapeHtml(block.key)}" ${enabled[block.key] ? 'checked' : ''}>
+            <span class="recall-context-name">${escapeHtml(block.label)}</span>
+            <span class="recall-dim recall-context-size">${block.chars ? `${block.chars.toLocaleString()} chars` : 'empty here'}</span>
+        </label>`).join('');
+
+    for (const input of Array.from(container.querySelectorAll('[data-context-block]'))) {
+        input.addEventListener('change', event => {
+            getSettings().contextBlocks[input.dataset.contextBlock] = !!event.target.checked;
+            saveSettings();
+        });
+    }
 }
 
 function renderSettings() {
@@ -810,6 +892,8 @@ function renderSettings() {
 
     renderNudgeHint();
     renderAliasStatus();
+    renderProfile();
+    renderContextBlocks();
     renderScope();
     renderBlocks();
 }
@@ -896,13 +980,21 @@ function renderBlocks() {
                     <div class="menu_button menu_button_icon" data-block-expand title="Show or hide the text">
                         <i class="fa-solid fa-pen"></i>
                     </div>
+                    <!--
+                        ST's native expand control. Its handler is delegated from document
+                        and keyed on data-for, so each block's textarea needs a unique id.
+                    -->
+                    <div class="menu_button menu_button_icon editor_maximize"
+                        data-for="recall_block_${index}" title="Expand the editor">
+                        <i class="fa-solid fa-maximize"></i>
+                    </div>
                     <div class="menu_button menu_button_icon recall-action-destructive" data-block-delete title="Delete block">
                         <i class="fa-solid fa-trash-can"></i>
                     </div>
                 </div>
             </div>
             <div class="recall-block-summary recall-dim">${escapeHtml(blockPreview(block))}</div>
-            <textarea class="text_pole textarea_compact recall-block-content" data-block-content rows="12" hidden>${escapeHtml(block.content)}</textarea>
+            <textarea id="recall_block_${index}" class="text_pole textarea_compact recall-block-content monospace" data-block-content rows="12" hidden>${escapeHtml(block.content)}</textarea>
         </div>`).join('');
 
     for (const element of Array.from(container.querySelectorAll('[data-block-index]'))) {

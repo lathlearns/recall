@@ -14,7 +14,6 @@ import {
     deactivateSendButtons,
     generateRawData,
     extractMessageFromData,
-    getMaxPromptTokens,
     is_send_press,
     main_api,
     streamingProcessor,
@@ -27,6 +26,8 @@ import { getStringHash } from '../../../../utils.js';
 import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
 import { getFallbackSummary } from './legacy.js';
+import { buildContextBlocks } from './context-blocks.js';
+import { getActiveProfile, generateViaProfile, getPromptBudget, describeTarget } from './connection.js';
 
 import {
     getSettings,
@@ -99,7 +100,17 @@ function frameSummary(content) {
  * @returns {string}
  */
 function buildBufferFrom(indices, previousSummary) {
-    const parts = [frameSummary(previousSummary)];
+    const parts = [];
+
+    // Reference material first: it explains who the participants are before the
+    // model reads what they did.
+    const context = buildContextBlocks();
+    if (context.text) {
+        parts.push(context.text);
+    }
+
+    parts.push(frameSummary(previousSummary));
+
     for (const index of indices) {
         if (chat[index]) {
             parts.push(formatMessage(index));
@@ -145,9 +156,9 @@ export function buildBuffer() {
  * @param {number[]} indices
  */
 async function enforceBudget(buffer, systemPrompt, indices) {
-    const settings = getSettings();
-
-    const available = getMaxPromptTokens(settings.responseReserve)
+    // Sized against whichever connection will actually run the request — the main
+    // API's context window is the wrong number when a profile is in use.
+    const available = getPromptBudget()
         - await getTokenCountAsync(systemPrompt)
         - BUDGET_PADDING;
 
@@ -255,25 +266,12 @@ function contextChanged(snapshot) {
  */
 async function runGeneration(buffer, systemPrompt) {
     const settings = getSettings();
-
-    const data = await generateRawData({
-        prompt: buffer,
-        systemPrompt,
-        responseLength: settings.outputBudget > 0 ? settings.outputBudget : null,
-    });
-
-    const raw = extractMessageFromData(data, main_api);
-    const content = removeReasoningFromString(String(raw ?? '')).trim();
+    const { content, reasoning } = getActiveProfile()
+        ? await runViaProfile(buffer, systemPrompt)
+        : await runViaMainApi(buffer, systemPrompt);
 
     if (content.length >= settings.minResponseChars) {
         return content;
-    }
-
-    let reasoning = '';
-    try {
-        reasoning = extractReasoningFromData(data, { ignoreShowThoughts: true }) ?? '';
-    } catch {
-        reasoning = '';
     }
 
     if (reasoning.trim().length) {
@@ -293,6 +291,62 @@ async function runGeneration(buffer, systemPrompt) {
         + 'Treating it as a generation failure rather than saving a stub.',
         { kind: 'short-response' },
     );
+}
+
+/**
+ * The main API path, unchanged: the same connection the chat itself uses.
+ * @returns {Promise<{content: string, reasoning: string}>}
+ */
+async function runViaMainApi(buffer, systemPrompt) {
+    const settings = getSettings();
+
+    const data = await generateRawData({
+        prompt: buffer,
+        systemPrompt,
+        responseLength: settings.outputBudget > 0 ? settings.outputBudget : null,
+    });
+
+    const raw = extractMessageFromData(data, main_api);
+
+    let reasoning = '';
+    try {
+        reasoning = extractReasoningFromData(data, { ignoreShowThoughts: true }) ?? '';
+    } catch {
+        reasoning = '';
+    }
+
+    return {
+        content: removeReasoningFromString(String(raw ?? '')).trim(),
+        reasoning,
+    };
+}
+
+/**
+ * The connection-profile path. The request service already returns reasoning and
+ * content as separate fields, so nothing needs stripping here — but an inline
+ * `<think>` block would still arrive inside content, so it is run through the
+ * same stripper for consistency.
+ *
+ * Provider errors are surfaced verbatim: with an overridden model id there is no
+ * list to validate against, so the provider's own complaint is the only thing
+ * that can tell the user they mistyped it.
+ *
+ * @returns {Promise<{content: string, reasoning: string}>}
+ */
+async function runViaProfile(buffer, systemPrompt) {
+    try {
+        const { content, reasoning } = await generateViaProfile(systemPrompt, buffer);
+        return {
+            content: removeReasoningFromString(String(content ?? '')).trim(),
+            reasoning: String(reasoning ?? ''),
+        };
+    } catch (error) {
+        const detail = error?.cause?.message || error?.message || String(error);
+        throw new RecallError(
+            `${describeTarget()}\n\nThe request failed: ${detail}`,
+            { kind: 'profile-failed' },
+        );
+    }
 }
 
 /**
