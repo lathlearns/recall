@@ -14,6 +14,22 @@
 /* Shared                                                                     */
 /* ========================================================================== */
 
+/*
+ * The `hidden` attribute must beat our own layout rules.
+ *
+ * The browser hides [hidden] elements through a UA rule of the lowest possible
+ * priority, so any class here that sets `display` silently defeats it — which is
+ * how every banner, dirty-state bar and the whole detail pane ended up visible and
+ * undismissable at once. Recall toggles visibility exclusively through this
+ * attribute, so it is declared once, first, and wins outright.
+ */
+.recall-manager [hidden],
+.recall-drawer [hidden],
+.recall-manager[hidden],
+.recall-drawer[hidden] {
+    display: none !important;
+}
+
 .recall-dim {
     color: var(--SmartThemeEmColor);
     opacity: 0.85;
