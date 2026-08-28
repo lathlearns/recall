@@ -99,7 +99,7 @@ function frameSummary(content) {
  * @param {string} previousSummary
  * @returns {string}
  */
-function buildBufferFrom(indices, previousSummary) {
+function buildBufferFrom(indices, previousSummary, steeringNote = '') {
     const parts = [];
 
     // Reference material first: it explains who the participants are before the
@@ -116,6 +116,23 @@ function buildBufferFrom(indices, previousSummary) {
             parts.push(formatMessage(index));
         }
     }
+
+    // Last, after the chat. Recency is the whole point — this is a correction to
+    // emphasis, competing with a long instruction and a long history, and it is
+    // most likely to be obeyed from the position nearest generation. Placing it in
+    // the system prompt would also put it after the Quality Check block, which
+    // deliberately ends the instruction by telling the model to verify and submit.
+    const note = String(steeringNote ?? '').trim();
+    if (note) {
+        parts.push([
+            '--- BEGIN GUIDANCE FOR THIS PASS ---',
+            note,
+            'This guidance applies to this pass only. It does not replace the required structure '
+            + 'or any rule above, and it is not part of the summary.',
+            '--- END GUIDANCE FOR THIS PASS ---',
+        ].join('\n\n'));
+    }
+
     return parts.join('\n\n');
 }
 
@@ -124,7 +141,7 @@ function buildBufferFrom(indices, previousSummary) {
  * summary as material.
  * @returns {{ buffer: string, indices: number[], previous: import('./store.js').RecallSummary|null }}
  */
-export function buildBuffer() {
+export function buildBuffer(steeringNote = '') {
     const indices = getVisibleIndices();
     const previous = getActiveSummary();
 
@@ -136,7 +153,7 @@ export function buildBuffer() {
     const seed = previous?.content ?? getFallbackSummary();
 
     return {
-        buffer: buildBufferFrom(indices, seed),
+        buffer: buildBufferFrom(indices, seed, steeringNote),
         indices,
         previous,
         seededFromLegacy: !previous && !!seed,
@@ -383,9 +400,9 @@ export function hideableIndices(covered) {
  *   tokens: { system: number, buffer: number, total: number, available: number },
  * }>}
  */
-export async function previewRequest() {
+export async function previewRequest(steeringNote = '') {
     const systemPrompt = substituteParams(assemblePrompt());
-    const { buffer, indices, seededFromLegacy } = buildBuffer();
+    const { buffer, indices, seededFromLegacy } = buildBuffer(steeringNote);
     const { included } = buildContextBlocks();
 
     const system = await getTokenCountAsync(systemPrompt);
@@ -411,7 +428,7 @@ export async function previewRequest() {
  * Summarize now — produce a new summary over the currently visible chat.
  * @returns {Promise<import('./store.js').RecallSummary>}
  */
-export async function summarizeNow() {
+export async function summarizeNow(steeringNote = '') {
     checkGuards({ nothingNew: true });
 
     const settings = getSettings();
@@ -422,7 +439,7 @@ export async function summarizeNow() {
     }
 
     const systemPrompt = substituteParams(assemblePrompt());
-    const { buffer, indices, previous, seededFromLegacy } = buildBuffer();
+    const { buffer, indices, previous, seededFromLegacy } = buildBuffer(steeringNote);
 
     if (!indices.length) {
         throw new RecallError('Every message is hidden — there is nothing visible to summarize.', { kind: 'empty' });
@@ -463,6 +480,7 @@ export async function summarizeNow() {
             // re-deriving it from the coverage range, which would sweep in every
             // message an earlier summary had already hidden.
             sourceIndices: [...indices],
+            steeringNote: String(steeringNote ?? '').trim(),
         });
 
         addSummary(record);
@@ -536,7 +554,7 @@ export function resolveSourceIndices(summary) {
  * @param {number[]} [indicesOverride] Messages to replay instead, when the user
  *        has told Recall what the original actually covered.
  */
-export async function regenerateSummary(id, indicesOverride = null) {
+export async function regenerateSummary(id, indicesOverride = null, steeringNote = '') {
     checkGuards();
 
     const original = getSummaryById(id);
@@ -575,7 +593,10 @@ export async function regenerateSummary(id, indicesOverride = null) {
     const basisContent = basis?.content
         ?? (original.seededFromLegacy ? getFallbackSummary() : '');
 
-    const buffer = buildBufferFrom(indices, basisContent);
+    // The original's own note is not carried over. A redo with the same note would
+    // be indistinguishable from one without, and the point of a sibling is that you
+    // chose what changed between them.
+    const buffer = buildBufferFrom(indices, basisContent, steeringNote);
     await enforceBudget(buffer, systemPrompt, indices);
 
     const snapshot = captureContext();
@@ -605,6 +626,7 @@ export async function regenerateSummary(id, indicesOverride = null) {
             seededFromLegacy: !!original.seededFromLegacy,
             sourceIndices: [...indices],
             sourceIndicesInferred: !!indicesOverride,
+            steeringNote: String(steeringNote ?? '').trim(),
             // Hide ownership stays with the original. One summary owns a hidden
             // range, always.
             hiddenIndices: [],

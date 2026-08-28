@@ -221,7 +221,8 @@ function wireManager({ onSummarize }) {
 
     on('[data-recall="summarize-now"]', 'click', async () => {
         if (onSummarize) {
-            await onSummarize();
+            const note = takeSteeringNote();
+            await onSummarize(note);
         }
         renderAll();
     });
@@ -267,6 +268,29 @@ function wireManager({ onSummarize }) {
 
     // Settings
     wireSettings();
+}
+
+/**
+ * Reads the guidance field and empties it in the same motion.
+ *
+ * Clearing on read rather than on success is deliberate: if a run fails and the
+ * note stayed, the next press would silently reuse it. Failures are rare and
+ * retyping is cheap; a note applied without the user meaning it is not.
+ * @returns {string}
+ */
+function takeSteeringNote() {
+    const input = q('[data-recall="steering-note"]');
+    if (!input) {
+        return '';
+    }
+    const value = String(input.value ?? '').trim();
+    input.value = '';
+    return value;
+}
+
+/** Reads it without consuming it — for the preview, which sends nothing. */
+function peekSteeringNote() {
+    return String(q('[data-recall="steering-note"]')?.value ?? '').trim();
 }
 
 function setView(view) {
@@ -454,6 +478,7 @@ function renderDetail() {
         ['Generated with', `${escapeHtml(summary.generatedWith?.setName || 'unknown')}${summary.generatedWith?.isOverride ? ' (character override)' : ''}`],
         ['Hides', summary.hiddenIndices?.length ? `${summary.hiddenIndices.length} message${summary.hiddenIndices.length === 1 ? '' : 's'}` : 'nothing'],
         ['Read', describeReadSet(summary)],
+        ...(summary.steeringNote ? [['Guidance', escapeHtml(summary.steeringNote)]] : []),
     ].map(([label, value]) => `
         <div class="recall-meta-row">
             <span class="recall-meta-label">${label}</span>
@@ -595,7 +620,7 @@ async function doRegenerate() {
     try {
         // Regeneration produces a sibling, never a replacement. Both persist, and
         // neither becomes active on its own — the user compares and picks.
-        const sibling = await regenerateSummary(summary.id, override);
+        const sibling = await regenerateSummary(summary.id, override, takeSteeringNote());
         selectedId = sibling.id;
         resetDraft();
         refreshDrawer();
@@ -767,7 +792,8 @@ async function showPreview() {
 
     let preview;
     try {
-        preview = await previewRequest();
+        // Peeked, not consumed: previewing must not spend the note.
+        preview = await previewRequest(peekSteeringNote());
     } catch (error) {
         reportError(error);
         return;

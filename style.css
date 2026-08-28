@@ -196,6 +196,16 @@
     border-bottom-color: var(--SmartThemeQuoteColor);
 }
 
+.recall-note-row {
+    display: flex;
+    gap: 0.5em;
+}
+
+.recall-note {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .recall-pane {
     display: none;
     flex: 1 1 auto;

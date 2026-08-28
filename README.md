@@ -157,6 +157,29 @@ Summarize hands the name straight back.
 
 ---
 
+## Steering one pass
+
+The field at the top of the manager is one-off guidance — *"track all four, don't let
+Maddie drop out"*. It applies to whichever action you press next, **Summarize now** or
+**Regenerate**, and clears itself when that runs. `/recall keep all four present` does the
+same from the chat bar.
+
+It is deliberately **not** remembered. An emphasis that silently persisted would make
+later summaries drift for a reason invisible at the moment you press the button, and a
+regenerated sibling carrying the original's note would be indistinguishable from one
+without it — which defeats the point of keeping both. If you want it again, type it again.
+
+It *is* recorded on the resulting summary and shown in the detail pane, so you can see
+which note produced which result. That record is bookkeeping only; nothing replays it.
+
+The note goes last in the request, after the chat, fenced and marked as applying to this
+pass alone. Recency is the point: it is a correction to emphasis competing with a long
+instruction and a longer history. It is not appended to the system prompt, because the
+Quality Check block deliberately ends the instruction by telling the model to verify and
+submit, and nothing useful goes after that.
+
+---
+
 ## Checking what actually gets sent
 
 **Preview request** in the manager assembles exactly what *Summarize now* would send and

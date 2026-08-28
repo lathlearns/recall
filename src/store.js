@@ -37,6 +37,7 @@ export const STORE_KEY = 'recall';
  * @property {number[]} hiddenIndices   Indices this summary actually flipped to hidden.
  * @property {boolean} stale            Set by drift detection when the anchor is gone.
  * @property {boolean} seededFromLegacy Built on the built-in Summarize's stored summary rather than from scratch.
+ * @property {string} steeringNote      One-off guidance sent with this pass. Kept as a record of what produced this result; never replayed.
  */
 
 function emptyStore() {
@@ -155,6 +156,10 @@ export function createSummaryRecord(fields) {
         hiddenIndices: [],
         stale: false,
         seededFromLegacy: false,
+        // Bookkeeping only. Deliberately never re-applied: a note is a correction
+        // for one pass, and silently repeating it would make later summaries drift
+        // for a reason invisible at the point of pressing the button.
+        steeringNote: '',
         ...fields,
     };
 }

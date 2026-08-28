@@ -38,6 +38,18 @@
         Errors are persistent and inline, not only toasts: generation can take a
         while and the user may not be looking at the screen when it fails.
     -->
+    <!--
+        One-off guidance for the next pass. Deliberately not a setting and not
+        remembered: an emphasis that silently persisted would make later summaries
+        drift for a reason invisible at the point of pressing the button. It clears
+        itself after a run, and is kept on the resulting summary purely so you can
+        see what produced what.
+    -->
+    <div class="recall-note-row">
+        <input class="text_pole recall-note" data-recall="steering-note" type="text"
+            placeholder="Optional guidance for the next pass — cleared after it runs, not remembered">
+    </div>
+
     <div class="recall-banner recall-banner-error" data-recall="error" hidden>
         <i class="fa-solid fa-triangle-exclamation"></i>
         <span data-recall="error-text"></span>

@@ -29,9 +29,9 @@ const BUILTIN_SUMMARIZE = 'memory';
  * Refusals are user-facing text and are shown as toasts here; the manager also
  * renders them inline, since the user may not be looking at the screen.
  */
-async function handleSummarize() {
+async function handleSummarize(steeringNote = '') {
     try {
-        const record = await summarizeNow();
+        const record = await summarizeNow(steeringNote);
 
         // The nudge clears and re-arms only once usage has actually dropped back
         // below the threshold — see the dead zone in nudge.js.

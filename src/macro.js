@@ -120,10 +120,15 @@ function registerAlias() {
 export function registerSlashCommand(onTrigger) {
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
         name: MACRO_NAME,
-        callback: async () => {
-            await onTrigger();
+        callback: async (_namedArgs, unnamedArgs) => {
+            // Anything after the command is one-off guidance for this pass, the
+            // same field the manager offers. Not remembered between runs.
+            const note = Array.isArray(unnamedArgs) ? unnamedArgs.join(' ') : String(unnamedArgs ?? '');
+            await onTrigger(note.trim());
             return '';
         },
-        helpString: 'Generates a new Recall summary of the currently visible chat. Equivalent to the Summarize now button.',
+        helpString: 'Generates a new Recall summary of the currently visible chat. Equivalent to the Summarize now button. '
+            + 'Anything written after the command is used as one-off guidance for that pass, for example '
+            + '<code>/recall keep all four characters present</code>.',
     }));
 }
