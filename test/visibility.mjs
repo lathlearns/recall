@@ -200,7 +200,35 @@ if (guidanceWidth < 400) {
     failures.push(`guidance block is only ${guidanceWidth}px wide - it needs the full pane`);
 }
 
+// 13. Token counts are painted into elements found by selector. A hook emitted
+//     under one name and queried under another paints nothing, silently — there
+//     is no error, just a blank where a number should be.
+const uiSrc = fs.readFileSync(`${ROOT}/src/ui.js`, 'utf8');
+const templateSrc = fs.readFileSync(`${ROOT}/templates/manager.html`, 'utf8');
+
+// Attributes ui.js emits into generated markup, e.g. data-summary-size="..."
+// Matches both data-x-size="v" and the valueless data-x-size form.
+// Matches data-x-size="v" and the valueless data-x-size, but NOT the same
+// name inside a selector like [data-x-size=...] — counting those made the
+// two sets identical by construction and the check vacuous.
+const emitted = new Set([...uiSrc.matchAll(/(?<!\[)\bdata-([a-z-]+-size)(?=[="\s>])/g)].map(m => m[1]));
+// Attributes ui.js then queries, e.g. [data-summary-size="..."]
+const queried = new Set([...uiSrc.matchAll(/\[data-([a-z-]+-size)[\]=]/g)].map(m => m[1]));
+
+for (const name of queried) {
+    if (!emitted.has(name)) failures.push(`ui.js queries [data-${name}] but never emits it`);
+}
+for (const name of emitted) {
+    if (!queried.has(name)) failures.push(`ui.js emits data-${name} but never paints into it`);
+}
+if (!emitted.size) failures.push('no token-count hooks found in ui.js at all');
+
+// The blocks total lives in the template rather than generated markup.
+if (uiSrc.includes('data-recall="blocks-total"') && !templateSrc.includes('data-recall="blocks-total"')) {
+    failures.push('ui.js paints [data-recall="blocks-total"] but the template has no such element');
+}
+
 await browser.close();
 
 if (failures.length) { console.log('FAIL:'); failures.forEach(f => console.log('  -', f)); process.exit(1); }
-console.log('All 12 visibility, layout and editor-wiring checks pass.');
+console.log('All 13 visibility, layout and editor-wiring checks pass.');

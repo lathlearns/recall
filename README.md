@@ -181,6 +181,27 @@ submit, and nothing useful goes after that.
 
 ---
 
+## Token counts
+
+Shown in three places, all in the tokenizer your current API uses:
+
+- **Each summary**, in the archive list and its detail pane. A summary sits in permanent
+  context, so this is the standing cost of keeping it.
+- **Each reference-material block**, counting the section as it would appear in the buffer
+  — heading included — so the number is the marginal cost of ticking that box. The
+  preamble and fences are shared overhead, paid once whichever blocks are on.
+- **Each prompt block**, plus a total for the enabled ones joined exactly as generation
+  joins them, which is the system prompt's real cost rather than the sum of its parts.
+
+Counting is asynchronous and some tokenizers are a server round-trip, so counts are
+painted in after render. ST caches results internally by tokenizer and model, and Recall
+keeps a small local cache besides, so a known value appears in the same frame and only a
+genuinely new string ever shows a placeholder. Each element is stamped with the string it
+is displaying; a count that resolves after a re-render is discarded rather than written
+into an element that now describes something else.
+
+---
+
 ## Checking what actually gets sent
 
 **Preview request** in the manager assembles exactly what *Summarize now* would send and

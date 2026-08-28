@@ -218,12 +218,21 @@ export function buildContextBlocks() {
  * A preview of what each block currently resolves to, for the settings panel —
  * so the user can see that a block they enabled is actually empty for this
  * character rather than wondering why nothing changed.
- * @returns {{ key: string, label: string, chars: number }[]}
+ *
+ * `text` is the section exactly as it would appear in the buffer, heading
+ * included, so counting it gives the real marginal cost of enabling the block
+ * rather than the length of the raw field. (The preamble and fences are shared
+ * overhead paid once, whichever blocks are on.)
+ *
+ * @returns {{ key: string, label: string, text: string }[]}
  */
 export function previewContextBlocks() {
-    return CONTEXT_BLOCKS.map(block => ({
-        key: block.key,
-        label: block.label,
-        chars: substituteParams(String(safely(block.read) ?? '')).trim().length,
-    }));
+    return CONTEXT_BLOCKS.map(block => {
+        const value = substituteParams(String(safely(block.read) ?? '')).trim();
+        return {
+            key: block.key,
+            label: block.label,
+            text: value ? `### ${block.label}\n${value}` : '',
+        };
+    });
 }

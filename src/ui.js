@@ -43,6 +43,7 @@ import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import { listProfiles, getActiveProfile, describeTarget, isConnectionManagerAvailable } from './connection.js';
 import { previewContextBlocks } from './context-blocks.js';
+import { paintTokens } from './tokens.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
 
 const EXTENSION_PATH = 'third-party/recall';
@@ -373,9 +374,19 @@ function renderList() {
                 <div class="recall-row-sub recall-dim">
                     Messages ${summary.coversFrom}–${summary.coversTo}
                     ${summary.newFrom > 0 ? ` · new from ${summary.newFrom}` : ''}
+                    · <span data-summary-size="${escapeHtml(summary.id)}"></span>
                 </div>
             </div>`;
     }).join('');
+
+    // A summary sits in permanent context, so its size is the standing cost of
+    // keeping it — the most useful number about it after its text.
+    for (const summary of summaries) {
+        void paintTokens(
+            list.querySelector(`[data-summary-size="${CSS.escape(summary.id)}"]`),
+            summary.content,
+        );
+    }
 
     for (const row of qa('[data-recall-id]')) {
         row.addEventListener('click', async () => {
@@ -478,11 +489,14 @@ function renderDetail() {
         ['Generated with', `${escapeHtml(summary.generatedWith?.setName || 'unknown')}${summary.generatedWith?.isOverride ? ' (character override)' : ''}`],
         ['Hides', summary.hiddenIndices?.length ? `${summary.hiddenIndices.length} message${summary.hiddenIndices.length === 1 ? '' : 's'}` : 'nothing'],
         ['Read', describeReadSet(summary)],
+        ['Size', '<span data-detail-size></span>'],
     ].map(([label, value]) => `
         <div class="recall-meta-row">
             <span class="recall-meta-label">${label}</span>
             <span class="recall-meta-value">${value}</span>
         </div>`).join('');
+
+    void paintTokens(q('[data-detail-size]'), draftContent ?? summary.content);
 
     // textContent, not interpolation: this is text the user typed, and it is being
     // put back on the page.
@@ -1094,8 +1108,16 @@ function renderContextBlocks() {
         <label class="checkbox_label recall-row recall-context-row">
             <input type="checkbox" data-context-block="${escapeHtml(block.key)}" ${enabled[block.key] ? 'checked' : ''}>
             <span class="recall-context-name">${escapeHtml(block.label)}</span>
-            <span class="recall-dim recall-context-size">${block.chars ? `${block.chars.toLocaleString()} chars` : 'empty here'}</span>
+            <span class="recall-dim recall-context-size" data-context-size="${escapeHtml(block.key)}"></span>
         </label>`).join('');
+
+    for (const block of preview) {
+        void paintTokens(
+            container.querySelector(`[data-context-size="${CSS.escape(block.key)}"]`),
+            block.text,
+            { empty: 'empty here' },
+        );
+    }
 
     for (const input of Array.from(container.querySelectorAll('[data-context-block]'))) {
         input.addEventListener('change', event => {
@@ -1226,9 +1248,24 @@ function renderBlocks() {
                     </div>
                 </div>
             </div>
+            <div class="recall-block-meta recall-dim">
+                <span data-block-size="${index}"></span>
+            </div>
             <div class="recall-block-summary recall-dim">${escapeHtml(blockPreview(block))}</div>
             <textarea id="recall_block_${index}" class="text_pole textarea_compact recall-block-content monospace" data-block-content rows="12" hidden>${escapeHtml(block.content)}</textarea>
         </div>`).join('');
+
+    blocks.forEach((block, index) => {
+        void paintTokens(container.querySelector(`[data-block-size="${index}"]`), block.content);
+    });
+
+    // The total counts only enabled blocks, joined exactly as generation joins
+    // them — so it is the system prompt's real cost, not the sum of the parts.
+    void paintTokens(
+        q('[data-recall="blocks-total"]'),
+        blocks.filter(b => b.enabled).map(b => b.content).join('\n\n'),
+        { empty: 'nothing enabled' },
+    );
 
     for (const element of Array.from(container.querySelectorAll('[data-block-index]'))) {
         const index = Number(element.dataset.blockIndex);

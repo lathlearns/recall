@@ -640,9 +640,19 @@
     flex: 0 0 auto;
 }
 
+.recall-block-meta {
+    font-size: calc(var(--mainFontSize) * 0.8);
+}
+
 .recall-block-summary {
     font-size: calc(var(--mainFontSize) * 0.85);
     line-height: 1.4;
+}
+
+.recall-blocks-total {
+    margin-left: auto;
+    font-size: calc(var(--mainFontSize) * 0.85);
+    align-self: center;
 }
 
 .recall-block-content {
