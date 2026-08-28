@@ -144,6 +144,19 @@ Summarize hands the name straight back.
 
 ---
 
+## Checking what actually gets sent
+
+**Preview request** in the manager assembles exactly what *Summarize now* would send and
+shows it without sending it: the system message, the user message, token counts for each,
+and how much room is left. The two messages are shown separately because which half a
+piece of text lands in is usually the thing being checked — reference material belongs in
+the user message alongside the chat, not in the system prompt with the instruction.
+
+It builds through the same code path as the real request rather than describing it, so it
+cannot drift from what is sent and reassure you about the wrong text.
+
+---
+
 ## Where summarization runs
 
 By default Recall uses the main API — the same connection as your chat. Picking a
@@ -260,9 +273,22 @@ deliberately:
    records for free. A branch cut below a summary's anchor shows up as a stale badge on
    the next chat load, which is the correct outcome.
 
+6. **Templates are Handlebars, and every macro in them is live.** ST registers a global
+   `helperMissing` that pipes any unknown expression through `substituteParams`, so naming
+   a macro in help-text prose *resolves* it — writing the recall macro in a paragraph
+   expanded it to the entire active summary, in the middle of a settings panel, twice.
+   Braces in these templates are written as `&#123;` and `&#125;`. Handlebars does not
+   respect HTML comments either, so a malformed example inside one is a compile error that
+   takes the whole template with it. `test/templates.mjs` guards both.
+
 One deviation is a judgement call rather than a correction: §12 lists `MESSAGE_SENT` as
 a nudge trigger, but no itemized entry exists for a message that has not been generated
 against yet, so the check would always skip. Only `MESSAGE_RECEIVED` is wired.
+
+Tests live in `test/` and run with `npm test` (needs `npm install` first, plus
+`npx playwright install chromium` once). They cover the two classes of bug that static
+checking cannot see: CSS that defeats the `hidden` attribute, and templates that expand
+macros written as prose.
 
 Deferred, per §14: the persistent nudge indicator (the toast and threshold tracking do
 ship), multiple named block sets beyond the global-plus-override model, and the desktop

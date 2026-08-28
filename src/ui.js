@@ -38,7 +38,7 @@ import {
     persist,
 } from './store.js';
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
-import { summarizeNow, regenerateSummary, RecallError, isGenerating } from './generate.js';
+import { summarizeNow, regenerateSummary, previewRequest, RecallError, isGenerating } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive } from './legacy.js';
 import { listProfiles, getActiveProfile, describeTarget, isConnectionManagerAvailable } from './connection.js';
@@ -225,6 +225,8 @@ function wireManager({ onSummarize }) {
         }
         renderAll();
     });
+
+    on('[data-recall="preview"]', 'click', showPreview);
 
     on('[data-recall="error-dismiss"]', 'click', () => hideBanner('error'));
     on('[data-recall="notice-dismiss"]', 'click', () => hideBanner('notice'));
@@ -622,6 +624,75 @@ async function doSync() {
     showBanner('notice', parts.length
         ? `Synced: ${parts.join(', ')} message${hidden.length + unhidden.length === 1 ? '' : 's'}.`
         : 'Nothing to sync.');
+}
+
+/**
+ * Shows the exact request Summarize now would send.
+ *
+ * The two messages are shown separately and labelled, because which half a piece
+ * of text lands in is the thing being checked: reference material belongs in the
+ * user message alongside the chat, not in the system prompt with the instruction.
+ */
+async function showPreview() {
+    hideBanner('error');
+
+    let preview;
+    try {
+        preview = await previewRequest();
+    } catch (error) {
+        reportError(error);
+        return;
+    }
+
+    const { tokens, included, indices, seededFromLegacy, target } = preview;
+    const overBudget = tokens.buffer > tokens.available;
+
+    const summaryLine = [
+        `${indices.length} visible message${indices.length === 1 ? '' : 's'}`,
+        included.length ? `reference material: ${included.join(', ')}` : 'no reference material',
+        seededFromLegacy ? 'seeded from the built-in summary' : null,
+    ].filter(Boolean).join(' · ');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'recall-preview';
+    wrapper.innerHTML = `
+        <p class="recall-dim">${escapeHtml(target)}</p>
+        <p class="recall-dim">${escapeHtml(summaryLine)}</p>
+        <p class="${overBudget ? 'recall-preview-over' : 'recall-dim'}">
+            System prompt ${tokens.system.toLocaleString()} tokens ·
+            Chat and material ${tokens.buffer.toLocaleString()} ·
+            Total ${tokens.total.toLocaleString()} ·
+            Room for the buffer ${Math.max(0, tokens.available).toLocaleString()}
+            ${overBudget ? '— over budget, this would be refused' : ''}
+        </p>
+
+        <div class="recall-editor-head">
+            <span class="recall-editor-label">System message — the assembled prompt blocks</span>
+            <i class="editor_maximize fa-solid fa-maximize right_menu_button"
+                data-for="recall_preview_system" title="Expand the editor"></i>
+        </div>
+        <textarea id="recall_preview_system" class="text_pole textarea_compact monospace recall-preview-text"
+            rows="8" readonly></textarea>
+
+        <div class="recall-editor-head">
+            <span class="recall-editor-label">User message — reference material, previous summary, then the chat</span>
+            <i class="editor_maximize fa-solid fa-maximize right_menu_button"
+                data-for="recall_preview_buffer" title="Expand the editor"></i>
+        </div>
+        <textarea id="recall_preview_buffer" class="text_pole textarea_compact monospace recall-preview-text"
+            rows="16" readonly></textarea>`;
+
+    // Assigned rather than interpolated: the buffer contains the whole chat, and
+    // building it into an HTML string is how a stray sequence in someone's
+    // roleplay becomes markup.
+    wrapper.querySelector('#recall_preview_system').value = preview.systemPrompt;
+    wrapper.querySelector('#recall_preview_buffer').value = preview.buffer;
+
+    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', {
+        large: true,
+        wide: true,
+        allowVerticalScrolling: true,
+    }).show();
 }
 
 function reportError(error) {

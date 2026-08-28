@@ -369,6 +369,45 @@ export function hideableIndices(covered) {
 }
 
 /**
+ * Builds exactly what Summarize now would send, without sending it.
+ *
+ * "Is the character description actually reaching the model?" is otherwise only
+ * answerable by reading the network tab, and a setting whose effect you cannot
+ * observe is a setting you cannot trust. This assembles through the same code
+ * path as the real thing rather than describing it — a preview built separately
+ * would drift from the request and reassure about the wrong text.
+ *
+ * @returns {Promise<{
+ *   systemPrompt: string, buffer: string, indices: number[],
+ *   included: string[], seededFromLegacy: boolean, target: string,
+ *   tokens: { system: number, buffer: number, total: number, available: number },
+ * }>}
+ */
+export async function previewRequest() {
+    const systemPrompt = substituteParams(assemblePrompt());
+    const { buffer, indices, seededFromLegacy } = buildBuffer();
+    const { included } = buildContextBlocks();
+
+    const system = await getTokenCountAsync(systemPrompt);
+    const body = await getTokenCountAsync(buffer);
+
+    return {
+        systemPrompt,
+        buffer,
+        indices,
+        included,
+        seededFromLegacy,
+        target: describeTarget(),
+        tokens: {
+            system,
+            buffer: body,
+            total: system + body,
+            available: getPromptBudget() - system - BUDGET_PADDING,
+        },
+    };
+}
+
+/**
  * Summarize now — produce a new summary over the currently visible chat.
  * @returns {Promise<import('./store.js').RecallSummary>}
  */

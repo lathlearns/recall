@@ -641,6 +641,30 @@
     font-size: calc(var(--mainFontSize) * 0.9);
 }
 
+/* --- Request preview ------------------------------------------------------ */
+
+.recall-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    text-align: left;
+}
+
+.recall-preview p {
+    margin: 0;
+    font-size: calc(var(--mainFontSize) * 0.88);
+}
+
+.recall-preview-text {
+    width: 100%;
+    resize: vertical;
+    font-size: calc(var(--mainFontSize) * 0.85);
+}
+
+.recall-preview-over {
+    color: var(--SmartThemeQuoteColor);
+}
+
 .recall-override-row {
     padding-top: 0.5em;
     border-top: 1px dashed var(--SmartThemeBorderColor);

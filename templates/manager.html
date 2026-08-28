@@ -1,3 +1,16 @@
+<!--
+    NOTE: never write a literal double-brace macro in this file.
+
+    Extension templates are compiled by Handlebars, and ST registers a global
+    helperMissing that pipes any unknown expression through substituteParams. So a
+    macro name written as prose in help text is *resolved* at render time: writing
+    the recall macro in a paragraph expands it to the entire active summary, which
+    is exactly what happened here once.
+
+    Handlebars does not respect HTML comments either, so this note cannot contain
+    an example. Write the braces as the entities &#123; and &#125; -- Handlebars
+    never sees a brace, and the browser renders them normally.
+-->
 <div class="recall-manager" data-recall-view="list">
 
     <div class="recall-topbar">
@@ -9,6 +22,11 @@
             </div>
         </div>
         <div class="recall-topbar-actions">
+            <div class="menu_button menu_button_icon" data-recall="preview"
+                title="Show exactly what would be sent, without sending it.">
+                <i class="fa-solid fa-eye"></i>
+                <span>Preview request</span>
+            </div>
             <div class="menu_button menu_button_icon recall-action-primary" data-recall="summarize-now">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                 <span>Summarize now</span>
@@ -56,7 +74,7 @@
                     </p>
                     <p class="recall-dim recall-empty-fallback" data-recall="empty-fallback" hidden>
                         This chat has a summary left by the built-in Summarize.
-                        <b>{{recall}}</b> is resolving to it in the meantime, and the
+                        <b>&#123;&#123;recall&#125;&#125;</b> is resolving to it in the meantime, and the
                         first summary you generate will revise it rather than start over.
                     </p>
                 </div>
@@ -237,7 +255,7 @@
                     <span>Use its old summary until Recall has one</span>
                 </label>
                 <p class="recall-help">
-                    On a chat the built-in already summarised, <b>{{recall}}</b> resolves to that
+                    On a chat the built-in already summarised, <b>&#123;&#123;recall&#125;&#125;</b> resolves to that
                     summary until you generate your first, and it seeds that first generation so
                     Recall revises it instead of writing a new one from scratch. Read-only, and it
                     does not need the built-in to be enabled — the text lives in the chat file.
@@ -247,7 +265,7 @@
 
                 <label class="checkbox_label recall-row">
                     <input type="checkbox" data-recall="summary-alias">
-                    <span>Also answer to <code>{{summary}}</code></span>
+                    <span>Also answer to <code>&#123;&#123;summary&#125;&#125;</code></span>
                 </label>
                 <p class="recall-help" data-recall="alias-status"></p>
             </section>

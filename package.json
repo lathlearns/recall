@@ -1,0 +1,14 @@
+{
+  "name": "recall",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Development tooling for the Recall SillyTavern extension. Not loaded by SillyTavern, which reads manifest.json.",
+  "type": "module",
+  "scripts": {
+    "test": "node test/templates.mjs && node test/visibility.mjs"
+  },
+  "devDependencies": {
+    "handlebars": "^4.7.8",
+    "playwright": "^1.49.0"
+  }
+}
