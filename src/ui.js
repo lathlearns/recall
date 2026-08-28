@@ -38,7 +38,7 @@ import {
     persist,
 } from './store.js';
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
-import { summarizeNow, regenerateSummary, previewRequest, RecallError, isGenerating } from './generate.js';
+import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, isGenerating } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import { listProfiles, getActiveProfile, describeTarget, isConnectionManagerAvailable } from './connection.js';
@@ -367,6 +367,25 @@ function renderList() {
     }
 }
 
+/**
+ * Parses "96-150" or "96 - 150". Deliberately strict: a silently misread range
+ * would send the wrong material with no sign of it.
+ * @param {string} value
+ * @returns {{from: number, to: number}|null}
+ */
+function parseRange(value) {
+    const match = String(value ?? '').trim().match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+    if (!match) {
+        return null;
+    }
+    const from = Number(match[1]);
+    const to = Number(match[2]);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) {
+        return null;
+    }
+    return { from, to };
+}
+
 async function confirmDiscardDetail() {
     return await Popup.show.confirm(
         'Discard unsaved changes?',
@@ -434,6 +453,7 @@ function renderDetail() {
         ['Edited', summary.editedAt ? formatTimestamp(summary.editedAt) : 'never'],
         ['Generated with', `${escapeHtml(summary.generatedWith?.setName || 'unknown')}${summary.generatedWith?.isOverride ? ' (character override)' : ''}`],
         ['Hides', summary.hiddenIndices?.length ? `${summary.hiddenIndices.length} message${summary.hiddenIndices.length === 1 ? '' : 's'}` : 'nothing'],
+        ['Read', describeReadSet(summary)],
     ].map(([label, value]) => `
         <div class="recall-meta-row">
             <span class="recall-meta-label">${label}</span>
@@ -449,6 +469,22 @@ function renderDetail() {
 
     renderMismatch(summary, isActive);
     renderDirty();
+}
+
+/**
+ * What a redo of this summary would actually replay. Coverage is a range; the read
+ * set is what was in the buffer, and on any summary after the first those differ.
+ */
+function describeReadSet(summary) {
+    const { exact, indices, extra } = resolveSourceIndices(summary);
+
+    if (exact) {
+        return `${indices.length} message${indices.length === 1 ? '' : 's'}, recorded`;
+    }
+    if (summary.sourceIndicesInferred) {
+        return `${indices.length} message${indices.length === 1 ? '' : 's'}, as you specified`;
+    }
+    return `not recorded — a redo would replay all ${extra} in range`;
 }
 
 function renderMismatch(summary, isActive) {
@@ -513,10 +549,53 @@ async function doRegenerate() {
 
     hideBanner('error');
 
+    let override = null;
+
+    // A summary from before the read set was recorded can only be replayed from
+    // its coverage range, which is very likely more than it read. Say so with the
+    // real numbers, and let the range be corrected rather than merely confirmed.
+    const { exact, rangeIndices } = resolveSourceIndices(summary);
+
+    if (!exact) {
+        const first = rangeIndices[0] ?? summary.coversFrom;
+        const last = rangeIndices[rangeIndices.length - 1] ?? summary.coversTo;
+
+        const answer = await Popup.show.input(
+            'This summary did not record what it read',
+            `It covers messages ${summary.coversFrom}–${summary.coversTo}, but only its range was stored, not the list. `
+            + `Regenerating will replay all ${rangeIndices.length} messages in that range — including any an earlier `
+            + 'summary had already hidden, which the original never saw.\n\n'
+            + 'Accept the range below to send all of it, or narrow it to what this summary actually covered.',
+            `${first}-${last}`,
+        );
+
+        if (answer === null) {
+            return;
+        }
+
+        const parsed = parseRange(answer);
+        if (!parsed) {
+            showBanner('error', `"${answer}" is not a range. Use two message numbers separated by a dash, like 96-150.`);
+            return;
+        }
+
+        override = rangeIndices.filter(i => i >= parsed.from && i <= parsed.to);
+        if (!override.length) {
+            showBanner('error', `No messages in ${parsed.from}–${parsed.to} are still in this chat.`);
+            return;
+        }
+
+        // Keep what the user told us, so the next redo of this summary is exact.
+        // Flagged as inferred: it is their statement, not a recording.
+        summary.sourceIndices = [...override];
+        summary.sourceIndicesInferred = true;
+        persist({ immediate: true });
+    }
+
     try {
         // Regeneration produces a sibling, never a replacement. Both persist, and
         // neither becomes active on its own — the user compares and picks.
-        const sibling = await regenerateSummary(summary.id);
+        const sibling = await regenerateSummary(summary.id, override);
         selectedId = sibling.id;
         resetDraft();
         refreshDrawer();

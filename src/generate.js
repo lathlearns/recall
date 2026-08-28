@@ -459,6 +459,10 @@ export async function summarizeNow() {
             rangeHash: settings.deepIntegrityCheck ? computeRangeHash(0, coversTo) : null,
             generatedWith: { setName, isOverride },
             seededFromLegacy: !!seededFromLegacy,
+            // Recorded so a later regenerate replays this exact set rather than
+            // re-deriving it from the coverage range, which would sweep in every
+            // message an earlier summary had already hidden.
+            sourceIndices: [...indices],
         });
 
         addSummary(record);
@@ -488,7 +492,51 @@ export async function summarizeNow() {
  * @param {string} id
  * @returns {Promise<import('./store.js').RecallSummary>}
  */
-export async function regenerateSummary(id) {
+/**
+ * Works out which messages a redo should replay.
+ *
+ * A summary generated since this was recorded knows exactly what it read. One
+ * generated before it does not, and the only thing left to fall back on is its
+ * coverage range — which is not the same set, and is the bug this exists to make
+ * visible: the range includes every message an earlier summary had already hidden,
+ * none of which were in the original buffer.
+ *
+ * @param {import('./store.js').RecallSummary} summary
+ * @returns {{ indices: number[], exact: boolean, rangeIndices: number[], extra: number }}
+ */
+export function resolveSourceIndices(summary) {
+    const rangeIndices = [];
+    for (let i = summary.coversFrom; i <= summary.coversTo && i < chat.length; i++) {
+        if (chat[i]) {
+            rangeIndices.push(i);
+        }
+    }
+
+    const recorded = (summary.sourceIndices ?? []).filter(i => chat[i]);
+
+    if (recorded.length) {
+        return {
+            indices: recorded,
+            exact: !summary.sourceIndicesInferred,
+            rangeIndices,
+            extra: 0,
+        };
+    }
+
+    return {
+        indices: rangeIndices,
+        exact: false,
+        rangeIndices,
+        extra: rangeIndices.length,
+    };
+}
+
+/**
+ * @param {string} id
+ * @param {number[]} [indicesOverride] Messages to replay instead, when the user
+ *        has told Recall what the original actually covered.
+ */
+export async function regenerateSummary(id, indicesOverride = null) {
     checkGuards();
 
     const original = getSummaryById(id);
@@ -508,14 +556,9 @@ export async function regenerateSummary(id) {
 
     const systemPrompt = substituteParams(assemblePrompt());
 
-    // The same messages the original saw: everything in its covered range that is
-    // not a genuine ST system message, hidden or not.
-    const indices = [];
-    for (let i = original.coversFrom; i <= original.coversTo && i < chat.length; i++) {
-        if (chat[i]) {
-            indices.push(i);
-        }
-    }
+    const indices = indicesOverride?.length
+        ? indicesOverride.filter(i => chat[i])
+        : resolveSourceIndices(original).indices;
 
     if (!indices.length) {
         throw new RecallError('The messages this summary covered are no longer in the chat.', { kind: 'missing' });
@@ -560,6 +603,8 @@ export async function regenerateSummary(id) {
             generatedWith: { setName, isOverride },
             regeneratedFrom: original.id,
             seededFromLegacy: !!original.seededFromLegacy,
+            sourceIndices: [...indices],
+            sourceIndicesInferred: !!indicesOverride,
             // Hide ownership stays with the original. One summary owns a hidden
             // range, always.
             hiddenIndices: [],

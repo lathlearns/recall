@@ -32,6 +32,8 @@ export const STORE_KEY = 'recall';
  * @property {number|null} editedAt
  * @property {{setName: string, isOverride: boolean}} generatedWith
  * @property {string|null} regeneratedFrom  Id of the summary this is a sibling of.
+ * @property {number[]} sourceIndices   The messages actually in the buffer. Empty on records written before this was captured.
+ * @property {boolean} sourceIndicesInferred  True when the read set was supplied by the user rather than recorded at generation.
  * @property {number[]} hiddenIndices   Indices this summary actually flipped to hidden.
  * @property {boolean} stale            Set by drift detection when the anchor is gone.
  * @property {boolean} seededFromLegacy Built on the built-in Summarize's stored summary rather than from scratch.
@@ -143,6 +145,13 @@ export function createSummaryRecord(fields) {
         editedAt: null,
         generatedWith: { setName: '', isOverride: false },
         regeneratedFrom: null,
+        // What the buffer actually contained. Coverage is a *range*; the buffer was
+        // "whatever was visible", which is a range minus arbitrary holes wherever an
+        // earlier summary or the user had already hidden something. Those two are
+        // only the same set for the very first summary in a chat, so re-deriving
+        // the material from the range fabricates messages the summary never read.
+        sourceIndices: [],
+        sourceIndicesInferred: false,
         hiddenIndices: [],
         stale: false,
         seededFromLegacy: false,
@@ -361,6 +370,11 @@ export function runDriftDetection(deepCheck = false) {
             // optional: leave it uncorrected and a later delete unhides the wrong
             // messages, stranding some and popping others back mid-range.
             summary.hiddenIndices = summary.hiddenIndices
+                .map(i => i + delta)
+                .filter(i => i >= 0 && i < chat.length);
+            // The read set is a raw index list too, and drifts for the same reason.
+            // Left uncorrected it would replay the wrong messages on a regenerate.
+            summary.sourceIndices = (summary.sourceIndices ?? [])
                 .map(i => i + delta)
                 .filter(i => i >= 0 && i < chat.length);
             summary.stale = false;

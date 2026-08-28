@@ -62,9 +62,22 @@ tail, which defaults to the newest 5.
 
 **Regenerate** redoes an existing summary over the same material and produces a
 *sibling*, never a replacement. Both persist so you can compare and pick; neither
-becomes active on its own. Regeneration touches no state at all — it rebuilds the
-buffer from the original's recorded indices whether or not those messages are
-currently hidden.
+becomes active on its own. It rebuilds the buffer from the exact list of messages the
+original read, whether or not they are currently hidden — a summary hides its own
+material immediately after generating, so ignoring hidden state is what makes a redo
+possible at all.
+
+That list is *not* the coverage range. Coverage is a range; the buffer was "whatever was
+visible", which is a range minus arbitrary holes wherever an earlier summary or you had
+already hidden something. The two coincide only for the first summary in a chat. Deriving
+the material from the range instead — which Recall did until this was caught — feeds a
+redo every message an earlier summary hid: on a chat with three summaries, the third was
+regenerated against 151 messages when it had read 56.
+
+Summaries record their read set at generation time. Older ones have no such record, so
+regenerating them opens a prompt showing what the range would actually send and letting
+you narrow it; what you enter is kept, so the next redo of that summary is exact. The
+detail pane's **Read** row says which state a summary is in.
 
 **Making a summary active** changes what `{{recall}}` resolves to and nothing else. It
 never moves a message. You can browse and diff the whole archive without touching the
