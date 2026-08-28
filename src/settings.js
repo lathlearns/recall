@@ -108,6 +108,23 @@ const DEFAULT_SETTINGS = {
     /** In tokens. 0 means "derive from the context limit" — see AUTO_NUDGE_FRACTION. */
     nudgeThreshold: 0,
 
+    // --- Migration from the built-in Summarize ---
+
+    /**
+     * On a chat where Recall has no summary yet, stand in the built-in's stored
+     * summary: `{{recall}}` resolves to it, and it seeds the first summarization
+     * so Recall continues that summary rather than restarting from scratch.
+     * Read-only, and does not require the built-in to be enabled.
+     */
+    legacyFallback: true,
+
+    /**
+     * Also answer to `{{summary}}`, so presets that were never updated keep
+     * working. Registered only while the built-in Summarize is disabled — see
+     * macro.js for why that condition is not optional.
+     */
+    summaryAlias: true,
+
     // --- Advanced ---
 
     /**

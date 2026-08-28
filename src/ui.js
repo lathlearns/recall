@@ -10,7 +10,7 @@
  */
 
 import { chat, getMaxContextTokens } from '../../../../../script.js';
-import { renderExtensionTemplateAsync } from '../../../../extensions.js';
+import { renderExtensionTemplateAsync, extension_settings } from '../../../../extensions.js';
 import { Popup, POPUP_TYPE } from '../../../../popup.js';
 
 import {
@@ -40,6 +40,7 @@ import {
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
 import { summarizeNow, regenerateSummary, RecallError, isGenerating } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
+import { isLegacyFallbackActive } from './legacy.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
 
 const EXTENSION_PATH = 'third-party/recall';
@@ -79,13 +80,18 @@ export function refreshDrawer() {
     }
 
     const active = getActiveSummary();
+    const onFallback = isLegacyFallbackActive();
 
     drawerRoot.find('[data-recall="active-name"]')
-        .text(active ? (active.name || 'Untitled') : 'None')
+        .text(active
+            ? (active.name || 'Untitled')
+            : (onFallback ? 'Built-in summary (stand-in)' : 'None'))
         .toggleClass('recall-dim', !active);
 
     drawerRoot.find('[data-recall="active-coverage"]')
-        .text(active ? describeCoverage(active) : '—');
+        .text(active
+            ? describeCoverage(active)
+            : (onFallback ? 'from the built-in Summarize' : '—'));
 
     drawerRoot.find('[data-recall="context-usage"]').text(describeUsage());
 
@@ -301,6 +307,7 @@ function renderList() {
     if (!summaries.length) {
         list.innerHTML = '';
         empty.removeAttribute('hidden');
+        q('[data-recall="empty-fallback"]')?.toggleAttribute('hidden', !isLegacyFallbackActive());
         return;
     }
 
@@ -399,6 +406,9 @@ function renderDetail() {
     }
     if (summary.stale) {
         badges.push('<span class="recall-badge recall-badge-warn">Stale anchor</span>');
+    }
+    if (summary.seededFromLegacy) {
+        badges.push('<span class="recall-badge">Continued the built-in summary</span>');
     }
     q('[data-recall="detail-badges"]').innerHTML = badges.join('');
 
@@ -644,6 +654,8 @@ function wireSettings() {
     bindCheckbox('blocking', 'blocking');
     bindCheckbox('nudge-enabled', 'nudgeEnabled');
     bindCheckbox('deep-integrity', 'deepIntegrityCheck');
+    bindCheckbox('legacy-fallback', 'legacyFallback', () => { renderAll(); refreshDrawer(); });
+    bindCheckbox('summary-alias', 'summaryAlias', renderAliasStatus);
 
     bindNumber('tail-pin', 'tailPin', 0, 200);
     bindNumber('nudge-threshold', 'nudgeThreshold', 0, 10_000_000, renderNudgeHint);
@@ -723,12 +735,43 @@ function wireSettings() {
     void settings;
 }
 
-function bindCheckbox(hook, key) {
+function bindCheckbox(hook, key, after) {
     on(`[data-recall="${hook}"]`, 'change', event => {
         getSettings()[key] = !!event.target.checked;
         saveSettings();
         refreshDrawer();
+        after?.();
     });
+}
+
+/**
+ * The alias is conditional, and the condition is invisible from the checkbox
+ * alone, so the panel says which state it is actually in rather than implying the
+ * setting took effect.
+ */
+function renderAliasStatus() {
+    const status = q('[data-recall="alias-status"]');
+    if (!status) {
+        return;
+    }
+
+    if (!getSettings().summaryAlias) {
+        status.textContent = 'Only {{recall}} resolves. Your preset must name it directly.';
+        return;
+    }
+
+    if (!isSummarizeDisabled()) {
+        status.textContent = 'Not active: the built-in Summarize is enabled, so {{summary}} is left to it. '
+            + 'Disable Summarize and reload for this to take effect — until then, use {{recall}}.';
+        return;
+    }
+
+    status.textContent = 'Active: {{summary}} resolves to the Recall summary, so an unedited preset keeps working. '
+        + 'Re-enabling the built-in Summarize hands the name straight back on the next reload.';
+}
+
+function isSummarizeDisabled() {
+    return (extension_settings.disabledExtensions ?? []).includes('memory');
 }
 
 function bindNumber(hook, key, min, max, after) {
@@ -754,6 +797,8 @@ function renderSettings() {
     setChecked('blocking', settings.blocking);
     setChecked('nudge-enabled', settings.nudgeEnabled);
     setChecked('deep-integrity', settings.deepIntegrityCheck);
+    setChecked('legacy-fallback', settings.legacyFallback);
+    setChecked('summary-alias', settings.summaryAlias);
 
     setValue('tail-pin', settings.tailPin);
     setValue('nudge-threshold', settings.nudgeThreshold);
@@ -764,6 +809,7 @@ function renderSettings() {
     setValue('framing-suffix', settings.framingSuffix);
 
     renderNudgeHint();
+    renderAliasStatus();
     renderScope();
     renderBlocks();
 }

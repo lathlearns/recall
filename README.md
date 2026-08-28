@@ -38,11 +38,18 @@ will populate that field itself. If you must leave it enabled, tick its **Pause*
 `[Summary: {{recall}}]`. One-time edit. The wrapper text does not change, only the
 macro inside it.
 
-**3. If this chat already has hidden messages, unhide everything before the first
-summary.** The default prompt tells the model to read the entire chat when creating a
-summary from scratch. On an old chat previously managed with the built-in, that
-instruction is given while only the visible tail is shown — producing a confident
-summary of recent messages presented as covering the whole story.
+**3. Old chats carry over automatically.** On a chat the built-in already summarised,
+`{{recall}}` resolves to that old summary until you generate your first Recall one, and
+that old summary seeds the first generation — so Recall *revises* it rather than writing
+a new one from scratch. This is read-only and does not need the built-in enabled; the
+text lives in the chat file, not the extension.
+
+It also removes what the design document called the first-run footgun. Without it, an old
+chat with messages already hidden would hand Recall an empty `[Summary: ]`, firing the
+prompt's "read the entire chat" branch while showing it only the visible tail — a
+confident summary of recent messages presented as covering the whole story. With the
+seed, the revise branch fires and the old summary supplies the history instead. If you
+turn the fallback off, unhide everything before your first summary.
 
 ---
 
@@ -85,6 +92,8 @@ start looking for a stopping point.
 | **Output budget** | The generation limit sent to the API. |
 | Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
 | Minimum summary length | Shorter responses are treated as generation failures, not saved as stubs. |
+| Use the built-in's old summary | Stand in `extra.memory` until Recall has a summary of its own, and seed the first generation with it. |
+| Also answer to `{{summary}}` | Register `{{summary}}` as a second name for the Recall summary — only while the built-in Summarize is disabled. |
 | Deep integrity check | Also hash the whole covered range, catching edits below a summary's anchor. Off by default — it flags on any edit anywhere in history. |
 
 ### The two limits
@@ -114,6 +123,20 @@ right value:
 
 Recall does not read or change Reasoning Effort. That is a global chat setting and
 belongs to you.
+
+---
+
+### The `{{summary}}` alias
+
+Recall can also answer to `{{summary}}`, so a preset that was never updated keeps working.
+It is registered **only while the built-in Summarize is disabled**, and that condition is
+not a formality: the macro registry overwrites on a name collision with nothing but a
+console warning, and Recall's `loading_order` of 10 puts it after Summarize's 9. With both
+enabled, Recall would silently win the name and which summary reached your prompt would be
+a function of load order. The condition is re-evaluated every page load, so re-enabling
+Summarize hands the name straight back.
+
+`{{recall}}` always works regardless, and remains the name worth putting in a preset.
 
 ---
 
@@ -148,7 +171,8 @@ until you press Save.
 Vectorization / embeddings / RAG. Lorebook or World Info integration. Prompt injection —
 Recall never calls `setExtensionPrompt`. Extras API and WebLLM sources. The Classic
 prompt builder. Per-message summaries. Range selection. Importing from the built-in
-Summarize.
+Summarize — except reading its stored summary once, to carry an old chat over
+(see setup step 3). Recall never *writes* to `extra.memory`.
 
 ---
 

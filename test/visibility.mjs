@@ -62,7 +62,7 @@ if (rehidden !== 'none') failures.push(`banner did not re-hide on dismiss (got $
 // 4. Every element the JS toggles must start hidden in the template.
 const shouldStartHidden = ['error','notice','empty','detail-body','stale-banner',
                            'mismatch-banner','redo-banner','detail-dirty','blocks-dirty',
-                           'oos-banner','advanced','strip-notice'];
+                           'oos-banner','advanced','strip-notice','empty-fallback'];
 for (const hook of shouldStartHidden) {
     const state = await p.$eval(`[data-recall="${hook}"]`, el =>
         ({ hidden: el.hasAttribute('hidden'), display: getComputedStyle(el).display }))

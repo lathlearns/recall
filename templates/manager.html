@@ -54,6 +54,11 @@
                         Hide the messages you want left out, then press
                         <b>Summarize now</b>.
                     </p>
+                    <p class="recall-dim recall-empty-fallback" data-recall="empty-fallback" hidden>
+                        This chat has a summary left by the built-in Summarize.
+                        <b>{{recall}}</b> is resolving to it in the meantime, and the
+                        first summary you generate will revise it rather than start over.
+                    </p>
                 </div>
             </div>
 
@@ -162,6 +167,29 @@
                     <input type="checkbox" data-recall="blocking">
                     <span>Block sending while a summary generates</span>
                 </label>
+            </section>
+
+            <section class="recall-section">
+                <h4 class="recall-section-title">Coming from the built-in Summarize</h4>
+
+                <label class="checkbox_label recall-row">
+                    <input type="checkbox" data-recall="legacy-fallback">
+                    <span>Use its old summary until Recall has one</span>
+                </label>
+                <p class="recall-help">
+                    On a chat the built-in already summarised, <b>{{recall}}</b> resolves to that
+                    summary until you generate your first, and it seeds that first generation so
+                    Recall revises it instead of writing a new one from scratch. Read-only, and it
+                    does not need the built-in to be enabled — the text lives in the chat file.
+                    This is also what makes an old chat with already-hidden messages safe to
+                    summarise without unhiding everything first.
+                </p>
+
+                <label class="checkbox_label recall-row">
+                    <input type="checkbox" data-recall="summary-alias">
+                    <span>Also answer to <code>{{summary}}</code></span>
+                </label>
+                <p class="recall-help" data-recall="alias-status"></p>
             </section>
 
             <section class="recall-section">

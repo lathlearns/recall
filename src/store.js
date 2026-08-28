@@ -34,6 +34,7 @@ export const STORE_KEY = 'recall';
  * @property {string|null} regeneratedFrom  Id of the summary this is a sibling of.
  * @property {number[]} hiddenIndices   Indices this summary actually flipped to hidden.
  * @property {boolean} stale            Set by drift detection when the anchor is gone.
+ * @property {boolean} seededFromLegacy Built on the built-in Summarize's stored summary rather than from scratch.
  */
 
 function emptyStore() {
@@ -144,6 +145,7 @@ export function createSummaryRecord(fields) {
         regeneratedFrom: null,
         hiddenIndices: [],
         stale: false,
+        seededFromLegacy: false,
         ...fields,
     };
 }

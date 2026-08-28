@@ -26,6 +26,7 @@ import { is_group_generating, selected_group } from '../../../../group-chats.js'
 import { getStringHash } from '../../../../utils.js';
 import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
+import { getFallbackSummary } from './legacy.js';
 
 import {
     getSettings,
@@ -115,10 +116,19 @@ function buildBufferFrom(indices, previousSummary) {
 export function buildBuffer() {
     const indices = getVisibleIndices();
     const previous = getActiveSummary();
+
+    // With no Recall summary yet, the built-in's stands in if the user enabled the
+    // fallback. This is what makes the first summary on a migrated chat a revision
+    // rather than a from-scratch rewrite — and it is the real fix for §3.1, since
+    // the old summary supplies the history that the already-hidden messages would
+    // otherwise have had to.
+    const seed = previous?.content ?? getFallbackSummary();
+
     return {
-        buffer: buildBufferFrom(indices, previous?.content ?? ''),
+        buffer: buildBufferFrom(indices, seed),
         indices,
         previous,
+        seededFromLegacy: !previous && !!seed,
     };
 }
 
@@ -319,7 +329,7 @@ export async function summarizeNow() {
     }
 
     const systemPrompt = substituteParams(assemblePrompt());
-    const { buffer, indices, previous } = buildBuffer();
+    const { buffer, indices, previous, seededFromLegacy } = buildBuffer();
 
     if (!indices.length) {
         throw new RecallError('Every message is hidden — there is nothing visible to summarize.', { kind: 'empty' });
@@ -355,6 +365,7 @@ export async function summarizeNow() {
             anchorHash: getStringHash(chat[coversTo]?.mes ?? ''),
             rangeHash: settings.deepIntegrityCheck ? computeRangeHash(0, coversTo) : null,
             generatedWith: { setName, isOverride },
+            seededFromLegacy: !!seededFromLegacy,
         });
 
         addSummary(record);
@@ -423,7 +434,12 @@ export async function regenerateSummary(id) {
         ? getSummaryById(original.regeneratedFrom)
         : previousSummaryOf(original);
 
-    const buffer = buildBufferFrom(indices, basis?.content ?? '');
+    // A first summary that was itself seeded from the built-in must be redone
+    // against the same seed, or the sibling is not comparable to the original.
+    const basisContent = basis?.content
+        ?? (original.seededFromLegacy ? getFallbackSummary() : '');
+
+    const buffer = buildBufferFrom(indices, basisContent);
     await enforceBudget(buffer, systemPrompt, indices);
 
     const snapshot = captureContext();
@@ -450,6 +466,7 @@ export async function regenerateSummary(id) {
             rangeHash: original.rangeHash,
             generatedWith: { setName, isOverride },
             regeneratedFrom: original.id,
+            seededFromLegacy: !!original.seededFromLegacy,
             // Hide ownership stays with the original. One summary owns a hidden
             // range, always.
             hiddenIndices: [],

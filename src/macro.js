@@ -10,9 +10,18 @@ import { MacrosParser } from '../../../../macros.js';
 import { power_user } from '../../../../power-user.js';
 import { SlashCommandParser } from '../../../../slash-commands/SlashCommandParser.js';
 import { SlashCommand } from '../../../../slash-commands/SlashCommand.js';
+import { extension_settings } from '../../../../extensions.js';
 import { getActiveSummary } from './store.js';
+import { getFallbackSummary } from './legacy.js';
+import { getSettings } from './settings.js';
 
 export const MACRO_NAME = 'recall';
+
+/** The built-in Summarize extension's manifest key. */
+const BUILTIN_SUMMARIZE = 'memory';
+
+/** The name the built-in claims. Only taken over while it is disabled. */
+const ALIAS_NAME = 'summary';
 
 /**
  * Resolves to the active summary's `content` field and nothing else. No other
@@ -28,7 +37,15 @@ export const MACRO_NAME = 'recall';
  */
 function resolveRecall() {
     try {
-        return getActiveSummary()?.content ?? '';
+        const active = getActiveSummary();
+        if (active) {
+            return active.content ?? '';
+        }
+
+        // No Recall summary for this chat. Stand in the built-in's, if the user
+        // asked for that and one exists, so an old chat is not left with no memory
+        // at all until the first Recall summary is generated.
+        return getFallbackSummary();
     } catch (error) {
         console.error('[Recall] Macro resolution failed', error);
         return '';
@@ -55,6 +72,44 @@ export function registerMacro() {
     if (!power_user?.experimental_macro_engine) {
         console.warn('[Recall] The experimental macro engine is disabled; registering {{recall}} through the legacy macro parser as well.');
         MacrosParser.registerMacro(MACRO_NAME, resolveRecall, 'The active Recall summary.');
+    }
+
+    registerAlias();
+}
+
+/**
+ * Also answer to `{{summary}}`, so a preset that was never updated keeps working.
+ *
+ * **Only while the built-in Summarize is disabled.** The registry overwrites on a
+ * name collision with nothing but a console warning, and Recall's loading_order of
+ * 10 puts it after Summarize's 9 — so with both enabled Recall would silently win
+ * the name, and which summary reached the prompt would be a function of load
+ * order. That is exactly the failure the design document avoided by choosing a
+ * fresh macro name, and it is not worth reintroducing for a convenience.
+ *
+ * The condition is re-evaluated on every page load, so enabling Summarize again
+ * hands the name straight back.
+ */
+function registerAlias() {
+    if (!getSettings().summaryAlias) {
+        return;
+    }
+
+    const summarizeDisabled = (extension_settings.disabledExtensions ?? []).includes(BUILTIN_SUMMARIZE);
+    if (!summarizeDisabled) {
+        console.info(`[Recall] The built-in Summarize is enabled, so {{${ALIAS_NAME}}} is left to it. Use {{recall}}.`);
+        return;
+    }
+
+    if (macros.registry.hasMacro(ALIAS_NAME)) {
+        console.warn(`[Recall] {{${ALIAS_NAME}}} is already registered by something else; leaving it alone. Use {{recall}}.`);
+        return;
+    }
+
+    macros.registry.registerMacroAlias(MACRO_NAME, ALIAS_NAME);
+
+    if (!power_user?.experimental_macro_engine) {
+        MacrosParser.registerMacro(ALIAS_NAME, resolveRecall, 'The active Recall summary (alias of {{recall}}).');
     }
 }
 
