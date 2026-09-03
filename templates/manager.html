@@ -50,22 +50,6 @@
             placeholder="Optional guidance for the next pass — cleared after it runs, not remembered">
     </div>
 
-    <div class="recall-banner recall-banner-error" data-recall="error" hidden>
-        <i class="fa-solid fa-triangle-exclamation"></i>
-        <span data-recall="error-text"></span>
-        <div class="recall-banner-dismiss" data-recall="error-dismiss" title="Dismiss">
-            <i class="fa-solid fa-xmark"></i>
-        </div>
-    </div>
-
-    <div class="recall-banner recall-banner-notice" data-recall="notice" hidden>
-        <i class="fa-solid fa-circle-info"></i>
-        <span data-recall="notice-text"></span>
-        <div class="recall-banner-dismiss" data-recall="notice-dismiss" title="Dismiss">
-            <i class="fa-solid fa-xmark"></i>
-        </div>
-    </div>
-
     <!--
         Not dismissable, and not in the empty state's small print: which summary is
         reaching the prompt is the single most consequential thing this panel knows,
@@ -86,6 +70,39 @@
     <!-- ============================ ARCHIVE ============================ -->
 
     <div class="recall-pane recall-pane-active" data-recall-pane="archive">
+
+        <!--
+            The dismissable banners live inside a pane rather than above them all,
+            and follow the visible pane as the tabs change. Pinned above, each one
+            was a permanent 100-200px slice off the top of a phone screen: two of
+            them took the settings pane from 553px of reading room down to 332px,
+            and a banner is most likely to be showing exactly when you have opened
+            Settings to deal with what it is complaining about. Inside the pane
+            they scroll away with everything else on a phone, and sit where they
+            always did on a desktop, where the pane is not the scroller.
+
+            The fallback banner deliberately stays outside: it is not a note about
+            something that happened, it is a standing statement about which summary
+            is reaching the prompt, and it is the only one that cannot be dismissed.
+        -->
+        <div class="recall-banners" data-recall="banners">
+            <div class="recall-banner recall-banner-error" data-recall="error" hidden>
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span data-recall="error-text"></span>
+                <div class="recall-banner-dismiss" data-recall="error-dismiss" title="Dismiss">
+                    <i class="fa-solid fa-xmark"></i>
+                </div>
+            </div>
+
+            <div class="recall-banner recall-banner-notice" data-recall="notice" hidden>
+                <i class="fa-solid fa-circle-info"></i>
+                <span data-recall="notice-text"></span>
+                <div class="recall-banner-dismiss" data-recall="notice-dismiss" title="Dismiss">
+                    <i class="fa-solid fa-xmark"></i>
+                </div>
+            </div>
+        </div>
+
         <div class="recall-split">
 
             <div class="recall-master">
@@ -216,11 +233,20 @@
                     <span>Hide covered messages after summarizing</span>
                 </label>
 
+                <!--
+                    The field and the words that name its unit are one phrase, so
+                    they are one element. Left as siblings of the leading label,
+                    a narrow screen broke the sentence after the box and stranded
+                    "messages visible" on a line by itself, reading as a fragment
+                    rather than as the end of the label above it.
+                -->
                 <div class="recall-row recall-row-field">
                     <label for="recall-tail-pin">Keep the newest</label>
-                    <input id="recall-tail-pin" class="text_pole recall-number" type="number" min="0" max="200"
-                        data-recall="tail-pin">
-                    <label for="recall-tail-pin">messages visible</label>
+                    <span class="recall-field-unit">
+                        <input id="recall-tail-pin" class="text_pole recall-number" type="number" min="0" max="200"
+                            data-recall="tail-pin">
+                        <label for="recall-tail-pin">messages visible</label>
+                    </span>
                 </div>
                 <p class="recall-help">
                     Message&nbsp;0 is never hidden, whatever this is set to. The pinned tail keeps the
@@ -250,9 +276,11 @@
 
                 <div class="recall-row recall-row-field" data-recall="profile-context-row" hidden>
                     <label for="recall-profile-context">Its context size</label>
-                    <input id="recall-profile-context" class="text_pole recall-number" type="number" min="0"
-                        step="1000" data-recall="profile-context">
-                    <span class="recall-dim">tokens — 0 uses the main API's</span>
+                    <span class="recall-field-unit">
+                        <input id="recall-profile-context" class="text_pole recall-number" type="number" min="0"
+                            step="1000" data-recall="profile-context">
+                        <span class="recall-dim">tokens — 0 uses the main API's</span>
+                    </span>
                 </div>
 
                 <label class="checkbox_label recall-row" data-recall="profile-preset-row" hidden>
@@ -317,9 +345,11 @@
 
                 <div class="recall-row recall-row-field">
                     <label for="recall-nudge-threshold">Threshold</label>
-                    <input id="recall-nudge-threshold" class="text_pole recall-number" type="number" min="0" step="500"
-                        data-recall="nudge-threshold">
-                    <span class="recall-dim" data-recall="nudge-threshold-hint"></span>
+                    <span class="recall-field-unit">
+                        <input id="recall-nudge-threshold" class="text_pole recall-number" type="number" min="0"
+                            step="500" data-recall="nudge-threshold">
+                        <span class="recall-dim" data-recall="nudge-threshold-hint"></span>
+                    </span>
                 </div>
                 <p class="recall-help">
                     In tokens, measured against the last prompt actually sent. Leave at 0 to track 80% of
@@ -413,9 +443,11 @@
 
                     <div class="recall-row recall-row-field">
                         <label for="recall-min-response">Minimum summary length</label>
-                        <input id="recall-min-response" class="text_pole recall-number" type="number" min="0" step="50"
-                            data-recall="min-response">
-                        <span class="recall-dim">characters</span>
+                        <span class="recall-field-unit">
+                            <input id="recall-min-response" class="text_pole recall-number" type="number" min="0"
+                                step="50" data-recall="min-response">
+                            <span class="recall-dim">characters</span>
+                        </span>
                     </div>
                     <p class="recall-help">
                         Anything shorter is treated as a generation failure rather than saved as a stub.

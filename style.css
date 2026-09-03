@@ -85,6 +85,21 @@
     pointer-events: none;
 }
 
+/*
+ * ST's .menu_button is `width: min-content`, which sizes a button to its longest
+ * *word* rather than its label. Any button with a multi-word label therefore
+ * renders as a column of single words — "Take / the / global / copy / again" —
+ * regardless of how much room the row has. ST hit this itself and patched it for
+ * its own popup controls; .menu_button_icon escapes it too, because that class
+ * sets `width: fit-content`. Every plain menu_button Recall renders needs the
+ * same treatment, and it is worse on a phone, where the banners those buttons
+ * live in are already narrow.
+ */
+.recall-manager .menu_button,
+.recall-drawer .menu_button {
+    width: fit-content;
+}
+
 /* ========================================================================== */
 /* Drawer strip                                                               */
 /* ========================================================================== */
@@ -212,8 +227,22 @@
     min-height: 0;
 }
 
+/*
+ * A column, so the banner stack that now lives inside can take its natural
+ * height and leave the rest to the content below it.
+ */
 .recall-pane-active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75em;
+}
+
+/*
+ * The stack is a handle for moving the banners between panes, not a box. Left as
+ * a real element it would add its own gap even with every banner hidden.
+ */
+.recall-banners {
+    display: contents;
 }
 
 /* --- Banners ------------------------------------------------------------- */
@@ -273,14 +302,23 @@
 .recall-split {
     display: flex;
     gap: 1em;
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
 }
 
+/*
+ * min-width: 0 is not optional. A flex item's automatic minimum size is its
+ * min-content width, so without this the column refuses to shrink below the
+ * longest summary name and pushes its own right edge — badges, selection border
+ * and all — off the side of the popup. Invisible on desktop, where the fixed
+ * basis usually wins; plainly broken on a phone, where the column is the whole
+ * width.
+ */
 .recall-master {
     flex: 0 0 17em;
     display: flex;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
     border-right: 1px solid var(--SmartThemeBorderColor);
     padding-right: 1em;
@@ -356,8 +394,17 @@
     flex: 0 0 auto;
 }
 
+/*
+ * One line, always. Now that the column can actually shrink, the coverage line
+ * is the thing that decides row height, and letting it wrap turns a list of
+ * forty into a list that scrolls twice as far for no extra information — the
+ * numbers it drops off the end are the least important part of it.
+ */
 .recall-row-sub {
     font-size: calc(var(--mainFontSize) * 0.85);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .recall-empty {
@@ -514,7 +561,7 @@
     display: flex;
     flex-direction: column;
     gap: 1.25em;
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     padding-right: 0.25em;
@@ -580,6 +627,21 @@
 .recall-number {
     width: 8em;
     flex: 0 0 auto;
+}
+
+/*
+ * A number and the words naming its unit are one phrase and wrap as one item.
+ * As three siblings of the leading label they wrapped wherever the row ran out,
+ * which on a phone meant breaking after the box and leaving "messages visible"
+ * alone on the next line — a fragment, not the end of a sentence. Grouped, the
+ * break lands between the label and the field instead, where the reading still
+ * holds: "Keep the newest / 12 messages visible".
+ */
+.recall-field-unit {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    min-width: 0;
 }
 
 /*
@@ -752,6 +814,42 @@
         padding-right: 0;
     }
 
+    /*
+     * One scroller per screen, and it is the pane.
+     *
+     * The split shows a single column here, so the nested scroll areas inside it
+     * buy nothing — and they cost the banners, which sit above a pane that
+     * scrolls internally and therefore never leave the top of the screen. Giving
+     * the scrolling to the pane lets a banner scroll away with everything under
+     * it, and leaves one scrollbar where there were two.
+     */
+    .recall-pane-active {
+        overflow-y: auto;
+    }
+
+    /*
+     * The pane can only scroll if what is in it is allowed to be taller than it
+     * is. Left at `flex: 1 1 auto` these squeeze to the pane's height and spill
+     * their overflow visibly instead — which looks like scrolling is broken,
+     * because it is.
+     */
+    .recall-split,
+    .recall-settings {
+        flex: 0 0 auto;
+    }
+
+    .recall-split {
+        display: block;
+    }
+
+    .recall-master,
+    .recall-list,
+    .recall-detail,
+    .recall-settings {
+        overflow: visible;
+        flex: 0 0 auto;
+    }
+
     .recall-manager[data-recall-view="list"] .recall-detail {
         display: none;
     }
@@ -760,21 +858,124 @@
         display: none;
     }
 
+    /*
+     * The only control that exists solely on mobile, so it has to be the one
+     * that is easiest to hit rather than the hardest. As bare text it was 19px
+     * tall; the padding gives it a thumb-sized box without giving it a border it
+     * does not want.
+     */
     .recall-back {
         display: flex;
+        padding: 0.4em 0.5em;
+        margin-left: -0.5em;
     }
 
     .recall-meta-label {
         flex-basis: 7em;
     }
 
+    /*
+     * Two predictable rows — tabs, then actions — instead of letting four items
+     * of different widths reflow into anything between one row and three as the
+     * screen narrows. Both rows are full width, so the header is the same height
+     * on a 320px phone as on a 412px one.
+     */
     .recall-topbar {
         gap: 0.5em;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .recall-tabs {
+        gap: 0;
+    }
+
+    .recall-tab {
+        flex: 1 1 0;
+        justify-content: center;
+        padding: 0.4em 0.5em;
     }
 
     .recall-detail-actions .menu_button,
-    .recall-strip-actions .menu_button {
+    .recall-strip-actions .menu_button,
+    .recall-topbar-actions .menu_button {
         flex: 1 1 auto;
         justify-content: center;
+    }
+
+    /*
+     * Five icon buttons hold a fixed ~170px, which left the name field 43px wide
+     * at 320px — narrower than the word "Continuity". Wrapping the buttons onto
+     * their own line keeps the field editable at every phone size.
+     */
+    .recall-block-head {
+        flex-wrap: wrap;
+    }
+
+    .recall-block-name {
+        flex: 1 1 8em;
+        min-width: 8em;
+    }
+
+    .recall-block-buttons {
+        margin-left: auto;
+    }
+
+    /*
+     * 8em of number box is room for a five-digit token count nobody types. At
+     * 5.5em the label, the field and its unit fit on one line at 375px and still
+     * break at the label on a 320px screen.
+     */
+    .recall-number {
+        width: 5.5em;
+    }
+
+    /*
+     * Touch targets. ST's own controls are built for a mouse — a .menu_button is
+     * 26px tall and a checkbox is 15px square — which is fine until the surface
+     * is a thumb. These floors are computed from --mainFontSize rather than a
+     * local em, because a banner sets its own smaller font and 2.4em of that is
+     * 33px. They lift every control Recall owns to 36px without
+     * changing how any of them look: the buttons gain height they mostly had in
+     * padding anyway, and the checkbox rows become a full-width tappable strip
+     * rather than a 15px square that has to be hit exactly.
+     */
+    .recall-manager .menu_button,
+    .recall-drawer .menu_button {
+        min-height: calc(var(--mainFontSize) * 2.4);
+    }
+
+    .recall-block-buttons .menu_button {
+        min-width: calc(var(--mainFontSize) * 2.4);
+    }
+
+    .recall-manager .checkbox_label,
+    .recall-drawer .checkbox_label {
+        min-height: calc(var(--mainFontSize) * 2.4);
+        align-items: center;
+    }
+
+    /*
+     * Exempt: the enable box sits in the block header beside the name field, so
+     * a 36px floor would push that row taller for nothing. The header is already
+     * a comfortable target.
+     */
+    .recall-manager .recall-block-enable {
+        min-height: 0;
+    }
+
+    .recall-back {
+        min-height: calc(var(--mainFontSize) * 2.4);
+    }
+
+    .recall-banner-dismiss {
+        display: flex;
+        align-items: center;
+        padding: 0 0.5em;
+        min-height: calc(var(--mainFontSize) * 2.4);
+    }
+
+    .recall-tab {
+        min-height: calc(var(--mainFontSize) * 2.4);
     }
 }

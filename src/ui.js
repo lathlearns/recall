@@ -48,6 +48,30 @@ import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.j
 
 const EXTENSION_PATH = 'third-party/recall';
 
+/**
+ * Options shared by every popup Recall opens.
+ *
+ * `wide` sets ST's .wide_dialogue_popup, whose only effect is
+ * `min-width: var(--sheldWidth)`. min-width beats max-width, so on a phone
+ * running the chat at full width it overrides the 90dvw cap and takes the dialog
+ * edge to edge.
+ *
+ * Dropping it below the breakpoint was tried, for the margin. Measured at
+ * 375px it costs 37px of pane width (327 → 290), which makes every line of help
+ * text wrap sooner: the settings pane grows from 1963px of scrolling to 2161px,
+ * and a banner that was three lines becomes four, taking that height back out of
+ * the pane it was meant to give room to. Worse on every axis, so `wide` stays on
+ * everywhere and a phone gets the full width of its screen.
+ */
+function popupOptions(extra = {}) {
+    return {
+        large: true,
+        wide: true,
+        allowVerticalScrolling: true,
+        ...extra,
+    };
+}
+
 /** @type {JQuery<HTMLElement>|null} */
 let drawerRoot = null;
 
@@ -146,17 +170,14 @@ export async function openManager({ onSummarize } = {}) {
     wireManager({ onSummarize });
     renderAll();
 
-    managerPopup = new Popup(managerRoot, POPUP_TYPE.DISPLAY, '', {
-        large: true,
-        wide: true,
-        allowVerticalScrolling: true,
+    managerPopup = new Popup(managerRoot, POPUP_TYPE.DISPLAY, '', popupOptions({
         onClosing: guardUnsaved,
         onClose: () => {
             managerPopup = null;
             managerRoot = null;
             resetDraft();
         },
-    });
+    }));
 
     await managerPopup.show();
 }
@@ -217,6 +238,7 @@ function wireManager({ onSummarize }) {
                 pane.classList.toggle('recall-pane-active', isActive);
                 pane.toggleAttribute('hidden', !isActive);
             }
+            moveBannersInto(name);
         });
     }
 
@@ -296,6 +318,24 @@ function peekSteeringNote() {
 
 function setView(view) {
     managerRoot?.setAttribute('data-recall-view', view);
+}
+
+/**
+ * Keeps the dismissable banners in the pane the user is looking at.
+ *
+ * One element, moved, rather than a copy per pane: showBanner finds it by
+ * attribute, and two elements answering to the same name would mean the second
+ * one silently never updating. The pane is the scroll container on a phone, so
+ * landing inside it is what lets a banner scroll away instead of holding the top
+ * of the screen; on a desktop the pane is not the scroller and the banner stays
+ * where it has always been.
+ */
+function moveBannersInto(paneName) {
+    const banners = q('[data-recall="banners"]');
+    const pane = q(`[data-recall-pane="${paneName}"]`);
+    if (banners && pane && banners.parentElement !== pane) {
+        pane.prepend(banners);
+    }
 }
 
 function showBanner(kind, text) {
@@ -794,11 +834,7 @@ async function showLegacySummary() {
 
     wrapper.querySelector('#recall_legacy_view').value = text;
 
-    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', {
-        large: true,
-        wide: true,
-        allowVerticalScrolling: true,
-    }).show();
+    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', popupOptions()).show();
 }
 
 /**
@@ -864,11 +900,7 @@ async function showPreview() {
     wrapper.querySelector('#recall_preview_system').value = preview.systemPrompt;
     wrapper.querySelector('#recall_preview_buffer').value = preview.buffer;
 
-    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', {
-        large: true,
-        wide: true,
-        allowVerticalScrolling: true,
-    }).show();
+    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', popupOptions()).show();
 }
 
 function reportError(error) {
