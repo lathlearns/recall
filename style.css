@@ -35,6 +35,28 @@
     opacity: 0.85;
 }
 
+/*
+ * Clearance for the scrollbar, on every pane that scrolls.
+ *
+ * Each of these panes lines something up on its right edge — a token count, the
+ * "Global" badge, a prompt block's row of action buttons — and with no gutter
+ * those sit hard against the bar, which is where the settings pane put the block
+ * controls and the badge. How wide that bar is is not ours to decide: ST styles a
+ * thin 0.7rem one through ::-webkit-scrollbar, a Chromium-only selector, and a
+ * browser that ignores it draws its own, wider. So the clearance is stated here
+ * rather than tuned to the thin case and left to fail on the other.
+ *
+ * scrollbar-gutter reserves the space whether or not a bar is currently showing,
+ * so a pane keeps one content width instead of reflowing the moment its content
+ * grows past the fold.
+ */
+.recall-list,
+.recall-detail,
+.recall-settings {
+    scrollbar-gutter: stable;
+    padding-right: 0.6em;
+}
+
 .recall-badge {
     display: inline-block;
     padding: 0.1em 0.5em;
@@ -564,7 +586,6 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding-right: 0.25em;
 }
 
 .recall-section {
@@ -842,12 +863,17 @@
         display: block;
     }
 
+    /*
+     * The gutter goes with them. Nothing here scrolls, so it would only be dead
+     * space taken off the right of a column that is already the whole screen.
+     */
     .recall-master,
     .recall-list,
     .recall-detail,
     .recall-settings {
         overflow: visible;
         flex: 0 0 auto;
+        padding-right: 0;
     }
 
     .recall-manager[data-recall-view="list"] .recall-detail {
