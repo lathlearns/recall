@@ -18,6 +18,7 @@ import { registerMacro, registerSlashCommand } from './src/macro.js';
 import { summarizeNow, RecallError } from './src/generate.js';
 import { evaluateNudge, resetNudge, disarmNudge } from './src/nudge.js';
 import { initDrawer, refreshDrawer, toastNudge } from './src/ui.js';
+import { applyScrollbarGutter } from './src/scrollbars.js';
 
 const MODULE_NAME = 'recall';
 
@@ -125,6 +126,7 @@ async function onMessageReceived(mesId) {
 jQuery(async () => {
     try {
         getSettings();
+        applyScrollbarGutter();
 
         registerMacro();
         registerSlashCommand(handleSummarize);

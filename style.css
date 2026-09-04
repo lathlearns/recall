@@ -40,21 +40,24 @@
  *
  * Each of these panes lines something up on its right edge — a token count, the
  * "Global" badge, a prompt block's row of action buttons — and with no gutter
- * those sit hard against the bar, which is where the settings pane put the block
- * controls and the badge. How wide that bar is is not ours to decide: ST styles a
- * thin 0.7rem one through ::-webkit-scrollbar, a Chromium-only selector, and a
- * browser that ignores it draws its own, wider. So the clearance is stated here
- * rather than tuned to the thin case and left to fail on the other.
+ * those sit against the bar or, where the bar is an overlay one, underneath it.
  *
- * scrollbar-gutter reserves the space whether or not a bar is currently showing,
- * so a pane keeps one content width instead of reflowing the moment its content
- * grows past the fold.
+ * How much room that takes depends on which kind of scrollbar the browser draws,
+ * which only measuring can answer; scrollbars.js does that once at startup and
+ * writes the answer to --recall-scroll-gutter. The fallback here is the classic
+ * width, so the panes are still laid out sensibly if the measurement never runs.
+ *
+ * scrollbar-gutter handles the other half of the classic case, reserving the
+ * bar's own width whether or not it is currently showing, so a pane keeps one
+ * content width instead of reflowing the moment its content grows past the fold.
+ * It is specified to do nothing for overlay bars, which is why the padding above
+ * has to carry that case alone.
  */
 .recall-list,
 .recall-detail,
 .recall-settings {
-    scrollbar-gutter: stable;
-    padding-right: 0.6em;
+    scrollbar-gutter: var(--recall-scroll-stable, stable);
+    padding-right: var(--recall-scroll-gutter, 0.6em);
 }
 
 .recall-badge {
