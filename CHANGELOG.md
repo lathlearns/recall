@@ -4,6 +4,19 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.1.5
+
+**The two generation limits explain themselves now.** They were a pair of jargon labels over
+one dense paragraph that argued why there are two of them before saying what either one did.
+Renamed to what they do — "Kept free for the reply" and "Most the model may write" — with
+the old names kept in the help text, split into a paragraph each, and given live arithmetic
+against your actual context window: the reserve field now reads "leaves 198,000 for the chat"
+and moves as you type.
+
+Also warns when the reply is allowed more tokens than are held back for it. The reply lands
+in the room the reserve reserves, so that combination can run a full buffer past the end of
+the window, and nothing in either label hints at the connection.
+
 ## 1.1.4
 
 **Ticking your preset's summary block no longer sends the summary twice.** Nearly every

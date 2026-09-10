@@ -428,25 +428,44 @@
 
                 <div class="recall-advanced" data-recall="advanced" hidden>
 
+                    <p class="recall-help">
+                        A summarization request has two halves, and each gets its own limit: how much chat
+                        Recall sends out, and how much the model may write back.
+                    </p>
+
                     <div class="recall-row recall-row-field">
-                        <label for="recall-response-reserve">Response reserve</label>
-                        <input id="recall-response-reserve" class="text_pole recall-number" type="number" min="0"
-                            step="100" data-recall="response-reserve">
-                    </div>
-                    <div class="recall-row recall-row-field">
-                        <label for="recall-output-budget">Output budget</label>
-                        <input id="recall-output-budget" class="text_pole recall-number" type="number" min="0"
-                            step="500" data-recall="output-budget">
+                        <label for="recall-response-reserve">Kept free for the reply</label>
+                        <span class="recall-field-unit">
+                            <input id="recall-response-reserve" class="text_pole recall-number" type="number" min="0"
+                                step="100" data-recall="response-reserve">
+                            <span class="recall-dim" data-recall="reserve-hint"></span>
+                        </span>
                     </div>
                     <p class="recall-help">
-                        Two settings, because one number cannot do both jobs. The <b>reserve</b> is how much
-                        context room to hold back when budgeting the buffer — set it high and summarization
-                        starts refusing chats it could handle. The <b>output budget</b> is the generation
-                        limit sent to the API. On OpenAI-compatible sources that budget covers reasoning and
-                        visible output together, which makes it the only thing stopping a model that thinks
-                        without end; on Claude sources at high reasoning effort, a low budget starves the
-                        summary instead.
+                        Held back from the context window so the answer has somewhere to land. Everything
+                        left over is what the chat history gets. Set it too high and Recall refuses to
+                        summarise chats it could handle fine. Called the <b>response reserve</b> elsewhere.
                     </p>
+
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-output-budget">Most the model may write</label>
+                        <span class="recall-field-unit">
+                            <input id="recall-output-budget" class="text_pole recall-number" type="number" min="0"
+                                step="500" data-recall="output-budget">
+                            <span class="recall-dim" data-recall="budget-hint"></span>
+                        </span>
+                    </div>
+                    <p class="recall-help">
+                        Sent as the request's generation limit, the <b>output budget</b>. On most APIs it
+                        covers thinking <i>and</i> the summary together — which makes it the only thing
+                        stopping a model that reasons without end, and also means a model set to think hard
+                        can spend the lot before writing anything. A summary runs about 1,400 tokens; the
+                        rest of this number is headroom for reasoning.
+                    </p>
+
+                    <p class="recall-help" data-recall="budget-status"></p>
+
+                    <p class="recall-help recall-budget-warning" data-recall="budget-warning" hidden></p>
 
                     <div class="recall-row recall-row-field">
                         <label for="recall-framing-prefix">Framing prefix</label>

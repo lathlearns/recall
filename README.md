@@ -94,8 +94,8 @@ request, so it can't drift from it.
 | Keep newest N visible | Auto-hide skips this many recent messages. Message 0 is always skipped. |
 | Block sending | Deactivate send buttons while a summary generates. |
 | Nudge threshold | In tokens, against the last prompt sent. 0 tracks 80% of the context limit. |
-| **Response reserve** | Context room held back when budgeting the buffer. |
-| **Output budget** | The generation limit sent to the API. |
+| **Kept free for the reply** | Context held back so the answer has room. Keep it at least as large as the next row. |
+| **Most the model may write** | The generation limit sent to the API — thinking included, on most sources. |
 | Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
 | Minimum summary length | Shorter responses are treated as failures, not saved as stubs. |
 | Connection profile | Summarise through a different connection. Blank = your chat's. |
@@ -105,13 +105,26 @@ request, so it can't drift from it.
 | Also answer to `{{summary}}` | Only registers while the built-in Summarize is disabled. |
 | Deep integrity check | Also hash the covered range, catching edits below a summary's anchor. Off by default — it flags on any edit anywhere. |
 
-### The two limits are not one limit
+### The two limits
 
-**Response reserve** is subtracted from your context to decide how much chat fits in a
-buffer. Set it high and you starve the buffer, and long chats start refusing to summarise.
+A summarization request has two halves and each gets its own limit — one for what goes out,
+one for what comes back. The panel shows both as live arithmetic against your actual context
+window, which is easier to reason about than the raw numbers.
 
-**Output budget** is the `max_tokens` of the request. How it interacts with thinking models
-decides the right value, and the two failure modes are opposites:
+**Kept free for the reply** (the *response reserve*) is held back from the context window so
+the answer has somewhere to land. Whatever is left over is what the chat history gets, so
+setting it high makes Recall refuse chats it could otherwise handle.
+
+**Most the model may write** (the *output budget*) is the `max_tokens` of the request.
+
+They are connected, and this is the part the numbers don't tell you: the reply lands in the
+room the reserve holds back, and the buffer is packed right up to everything else. **Keep the
+reserve at least as large as the budget** — otherwise a full buffer plus a long answer runs
+past the end of the window, and some APIs refuse the request rather than truncating. The
+panel warns when the two are set that way.
+
+How the budget interacts with thinking models decides the right value, and the two failure
+modes are opposites:
 
 - **OpenAI-compatible** (OpenRouter, NanoGPT, most others): one budget covers reasoning
   *and* output, with nothing reserved for the response — so a model that thinks without end

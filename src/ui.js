@@ -41,7 +41,13 @@ import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js'
 import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, isGenerating } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
-import { listProfiles, getActiveProfile, describeTarget, isConnectionManagerAvailable } from './connection.js';
+import {
+    listProfiles,
+    getActiveProfile,
+    describeTarget,
+    isConnectionManagerAvailable,
+    getPromptBudget,
+} from './connection.js';
 import { previewContextBlocks, previewPresetBlocks } from './context-blocks.js';
 import { isPresetAvailable } from './preset-blocks.js';
 import { paintTokens } from './tokens.js';
@@ -941,8 +947,8 @@ function wireSettings() {
 
     bindNumber('tail-pin', 'tailPin', 0, 200);
     bindNumber('nudge-threshold', 'nudgeThreshold', 0, 10_000_000, renderNudgeHint);
-    bindNumber('response-reserve', 'responseReserve', 0, 1_000_000);
-    bindNumber('output-budget', 'outputBudget', 0, 1_000_000);
+    bindNumber('response-reserve', 'responseReserve', 0, 1_000_000, renderBudgets);
+    bindNumber('output-budget', 'outputBudget', 0, 1_000_000, renderBudgets);
     bindNumber('min-response', 'minResponseChars', 0, 100_000);
 
     bindText('framing-prefix', 'framingPrefix');
@@ -1211,6 +1217,51 @@ function renderPresetBlocks() {
     }
 }
 
+/**
+ * The two generation limits, as arithmetic rather than as two abstract numbers.
+ *
+ * "Response reserve: 2000" tells you nothing about what it does to this chat. The
+ * same setting rendered as "leaves 198,000 for the chat" is the whole explanation,
+ * and it moves while you type, so the relationship between the field and its
+ * effect is visible rather than described.
+ *
+ * The warning covers the one relationship nobody would infer from the labels: the
+ * reply lands in the room the reserve holds back, so a reserve smaller than the
+ * budget can put prompt and answer together over the window. It is a warning and
+ * not a clamp — some APIs cope, the shipped defaults are in that state, and a
+ * setting that silently corrects itself is worse than one that explains.
+ */
+function renderBudgets() {
+    const settings = getSettings();
+    const reserve = Math.max(0, Number(settings.responseReserve) || 0);
+    const budget = Math.max(0, Number(settings.outputBudget) || 0);
+    const forChat = Math.max(0, Number(getPromptBudget()) || 0);
+    const window = forChat + reserve;
+
+    setText('reserve-hint', forChat
+        ? `tokens — leaves ${forChat.toLocaleString()} for the chat`
+        : 'tokens');
+
+    setText('budget-hint', 'tokens — thinking included, on most APIs');
+
+    setText('budget-status', window
+        ? `Of a ${window.toLocaleString()}-token window: up to ${forChat.toLocaleString()} goes out as `
+            + `chat history, and up to ${budget.toLocaleString()} comes back as the answer.`
+        : '');
+
+    const warning = q('[data-recall="budget-warning"]');
+    if (warning) {
+        const overcommitted = budget > reserve;
+        warning.textContent = overcommitted
+            ? `The reply is allowed ${budget.toLocaleString()} tokens but only ${reserve.toLocaleString()} `
+                + 'are held back for it. A buffer that fills the window leaves the answer nowhere to go, '
+                + 'and some APIs refuse the request outright. Raising the reserve to at least the budget '
+                + 'costs nothing except history in a single pass.'
+            : '';
+        warning.toggleAttribute('hidden', !overcommitted);
+    }
+}
+
 function renderSettings() {
     const settings = getSettings();
 
@@ -1230,12 +1281,20 @@ function renderSettings() {
     setValue('framing-suffix', settings.framingSuffix);
 
     renderNudgeHint();
+    renderBudgets();
     renderAliasStatus();
     renderProfile();
     renderContextBlocks();
     renderPresetBlocks();
     renderScope();
     renderBlocks();
+}
+
+function setText(hook, value) {
+    const element = q(`[data-recall="${hook}"]`);
+    if (element) {
+        element.textContent = value;
+    }
 }
 
 function setChecked(hook, value) {

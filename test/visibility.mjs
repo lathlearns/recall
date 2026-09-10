@@ -64,7 +64,7 @@ const shouldStartHidden = ['error','notice','empty','detail-body','stale-banner'
                            'mismatch-banner','redo-banner','detail-dirty','blocks-dirty',
                            'oos-banner','advanced','strip-notice','empty-fallback',
                            'profile-extras','profile-context-row','fallback-banner',
-                           'preset-blocks-status'];
+                           'preset-blocks-status','budget-warning'];
 for (const hook of shouldStartHidden) {
     const state = await p.$eval(`[data-recall="${hook}"]`, el =>
         ({ hidden: el.hasAttribute('hidden'), display: getComputedStyle(el).display }))
