@@ -143,6 +143,19 @@ export function renderPresetBlock(block) {
 
 /**
  * The enabled blocks, rendered.
+ *
+ * Enabled *here*. The prompt order carries the chat's own on/off state for each
+ * prompt and it is deliberately not consulted: these toggles say what Recall
+ * sends, and nothing about the preset's current state overrides them in either
+ * direction. A prompt switched off in the prompt manager still goes if it is
+ * ticked here — you may well want the summariser to see a block the chat is not
+ * currently running — and one switched on there stays out if it is not.
+ *
+ * The alternative would make a setting that changes meaning behind your back:
+ * you tick a block, someone toggles it in the preset for an unrelated reason, and
+ * summaries quietly start or stop including it with nothing in this panel saying
+ * so. `readPromptOrder` therefore keeps only the positions and drops `enabled`.
+ *
  * @returns {{ sections: string[], included: string[] }}
  */
 export function buildPresetBlocks() {

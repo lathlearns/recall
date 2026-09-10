@@ -191,6 +191,22 @@ check('no prompt manager, no preset blocks', () => {
     setMainApi('openai');
 });
 
+// The fixture's order marks jailbreak disabled and main enabled, so one check
+// covers both directions: Recall's toggle decides, and the chat's does not get a
+// vote either way. Getting this backwards would mean a block you switched off
+// still reaching the model because your preset happens to have it on.
+check("the preset's own on/off state does not decide what Recall sends", () => {
+    settings.contextBlocks.description = false;
+    settings.presetBlocks.jailbreak = true;
+    settings.presetBlocks.main = false;
+
+    try {
+        assert.deepStrictEqual(buildContextBlocks().included, ['Post-History Instructions']);
+    } finally {
+        settings.presetBlocks.jailbreak = false;
+    }
+});
+
 check('nothing enabled emits nothing, not an empty fence', () => {
     settings.contextBlocks.description = false;
     settings.presetBlocks.jailbreak = false;
@@ -204,4 +220,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log('All 12 reference-material assembly checks pass.');
+console.log('All 13 reference-material assembly checks pass.');

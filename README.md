@@ -140,6 +140,11 @@ them — markers omitted, so it's that list with the gaps closed up. They tell t
 the register the chat is written in and what it's allowed to be explicit about, which
 nothing else here does.
 
+These toggles are the only thing that decides what's sent. Whether a prompt is currently
+switched on in your prompt manager doesn't come into it: one you've switched off there still
+goes if it's ticked here, and one that's on there stays out if it isn't. Otherwise the
+setting would change meaning behind your back every time you tweaked the preset.
+
 Preset blocks are sent quoted, under `### Chat instruction:` headings and behind a note
 saying they're addressed to someone else. They're commands, and a model handed them
 unmarked will follow them — the failure isn't a mediocre summary, it's the model writing
