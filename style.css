@@ -779,6 +779,27 @@
     font-size: calc(var(--mainFontSize) * 0.85);
 }
 
+/* The preset's own prompt blocks. Set apart from the card blocks above rather
+   than continuing the same list: they come from a different place, they are
+   instruction rather than description, and a jailbreak sitting flush under
+   "User persona" reads as one more field of the character card. */
+
+.recall-preset-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    margin-top: 0.35em;
+    padding: 0.6em 0 0 0.75em;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    border-left: 2px solid var(--SmartThemeQuoteColor, var(--SmartThemeBorderColor));
+}
+
+.recall-subsection-title {
+    margin: 0;
+    font-size: var(--mainFontSize);
+    opacity: 0.85;
+}
+
 /* --- Expand-editor control ------------------------------------------------ */
 
 .recall-editor-head {

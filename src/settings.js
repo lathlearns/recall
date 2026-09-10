@@ -115,12 +115,6 @@ const DEFAULT_SETTINGS = {
      */
     profileContextSize: 0,
 
-    /**
-     * Apply the profile's own generation preset. Off by default: a preset tuned
-     * for roleplay prose is the wrong sampler set for an editing task, and it can
-     * carry a max_tokens that displaces the output budget.
-     */
-    profileUsePreset: false,
 
     // --- Reference material sent alongside the chat ---
 
@@ -136,6 +130,19 @@ const DEFAULT_SETTINGS = {
         persona: false,
         examples: false,
     },
+
+    /**
+     * Which of the chat preset's own prompt blocks to include, keyed by the
+     * preset's identifier for each — `main`, `nsfw`, `jailbreak`, or the uuid a
+     * custom prompt was created with.
+     *
+     * An open map rather than a fixed set of keys, because the list belongs to the
+     * preset: a preset with eight custom prompts has eight togglable blocks, and
+     * naming them here would mean shipping a new version whenever someone writes a
+     * new prompt. Everything absent is off, so the empty default is "none of them"
+     * and stays correct for presets that do not exist yet.
+     */
+    presetBlocks: {},
 
     // --- Hiding ---
 
@@ -217,6 +224,15 @@ export function getSettings() {
             }
         }
     }
+
+    if (!settings.presetBlocks || typeof settings.presetBlocks !== 'object') {
+        settings.presetBlocks = {};
+    }
+
+    // Dropped in 1.1.0, when the profile's preset stopped being optional. Left
+    // behind it would be a stored answer to a question nothing asks any more, and
+    // the next reader of the saved settings would have to work out which.
+    delete settings.profileUsePreset;
 
     // Seed the default set on first run.
     if (!Object.keys(settings.library.sets).length) {

@@ -32,7 +32,7 @@ export function isConnectionManagerAvailable() {
  * The profiles Recall can target. Connection Manager itself filters to Chat
  * Completion and Text Completion, which are the only two the request service
  * knows how to drive.
- * @returns {{id: string, name: string, api: string, model: string}[]}
+ * @returns {{id: string, name: string, api: string, model: string, preset: string}[]}
  */
 export function listProfiles() {
     if (!isConnectionManagerAvailable()) {
@@ -45,6 +45,9 @@ export function listProfiles() {
             name: profile.name ?? '(unnamed)',
             api: profile.api ?? '',
             model: profile.model ?? '',
+            // Recall never loads this itself — ST resolves the name when the
+            // request is sent — but the panel names it, so it is carried along.
+            preset: profile.preset ?? '',
         }));
     } catch (error) {
         console.warn('[Recall] Could not list connection profiles', error);
@@ -56,7 +59,7 @@ export function listProfiles() {
  * The profile Recall is configured to summarise with, or null for the main API.
  * A profile that has since been deleted resolves to null rather than erroring, so
  * a stale setting degrades to "use the main API" instead of breaking generation.
- * @returns {{id: string, name: string, api: string, model: string}|null}
+ * @returns {{id: string, name: string, api: string, model: string, preset: string}|null}
  */
 export function getActiveProfile() {
     const id = getSettings().profileId;
@@ -140,10 +143,18 @@ export async function generateViaProfile(systemPrompt, buffer, signal = null) {
             stream: false,
             signal,
             extractData: true,
-            // Off by default: a preset tuned for roleplay prose is the wrong sampler
-            // set for an editing task, and it can also carry its own max_tokens,
-            // which would quietly displace the output budget.
-            includePreset: !!settings.profileUsePreset,
+            // Always the profile's own preset. Without it ST sends no sampler
+            // parameters at all — temperature and the rest are undefined and get
+            // stripped from the payload — so the request would run on whatever
+            // the provider defaults to, which is a third sampler set nobody chose
+            // and cannot see. A profile picked for summarising comes with a preset
+            // picked for summarising; that is the one the user can actually edit.
+            //
+            // ST re-applies this payload over the preset's, so the output budget
+            // and any model override still win. The preset's context length lands
+            // as truncation_length on a text completion profile, which is why its
+            // context size is configured separately above.
+            includePreset: true,
             includeInstruct: true,
         },
         overridePayload,
@@ -179,6 +190,12 @@ export function describeTarget() {
     const model = getEffectiveModel();
     const overridden = !!String(settings.modelOverride ?? '').trim();
 
+    // The preset is named because it is the one thing here the user did not pick
+    // in this panel: it arrives with the profile, and its samplers are what the
+    // summary is actually generated under.
+    const preset = String(profile.preset ?? '').trim();
+
     return `Summarising through "${profile.name}"${model ? ` with ${model}` : ''}`
-        + `${overridden ? ' (model overridden)' : ''}. Your selected profile is not changed.`;
+        + `${overridden ? ' (model overridden)' : ''}`
+        + `${preset ? `, under its "${preset}" preset` : ''}. Your selected profile is not changed.`;
 }

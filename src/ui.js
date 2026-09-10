@@ -42,7 +42,8 @@ import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, 
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import { listProfiles, getActiveProfile, describeTarget, isConnectionManagerAvailable } from './connection.js';
-import { previewContextBlocks } from './context-blocks.js';
+import { previewContextBlocks, previewPresetBlocks } from './context-blocks.js';
+import { isPresetAvailable } from './preset-blocks.js';
 import { paintTokens } from './tokens.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
 
@@ -949,7 +950,6 @@ function wireSettings() {
 
     bindText('model-override', 'modelOverride', renderProfile);
     bindNumber('profile-context', 'profileContextSize', 0, 10_000_000);
-    bindCheckbox('profile-preset', 'profileUsePreset');
 
     on('[data-recall="profile"]', 'change', event => {
         getSettings().profileId = event.target.value;
@@ -1107,12 +1107,11 @@ function renderProfile() {
 
     setValue('model-override', settings.modelOverride ?? '');
     setValue('profile-context', settings.profileContextSize ?? 0);
-    setChecked('profile-preset', settings.profileUsePreset);
 
-    // The model, context-size and preset controls only mean anything once a
-    // profile is chosen, so they are not shown until one is.
+    // The model and context-size controls only mean anything once a profile is
+    // chosen, so they are not shown until one is.
     const usingProfile = !!getActiveProfile();
-    for (const hook of ['profile-extras', 'profile-context-row', 'profile-preset-row']) {
+    for (const hook of ['profile-extras', 'profile-context-row']) {
         q(`[data-recall="${hook}"]`)?.toggleAttribute('hidden', !usingProfile);
     }
 
@@ -1159,6 +1158,59 @@ function renderContextBlocks() {
     }
 }
 
+/**
+ * The chat preset's own prompt blocks.
+ *
+ * Rebuilt from the preset on every render rather than kept in the settings shape,
+ * because the list is the preset's, not Recall's: switching preset changes which
+ * rows exist. A toggle for a prompt that is not in the current preset stays saved
+ * and simply has nothing to draw, which is what makes switching back and forth
+ * non-destructive.
+ */
+function renderPresetBlocks() {
+    const container = q('[data-recall="preset-blocks"]');
+    const status = q('[data-recall="preset-blocks-status"]');
+    if (!container) {
+        return;
+    }
+
+    const enabled = getSettings().presetBlocks ?? {};
+    const preview = previewPresetBlocks();
+
+    container.innerHTML = preview.map(block => `
+        <label class="checkbox_label recall-row recall-context-row">
+            <input type="checkbox" data-preset-block="${escapeHtml(block.key)}" ${enabled[block.key] ? 'checked' : ''}>
+            <span class="recall-context-name">${escapeHtml(block.label)}</span>
+            <span class="recall-dim recall-context-size" data-preset-size="${escapeHtml(block.key)}"></span>
+        </label>`).join('');
+
+    // An empty list has two quite different causes and the user can act on only
+    // one of them, so it says which: a preset with nothing but markers is worth
+    // editing, an API without a prompt manager is not.
+    if (status) {
+        const message = !isPresetAvailable()
+            ? 'Your chat is not on a Chat Completion API, so there is no prompt manager to read.'
+            : (preview.length ? '' : 'This preset defines no prompts with text of their own.');
+        status.textContent = message;
+        status.toggleAttribute('hidden', !message);
+    }
+
+    for (const block of preview) {
+        void paintTokens(
+            container.querySelector(`[data-preset-size="${CSS.escape(block.key)}"]`),
+            block.text,
+            { empty: 'empty' },
+        );
+    }
+
+    for (const input of Array.from(container.querySelectorAll('[data-preset-block]'))) {
+        input.addEventListener('change', event => {
+            getSettings().presetBlocks[input.dataset.presetBlock] = !!event.target.checked;
+            saveSettings();
+        });
+    }
+}
+
 function renderSettings() {
     const settings = getSettings();
 
@@ -1181,6 +1233,7 @@ function renderSettings() {
     renderAliasStatus();
     renderProfile();
     renderContextBlocks();
+    renderPresetBlocks();
     renderScope();
     renderBlocks();
 }

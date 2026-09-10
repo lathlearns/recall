@@ -283,11 +283,6 @@
                     </span>
                 </div>
 
-                <label class="checkbox_label recall-row" data-recall="profile-preset-row" hidden>
-                    <input type="checkbox" data-recall="profile-preset">
-                    <span>Apply that profile's generation preset</span>
-                </label>
-
                 <p class="recall-help" data-recall="profile-status"></p>
 
                 <p class="recall-help">
@@ -296,6 +291,13 @@
                     profile is untouched. A profile stores one model, and ST can only list models for
                     the source it is currently connected to, so the model field is free text and a
                     typo surfaces as the provider's own error.
+                </p>
+
+                <p class="recall-help">
+                    The profile's own generation preset comes with it: temperature, top&nbsp;P and the
+                    rest of its samplers are what the summary is generated under. Edit that preset in
+                    ST to change them. On the main API nothing is substituted — the request goes out
+                    the same way your chat's would.
                 </p>
             </section>
 
@@ -310,6 +312,23 @@
                     of the same token budget as the chat history, so each one enabled means less
                     history fits in a single pass.
                 </p>
+
+                <div class="recall-preset-blocks">
+                    <h5 class="recall-subsection-title">From your chat's preset</h5>
+
+                    <div class="recall-context-blocks" data-recall="preset-blocks"></div>
+
+                    <p class="recall-help" data-recall="preset-blocks-status" hidden></p>
+
+                    <p class="recall-help">
+                        Your main prompt, post-history instructions and any custom prompts, read from
+                        the preset your chat is running on — not from the profile above. They tell the
+                        summariser the register the chat is written in and what it is allowed to be
+                        explicit about, which nothing else here does. Sent quoted and disclaimed, as
+                        instructions belonging to the chat rather than to the summary, so the
+                        summariser does not start writing the next reply instead.
+                    </p>
+                </div>
             </section>
 
             <section class="recall-section">
