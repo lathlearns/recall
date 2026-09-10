@@ -4,6 +4,13 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.1.2
+
+**The preset blocks line up with the blocks above them again.** They were indented behind a
+coloured left rule, which pushed their checkbox column out of line with the character-card
+list and read as a layout bug before it read as grouping. The divider and the heading were
+already separating the two groups; the rule was doing nothing the heading did not say.
+
 ## 1.1.1
 
 **Your chat's custom stopping strings no longer apply to summaries.** They live in Advanced

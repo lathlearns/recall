@@ -782,16 +782,21 @@
 /* The preset's own prompt blocks. Set apart from the card blocks above rather
    than continuing the same list: they come from a different place, they are
    instruction rather than description, and a jailbreak sitting flush under
-   "User persona" reads as one more field of the character card. */
+   "User persona" reads as one more field of the character card.
+
+   Separated by the rule and the heading only — the same way sections divide
+   everywhere else in this panel. An indent was tried and reverted: it buys
+   nothing the heading does not already say, and it costs the alignment of the
+   checkbox column with the list directly above, which reads as a layout bug
+   before it reads as grouping. */
 
 .recall-preset-blocks {
     display: flex;
     flex-direction: column;
     gap: 0.5em;
     margin-top: 0.35em;
-    padding: 0.6em 0 0 0.75em;
+    padding-top: 0.6em;
     border-top: 1px solid var(--SmartThemeBorderColor);
-    border-left: 2px solid var(--SmartThemeQuoteColor, var(--SmartThemeBorderColor));
 }
 
 .recall-subsection-title {
