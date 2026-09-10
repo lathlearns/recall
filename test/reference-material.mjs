@@ -32,7 +32,7 @@ stub('public/script.js', `
 export const chat_metadata = {};
 export const characters = [{ description: 'A tall woman.', personality: 'Wry.', scenario: '', mes_example: '' }];
 export const this_chid = 0;
-export const name1 = 'Chris';
+export const name1 = 'Val';
 export let main_api = 'openai';
 export function setMainApi(value) { main_api = value; }
 export function substituteParams(text) { return String(text).replaceAll('{{char}}', 'Ada'); }

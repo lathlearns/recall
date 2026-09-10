@@ -28,6 +28,12 @@ will follow, and the failure is not a poor summary but the model writing the cha
 reply instead. Chat Completion only; the panel says so on other APIs rather than showing an
 empty list.
 
+**Text completion backends are documented as unsupported.** They were never tested, and two
+things are now known not to work properly: the preset's context length arrives as
+`truncation_length` and can truncate the buffer behind the profile's context size, and the
+new preset blocks need a prompt manager, which text completion does not have. Nothing was
+removed — they may still work — but they are out of scope rather than quietly assumed.
+
 ## 1.0.0
 
 First release.

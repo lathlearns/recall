@@ -30,6 +30,32 @@ reported rather than repaired.
 Extensions → Install extension → paste this repository's URL. Or clone into
 `data/<user>/extensions/third-party/recall`.
 
+### What it needs
+
+**SillyTavern 1.18.0 or newer.** The manifest declares that as its
+`minimum_client_version`, and ST enforces it.
+
+**Nothing else.** Recall has no runtime dependencies: no bundled libraries, no npm
+packages, nothing fetched at load time. It imports SillyTavern's own modules and uses the
+jQuery and toastr that ST already loads. The Extras API is not used — the empty `requires`
+and `optional` arrays in the manifest are Extras module declarations, and Recall needs
+none of them.
+
+**Connection Manager**, ST's own built-in extension, only if you want to summarise through
+a profile other than your chat's connection. Disabled or absent, the profile picker greys
+out and Recall uses the main API.
+
+**A Chat Completion API.** Text completion backends are not supported: they are not tested,
+and two things are known not to work properly there. The preset's context length arrives as
+`truncation_length` and can silently truncate the buffer regardless of what you set as the
+profile's context size, and reference material read from the chat's preset needs a prompt
+manager, which text completion does not have. It may well work anyway. It is not something
+to report as broken.
+
+The `devDependencies` in `package.json` — handlebars and playwright — are for running the
+tests. They are not needed to use the extension and are not loaded by SillyTavern, which
+reads `manifest.json` and nothing else.
+
 ### Required setup
 
 **1. Disable the built-in Summarize extension.** It registers `{{summary}}` and calls
@@ -240,9 +266,9 @@ third sampler set nobody chose and nobody could see. A profile picked for summar
 with a preset picked for summarising, and that one is editable.
 
 Recall's own payload is applied over the preset's, so the output budget and any model
-override still win. On a text completion profile the preset's context length arrives as
-`truncation_length`, which is a separate number from the one Recall budgets against — see
-below.
+override still win. (On a text completion profile the preset's context length also arrives
+as `truncation_length`, which Recall does not override — one of the reasons those backends
+are unsupported.)
 
 **The model field is free text, and that is not laziness.** A connection profile stores a
 single `model` string, captured from whatever was selected when the profile was made. ST's
