@@ -20,7 +20,7 @@
  */
 
 import { main_api, substituteParams } from '../../../../../script.js';
-import { oai_settings } from '../../../../openai.js';
+import { oai_settings, promptManager } from '../../../../openai.js';
 import { getSettings } from './settings.js';
 
 /**
@@ -52,7 +52,35 @@ export function isPresetAvailable() {
 }
 
 /**
- * The offerable prompts of the chat's active preset, in preset order.
+ * The order the prompt manager displays, as identifier → position.
+ *
+ * `oai_settings.prompts` is a bag, near enough to creation order; the sequence
+ * you actually see and the sequence ST assembles from both come from
+ * `prompt_order`, which is a separate list of references. Reading the bag gets a
+ * plausible-looking order that is not the preset's, and the difference is
+ * invisible until you compare the two panels side by side.
+ *
+ * `activeCharacter` is the right key under either ordering strategy: with the
+ * global strategy — the only one 1.18.0 configures — ST sets it to the dummy id
+ * that holds the shared order, and with a per-character one it is the character.
+ * Same call ST's own renderer makes.
+ *
+ * @returns {Map<string, number>}
+ */
+function readPromptOrder() {
+    try {
+        const order = promptManager?.getPromptOrderForCharacter(promptManager.activeCharacter) ?? [];
+        return new Map(order.map((entry, index) => [String(entry?.identifier), index]));
+    } catch (error) {
+        console.warn('[Recall] Could not read the prompt order', error);
+        return new Map();
+    }
+}
+
+/**
+ * The offerable prompts of the chat's active preset, in the order the prompt
+ * manager shows them — markers removed, so it is that sequence with the gaps
+ * closed up.
  *
  * Keyed by the preset's own identifier: `main`, `nsfw` and `jailbreak` are stable
  * across every preset, but a custom prompt's identifier is a uuid minted when it
@@ -69,12 +97,24 @@ export function listPresetBlocks() {
     }
 
     const prompts = Array.isArray(oai_settings?.prompts) ? oai_settings.prompts : [];
+    const order = readPromptOrder();
 
-    return prompts.filter(isOfferable).map(prompt => ({
-        key: String(prompt.identifier),
-        label: String(prompt.name ?? prompt.identifier),
-        content: String(prompt.content ?? ''),
-    }));
+    // A prompt the order does not mention sorts last rather than disappearing.
+    // ST would not draw it at all — its manager renders from the order — but it
+    // has content and an identifier, and dropping something that exists is worse
+    // than showing it after everything that was placed deliberately. Ties keep
+    // their `prompts` order, sort being stable, which is what an unordered preset
+    // falls back to in full.
+    const rank = prompt => order.get(String(prompt.identifier)) ?? Number.MAX_SAFE_INTEGER;
+
+    return prompts
+        .filter(isOfferable)
+        .sort((a, b) => rank(a) - rank(b))
+        .map(prompt => ({
+            key: String(prompt.identifier),
+            label: String(prompt.name ?? prompt.identifier),
+            content: String(prompt.content ?? ''),
+        }));
 }
 
 /**

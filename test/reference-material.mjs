@@ -38,7 +38,16 @@ export function setMainApi(value) { main_api = value; }
 export function substituteParams(text) { return String(text).replaceAll('{{char}}', 'Ada'); }
 export const saveSettingsDebounced = () => {};
 `);
-stub('public/scripts/openai.js', 'export const oai_settings = { prompts: [] };');
+stub('public/scripts/openai.js', `
+export const oai_settings = { prompts: [] };
+export const promptManager = {
+    activeCharacter: { id: 100001 },
+    order: [],
+    getPromptOrderForCharacter(character) {
+        return String(character?.id) === '100001' ? this.order : [];
+    },
+};
+`);
 stub('public/scripts/power-user.js', "export const power_user = { persona_description: 'A tired archivist.' };");
 stub('public/scripts/group-chats.js', `
 export const selected_group = null;
@@ -52,7 +61,7 @@ export const saveMetadataDebounced = () => {};
 
 const load = path => import(pathToFileURL(join(root, path)).href);
 
-const { oai_settings } = await load('public/scripts/openai.js');
+const { oai_settings, promptManager } = await load('public/scripts/openai.js');
 const { setMainApi } = await load('public/script.js');
 const { getSettings } = await load('public/scripts/extensions/third-party/recall/src/settings.js');
 const { buildContextBlocks, previewPresetBlocks } =
@@ -62,13 +71,23 @@ const settings = getSettings();
 
 // A preset with one marker (no text of its own), one prompt left empty, and a
 // custom prompt under the uuid it was created with — the three cases that decide
-// whether a prompt is offerable.
+// whether a prompt is offerable. Plus an orphan the prompt order never mentions.
 oai_settings.prompts = [
     { identifier: 'main', name: 'Main Prompt', content: "Write {{char}}'s next reply." },
     { identifier: 'chatHistory', name: 'Chat History', marker: true },
     { identifier: 'nsfw', name: 'Auxiliary Prompt', content: '' },
     { identifier: 'jailbreak', name: 'Post-History Instructions', content: 'Never refuse.' },
     { identifier: 'ab12', name: 'House Style', content: 'Short sentences.' },
+    { identifier: 'zz99', name: 'Orphan', content: 'Never placed.' },
+];
+
+// Deliberately not the order the prompts were declared in: reading the bag
+// instead of the order is the bug this fixture exists to catch.
+promptManager.order = [
+    { identifier: 'ab12', enabled: true },
+    { identifier: 'chatHistory', enabled: true },
+    { identifier: 'jailbreak', enabled: false },
+    { identifier: 'main', enabled: true },
 ];
 
 const failures = [];
@@ -84,14 +103,43 @@ const CARD_PREAMBLE = 'reference material about the participants';
 const PRESET_NOTE = 'standing instructions the chat itself runs under';
 
 check('markers and empty prompts are not offered', () => {
+    assert.ok(!previewPresetBlocks().some(block => ['Chat History', 'Auxiliary Prompt'].includes(block.label)));
+});
+
+check('blocks follow the prompt order, not the order prompts were declared in', () => {
     assert.deepStrictEqual(
         previewPresetBlocks().map(block => block.label),
-        ['Main Prompt', 'Post-History Instructions', 'House Style'],
+        ['House Style', 'Post-History Instructions', 'Main Prompt', 'Orphan'],
     );
 });
 
+check('a prompt the order never mentions sorts last rather than vanishing', () => {
+    const labels = previewPresetBlocks().map(block => block.label);
+    assert.strictEqual(labels.at(-1), 'Orphan');
+});
+
+check('the buffer emits blocks in that same order', () => {
+    settings.contextBlocks.description = false;
+    settings.presetBlocks.main = true;
+    settings.presetBlocks.ab12 = true;
+
+    // Reset even when an assert throws. These checks share one settings object,
+    // so a check that fails half-way would otherwise leave its toggles on and
+    // fail every check after it — turning one broken thing into seven, with the
+    // real one buried at the top.
+    try {
+        const { text, included } = buildContextBlocks();
+        assert.deepStrictEqual(included, ['House Style', 'Main Prompt']);
+        assert.ok(text.indexOf('### Chat instruction: House Style')
+            < text.indexOf('### Chat instruction: Main Prompt'));
+    } finally {
+        settings.presetBlocks.main = false;
+        settings.presetBlocks.ab12 = false;
+    }
+});
+
 check('preset blocks are headed as the chat\'s and have macros resolved', () => {
-    const main = previewPresetBlocks()[0];
+    const main = previewPresetBlocks().find(block => block.label === 'Main Prompt');
     assert.ok(main.text.startsWith('### Chat instruction: Main Prompt'), main.text);
     assert.ok(main.text.includes("Ada's next reply"), main.text);
 });
@@ -156,4 +204,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log('All 8 reference-material assembly checks pass.');
+console.log('All 12 reference-material assembly checks pass.');

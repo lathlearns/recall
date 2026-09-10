@@ -4,6 +4,15 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.1.3
+
+**Preset blocks follow the preset's own order**, in the panel and in what is sent. They were
+read from `oai_settings.prompts`, which is a bag in roughly the order prompts were created;
+the sequence the prompt manager shows, and the one ST assembles from, is a separate
+`prompt_order` list. The result looked plausible enough to miss until you put the two panels
+side by side, and it meant the summariser read the chat's instructions in an order the chat
+never uses. Markers are still omitted, so the list is that order with the gaps closed up.
+
 ## 1.1.2
 
 **The preset blocks line up with the blocks above them again.** They were indented behind a

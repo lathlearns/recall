@@ -135,9 +135,10 @@ are. Everything here is off by default and competes for the same tokens as the c
 dialogue. Group chats use ST's combined cards.
 
 **From your chat's preset:** your main prompt, post-history instructions and any custom
-prompts, read from the preset your *chat* is on. They tell the summariser the register the
-chat is written in and what it's allowed to be explicit about, which nothing else here
-does.
+prompts, read from the preset your *chat* is on, in the order your prompt manager shows
+them — markers omitted, so it's that list with the gaps closed up. They tell the summariser
+the register the chat is written in and what it's allowed to be explicit about, which
+nothing else here does.
 
 Preset blocks are sent quoted, under `### Chat instruction:` headings and behind a note
 saying they're addressed to someone else. They're commands, and a model handed them
