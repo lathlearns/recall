@@ -428,11 +428,6 @@
 
                 <div class="recall-advanced" data-recall="advanced" hidden>
 
-                    <p class="recall-help">
-                        A summarization request has two halves, and each gets its own limit: how much chat
-                        Recall sends out, and how much the model may write back.
-                    </p>
-
                     <div class="recall-row recall-row-field">
                         <label for="recall-response-reserve">Kept free for the reply</label>
                         <span class="recall-field-unit">
@@ -441,11 +436,6 @@
                             <span class="recall-dim" data-recall="reserve-hint"></span>
                         </span>
                     </div>
-                    <p class="recall-help">
-                        Held back from the context window so the answer has somewhere to land. Everything
-                        left over is what the chat history gets. Set it too high and Recall refuses to
-                        summarise chats it could handle fine. Called the <b>response reserve</b> elsewhere.
-                    </p>
 
                     <div class="recall-row recall-row-field">
                         <label for="recall-output-budget">Most the model may write</label>
@@ -455,15 +445,12 @@
                             <span class="recall-dim" data-recall="budget-hint"></span>
                         </span>
                     </div>
-                    <p class="recall-help">
-                        Sent as the request's generation limit, the <b>output budget</b>. On most APIs it
-                        covers thinking <i>and</i> the summary together — which makes it the only thing
-                        stopping a model that reasons without end, and also means a model set to think hard
-                        can spend the lot before writing anything. A summary runs about 1,400 tokens; the
-                        rest of this number is headroom for reasoning.
-                    </p>
 
-                    <p class="recall-help" data-recall="budget-status"></p>
+                    <p class="recall-help">
+                        The first is the room Recall expects a summary to need; the second is a hard ceiling
+                        that stops a model reasoning forever. The defaults suit most setups. Raise the
+                        ceiling first if summaries come back empty.
+                    </p>
 
                     <p class="recall-help recall-budget-warning" data-recall="budget-warning" hidden></p>
 

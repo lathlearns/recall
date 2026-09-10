@@ -1222,14 +1222,16 @@ function renderPresetBlocks() {
  *
  * "Response reserve: 2000" tells you nothing about what it does to this chat. The
  * same setting rendered as "leaves 198,000 for the chat" is the whole explanation,
- * and it moves while you type, so the relationship between the field and its
- * effect is visible rather than described.
+ * and it moves while you type. Doing the sum here is what lets the help text be
+ * three lines: most of what the old paragraph was explaining is now just visible.
  *
- * The warning covers the one relationship nobody would infer from the labels: the
- * reply lands in the room the reserve holds back, so a reserve smaller than the
- * budget can put prompt and answer together over the window. It is a warning and
- * not a clamp — some APIs cope, the shipped defaults are in that state, and a
- * setting that silently corrects itself is worse than one that explains.
+ * The two numbers are deliberately different things — the reserve is what a
+ * summary is expected to need, the budget a ceiling that stops a runaway reasoner
+ * — so they are not merged and the reserve is not raised to match. The warning
+ * fires only where that gap actually bites: a reply allowed to exceed the room
+ * held for it, which Claude and some others reject up front rather than truncate.
+ * A warning and not a clamp, because a setting that silently corrects itself
+ * teaches you nothing about why it moved.
  */
 function renderBudgets() {
     const settings = getSettings();
@@ -1238,25 +1240,19 @@ function renderBudgets() {
     const forChat = Math.max(0, Number(getPromptBudget()) || 0);
     const window = forChat + reserve;
 
-    setText('reserve-hint', forChat
-        ? `tokens — leaves ${forChat.toLocaleString()} for the chat`
+    setText('reserve-hint', window
+        ? `tokens — leaves ${forChat.toLocaleString()} of ${window.toLocaleString()} for the chat`
         : 'tokens');
 
     setText('budget-hint', 'tokens — thinking included, on most APIs');
-
-    setText('budget-status', window
-        ? `Of a ${window.toLocaleString()}-token window: up to ${forChat.toLocaleString()} goes out as `
-            + `chat history, and up to ${budget.toLocaleString()} comes back as the answer.`
-        : '');
 
     const warning = q('[data-recall="budget-warning"]');
     if (warning) {
         const overcommitted = budget > reserve;
         warning.textContent = overcommitted
-            ? `The reply is allowed ${budget.toLocaleString()} tokens but only ${reserve.toLocaleString()} `
-                + 'are held back for it. A buffer that fills the window leaves the answer nowhere to go, '
-                + 'and some APIs refuse the request outright. Raising the reserve to at least the budget '
-                + 'costs nothing except history in a single pass.'
+            ? `A full buffer plus a ${budget.toLocaleString()}-token reply overruns the window, and some `
+                + `APIs refuse that outright. Raise the reserve to ${budget.toLocaleString()} if summaries `
+                + 'start failing on long chats.'
             : '';
         warning.toggleAttribute('hidden', !overcommitted);
     }

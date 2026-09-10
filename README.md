@@ -107,23 +107,22 @@ request, so it can't drift from it.
 
 ### The two limits
 
-A summarization request has two halves and each gets its own limit — one for what goes out,
-one for what comes back. The panel shows both as live arithmetic against your actual context
-window, which is easier to reason about than the raw numbers.
+The defaults are fine. This section is for when they aren't.
 
-**Kept free for the reply** (the *response reserve*) is held back from the context window so
-the answer has somewhere to land. Whatever is left over is what the chat history gets, so
-setting it high makes Recall refuse chats it could otherwise handle.
+**Kept free for the reply** (the *response reserve*) is what Recall expects a summary to
+need, held out of the context window; the chat history gets everything else. Set it high and
+Recall starts refusing chats it could have handled.
 
-**Most the model may write** (the *output budget*) is the `max_tokens` of the request.
+**Most the model may write** (the *output budget*) is the request's `max_tokens` — a ceiling,
+not an expectation. Its job is stopping a model that reasons without end.
 
-They are connected, and this is the part the numbers don't tell you: the reply lands in the
-room the reserve holds back, and the buffer is packed right up to everything else. **Keep the
-reserve at least as large as the budget** — otherwise a full buffer plus a long answer runs
-past the end of the window, and some APIs refuse the request rather than truncating. The
-panel warns when the two are set that way.
+The two differ on purpose: a summary runs about 1,400 tokens, so reserving room for a 15,000
+ceiling that will almost never be reached would waste buffer on every pass. The gap only
+bites when a near-full buffer meets a reply allowed to exceed what was held for it — Claude
+and some others reject that combination up front instead of truncating. The panel warns when
+you're set that way; if summaries fail on long chats, that's the first thing to raise.
 
-How the budget interacts with thinking models decides the right value, and the two failure
+How the ceiling interacts with thinking models decides the right value, and the two failure
 modes are opposites:
 
 - **OpenAI-compatible** (OpenRouter, NanoGPT, most others): one budget covers reasoning

@@ -4,6 +4,20 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.1.6
+
+**Less of it on screen.** 1.1.5 read better than what it replaced but still put fifteen lines
+in front of someone who wants to set two numbers and get back to their chat. The per-field
+paragraphs and the status line are gone; what is left is two fields with their arithmetic
+beside them and three lines of help. The detail moved to the README, which is where you go
+when the defaults are not working.
+
+The warning is also more honest. The two numbers are different by design — the reserve is
+what a summary is expected to need, the ceiling stops a runaway reasoner — so telling you to
+match them as a rule was too strong. It now says when the gap actually bites: a near-full
+buffer plus a reply allowed to exceed the room held for it, which Claude and some others
+reject up front.
+
 ## 1.1.5
 
 **The two generation limits explain themselves now.** They were a pair of jargon labels over
