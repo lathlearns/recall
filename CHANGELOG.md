@@ -4,6 +4,21 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.1.4
+
+**Ticking your preset's summary block no longer sends the summary twice.** Nearly every
+preset has a block like `[Summary: {{summary}}]` — it is how the summary reaches the chat at
+all, since Recall injects nothing — and offering that block as reference material meant its
+macro resolved like any other. The summariser was handed the whole previous summary twice:
+once as reference material it is told not to act on, and once in the framed slot it is
+supposed to be revising. Double the tokens, and the two copies disagreeing about their own
+purpose.
+
+Recall's macros are now removed from a preset block before anything is substituted, so what
+is left is the wrapper — `[Summary: ]`, a labelled empty block, a handful of tokens. The
+block is still offered rather than hidden, since blocks that mix a summary macro into
+otherwise useful instructions exist.
+
 ## 1.1.3
 
 **Preset blocks follow the preset's own order**, in the panel and in what is sent. They were

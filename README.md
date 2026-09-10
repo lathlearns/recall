@@ -140,6 +140,10 @@ them — markers omitted, so it's that list with the gaps closed up. They tell t
 the register the chat is written in and what it's allowed to be explicit about, which
 nothing else here does.
 
+Your summary block is safe to tick. Recall's macros are stripped from a preset block before
+anything is substituted, so `[Summary: {{summary}}]` contributes its wrapper and not a
+second copy of the summary the request is already carrying for revision.
+
 These toggles are the only thing that decides what's sent. Whether a prompt is currently
 switched on in your prompt manager doesn't come into it: one you've switched off there still
 goes if it's ticked here, and one that's on there stays out if it isn't. Otherwise the

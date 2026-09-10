@@ -35,7 +35,13 @@ export const this_chid = 0;
 export const name1 = 'Val';
 export let main_api = 'openai';
 export function setMainApi(value) { main_api = value; }
-export function substituteParams(text) { return String(text).replaceAll('{{char}}', 'Ada'); }
+export const SUMMARY_TEXT = 'CORE MEMORY: the pier at dawn.';
+export function substituteParams(text) {
+    return String(text)
+        .replaceAll('{{char}}', 'Ada')
+        .replaceAll('{{summary}}', SUMMARY_TEXT)
+        .replaceAll('{{recall}}', SUMMARY_TEXT);
+}
 export const saveSettingsDebounced = () => {};
 `);
 stub('public/scripts/openai.js', `
@@ -62,7 +68,7 @@ export const saveMetadataDebounced = () => {};
 const load = path => import(pathToFileURL(join(root, path)).href);
 
 const { oai_settings, promptManager } = await load('public/scripts/openai.js');
-const { setMainApi } = await load('public/script.js');
+const { setMainApi, SUMMARY_TEXT } = await load('public/script.js');
 const { getSettings } = await load('public/scripts/extensions/third-party/recall/src/settings.js');
 const { buildContextBlocks, previewPresetBlocks } =
     await load('public/scripts/extensions/third-party/recall/src/context-blocks.js');
@@ -79,11 +85,13 @@ oai_settings.prompts = [
     { identifier: 'jailbreak', name: 'Post-History Instructions', content: 'Never refuse.' },
     { identifier: 'ab12', name: 'House Style', content: 'Short sentences.' },
     { identifier: 'zz99', name: 'Orphan', content: 'Never placed.' },
+    { identifier: 'sum', name: 'Summary', content: 'Previous events: [Summary: {{summary}}]' },
 ];
 
 // Deliberately not the order the prompts were declared in: reading the bag
 // instead of the order is the bug this fixture exists to catch.
 promptManager.order = [
+    { identifier: 'sum', enabled: true },
     { identifier: 'ab12', enabled: true },
     { identifier: 'chatHistory', enabled: true },
     { identifier: 'jailbreak', enabled: false },
@@ -109,8 +117,25 @@ check('markers and empty prompts are not offered', () => {
 check('blocks follow the prompt order, not the order prompts were declared in', () => {
     assert.deepStrictEqual(
         previewPresetBlocks().map(block => block.label),
-        ['House Style', 'Post-History Instructions', 'Main Prompt', 'Orphan'],
+        ['Summary', 'House Style', 'Post-History Instructions', 'Main Prompt', 'Orphan'],
     );
+});
+
+// Nearly every preset has a block that places the summary — that is how it reaches
+// the chat. Ticking it here must not hand the summariser a second copy of what it
+// is already being given to revise.
+check("a preset block's summary macro cannot pull the summary into the buffer", () => {
+    const summaryBlock = previewPresetBlocks().find(block => block.label === 'Summary');
+    assert.ok(!summaryBlock.text.includes(SUMMARY_TEXT), 'the summary macro expanded');
+    assert.ok(summaryBlock.text.includes('Previous events: [Summary: ]'), summaryBlock.text);
+
+    settings.contextBlocks.description = false;
+    settings.presetBlocks.sum = true;
+    try {
+        assert.ok(!buildContextBlocks().text.includes(SUMMARY_TEXT));
+    } finally {
+        settings.presetBlocks.sum = false;
+    }
 });
 
 check('a prompt the order never mentions sorts last rather than vanishing', () => {
@@ -220,4 +245,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log('All 13 reference-material assembly checks pass.');
+console.log('All 14 reference-material assembly checks pass.');

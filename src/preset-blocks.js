@@ -133,11 +133,36 @@ export function presetBlockHeading(label) {
 }
 
 /**
+ * Recall's own macros, in the two spellings that resolve to a summary.
+ *
+ * Tolerant of whitespace and case because this is matching what a preset author
+ * typed, not what Recall emits.
+ */
+const SUMMARY_MACROS = /\{\{\s*(?:recall|summary)\s*\}\}/gi;
+
+/**
  * @param {{ key: string, label: string, content: string }} block
  * @returns {string} The section exactly as it would appear in the buffer.
  */
 export function renderPresetBlock(block) {
-    const value = substituteParams(String(block.content ?? '')).trim();
+    // Recall's macros are removed before anything is substituted, so a preset
+    // block cannot pull the summary into the buffer a second time.
+    //
+    // Nearly every preset has a block like `[Summary: {{summary}}]` — that is how
+    // the summary reaches the chat at all, since Recall injects nothing. Tick that
+    // block here and the macro resolves like any other, so the summariser is handed
+    // the whole previous summary twice: once as reference material it is told not
+    // to act on, and once in the framed slot it is supposed to be revising. Double
+    // the tokens, and the two copies contradict each other about what they are for.
+    //
+    // Removed rather than the block being hidden: a block is worth offering for the
+    // text around the macro, and blocks that mix a summary macro into genuinely
+    // useful instructions exist. What is left is the wrapper — `[Summary: ]`, a
+    // labelled empty block — which is exactly what the summary prompt expects to
+    // see when there is nothing to revise, and costs a handful of tokens instead of
+    // a whole summary.
+    const raw = String(block.content ?? '').replace(SUMMARY_MACROS, '');
+    const value = substituteParams(raw).trim();
     return value ? `${presetBlockHeading(block.label)}\n${value}` : '';
 }
 
