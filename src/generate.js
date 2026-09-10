@@ -27,7 +27,13 @@ import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
 import { getFallbackSummary } from './legacy.js';
 import { buildContextBlocks } from './context-blocks.js';
-import { getActiveProfile, generateViaProfile, getPromptBudget, describeTarget } from './connection.js';
+import {
+    getActiveProfile,
+    generateViaProfile,
+    getPromptBudget,
+    describeTarget,
+    suppressStoppingStrings,
+} from './connection.js';
 
 import {
     getSettings,
@@ -317,11 +323,21 @@ async function runGeneration(buffer, systemPrompt) {
 async function runViaMainApi(buffer, systemPrompt) {
     const settings = getSettings();
 
-    const data = await generateRawData({
-        prompt: buffer,
-        systemPrompt,
-        responseLength: settings.outputBudget > 0 ? settings.outputBudget : null,
-    });
+    // Your chat's custom stopping strings would otherwise apply to the summary,
+    // and `###` or `---` in that list truncates one at its first section break —
+    // reported by the provider as a normal finish. See suppressStoppingStrings.
+    const restoreStoppingStrings = suppressStoppingStrings();
+
+    let data;
+    try {
+        data = await generateRawData({
+            prompt: buffer,
+            systemPrompt,
+            responseLength: settings.outputBudget > 0 ? settings.outputBudget : null,
+        });
+    } finally {
+        restoreStoppingStrings();
+    }
 
     const raw = extractMessageFromData(data, main_api);
 

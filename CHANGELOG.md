@@ -4,6 +4,23 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.1.1
+
+**Your chat's custom stopping strings no longer apply to summaries.** They live in Advanced
+Formatting, not in a preset or a profile, so they rode along on every summarization request
+— and `###` and `---`, two of the commonest entries, are what the required summary
+structure is built out of. The provider stops at the first match and reports an ordinary
+finish, so the truncated summary saved like a complete one and the next pass revised
+*that*, losing the cut sections for good.
+
+Both paths are covered: the profile path clears `stop` in Recall's own payload, and the
+main API path removes it through `CHAT_COMPLETION_SETTINGS_READY`, the hook ST uses for
+this itself. Neither fires unless you actually have stopping strings set, so a user who has
+none sends exactly the request they sent before. Your chat is unaffected either way.
+
+Text completion is unchanged and still unsupported: its stopping strings arrive in a
+different field.
+
 ## 1.1.0
 
 **The profile's generation preset is no longer optional.** Picking a connection profile now

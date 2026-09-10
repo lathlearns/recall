@@ -11,8 +11,9 @@
  * as before. That path stays the default and the fallback.
  */
 
-import { getMaxPromptTokens, main_api } from '../../../../../script.js';
+import { getMaxPromptTokens, main_api, eventSource, event_types } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
+import { getCustomStoppingStrings } from '../../../../power-user.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { getSettings } from './settings.js';
 
@@ -103,6 +104,55 @@ export function getPromptBudget() {
 }
 
 /**
+ * Whether the user has any custom stopping strings at all.
+ *
+ * Read rather than assumed so that a user who has none sends exactly the payload
+ * they sent before: the guard is what keeps this from being a change to everyone's
+ * requests in service of the subset it protects.
+ * @returns {boolean}
+ */
+function hasCustomStoppingStrings() {
+    try {
+        return getCustomStoppingStrings().length > 0;
+    } catch (error) {
+        console.warn('[Recall] Could not read custom stopping strings', error);
+        return false;
+    }
+}
+
+/**
+ * The same protection for the main API path, where there is no payload to
+ * override — `generateRawData` takes no stopping-string option.
+ *
+ * ST emits `CHAT_COMPLETION_SETTINGS_READY` with the assembled payload and sends
+ * whatever the listeners leave behind, which is the documented seam for exactly
+ * this; ST's own temporary-response-length machinery uses the same `once` hook.
+ *
+ * The listener is removed in the caller's `finally` whether or not it fired. A
+ * `once` listener that never fires is not inert — it waits, and the next thing to
+ * fire it would be the user's own roleplay generation, silently stripped of the
+ * stopping strings they set. That is a worse bug than the one being fixed, so the
+ * cleanup is not optional and this returns the function that performs it.
+ *
+ * @returns {() => void} Removes the hook. Always call it.
+ */
+export function suppressStoppingStrings() {
+    if (main_api !== 'openai' || !hasCustomStoppingStrings()) {
+        return () => {};
+    }
+
+    const hook = generateData => {
+        if (generateData && typeof generateData === 'object') {
+            delete generateData.stop;
+        }
+    };
+
+    eventSource.once(event_types.CHAT_COMPLETION_SETTINGS_READY, hook);
+
+    return () => eventSource.removeListener(event_types.CHAT_COMPLETION_SETTINGS_READY, hook);
+}
+
+/**
  * Sends the summarization request through the configured profile.
  *
  * @param {string} systemPrompt
@@ -133,6 +183,27 @@ export async function generateViaProfile(systemPrompt, buffer, signal = null) {
     const override = String(settings.modelOverride ?? '').trim();
     if (override) {
         overridePayload.model = override;
+    }
+
+    // Your chat's stopping strings do not belong in a summarization request.
+    //
+    // ST fills `stop` from `power_user.custom_stopping_strings` — a global setting
+    // in Advanced Formatting, not part of any preset or profile — so it rides along
+    // whichever profile is picked. The strings people put there are the ones that
+    // end a roleplay turn, and two of the commonest, `###` and `---`, are exactly
+    // what the required summary structure is built out of. With macro substitution
+    // on, `{{user}}:` is worse: a summary names the persona in its first paragraph.
+    //
+    // The provider stops at the first match and reports `finish_reason: "stop"`,
+    // which is indistinguishable from finishing. A summary cut off after its first
+    // section is long enough to save, and the next pass revises *that*, so the lost
+    // sections never come back.
+    //
+    // Sent only when there is something to clear. An empty array is valid for every
+    // source ST supports, but a payload that is byte-identical to before whenever
+    // the user has no stopping strings cannot regress anyone who was never at risk.
+    if (hasCustomStoppingStrings()) {
+        overridePayload.stop = [];
     }
 
     const result = await ConnectionManagerRequestService.sendRequest(

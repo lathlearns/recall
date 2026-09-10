@@ -270,6 +270,15 @@ override still win. (On a text completion profile the preset's context length al
 as `truncation_length`, which Recall does not override — one of the reasons those backends
 are unsupported.)
 
+**Your custom stopping strings are removed from Recall's requests, and only from
+Recall's.** They are a global setting in Advanced Formatting rather than part of any
+preset or profile, so they otherwise apply to a summary as readily as to a reply — and the
+two commonest entries, `###` and `---`, are exactly what the required summary structure is
+built out of. The provider stops at the first match and reports an ordinary finish, so a
+summary truncated after its first section looks like a complete one, saves like one, and is
+what the next pass revises. Nothing is changed for your chat, and if you have no stopping
+strings set, nothing about the request changes at all.
+
 **The model field is free text, and that is not laziness.** A connection profile stores a
 single `model` string, captured from whatever was selected when the profile was made. ST's
 model dropdowns are populated only for the source you are *currently connected to* — there
@@ -393,6 +402,8 @@ tagged `vX.Y.Z`, and [CHANGELOG.md](CHANGELOG.md) says what changed and why.
 `auto_update` is on, so ST pulls updates on its own. Settings that disappear are removed
 from your saved settings on the next load rather than left behind as a stored answer to a
 question nothing asks any more.
+
+MIT licensed — see [LICENSE](LICENSE). Use it, fork it, change it.
 
 ---
 
