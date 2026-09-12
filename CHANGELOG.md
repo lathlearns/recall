@@ -24,15 +24,37 @@ away to a single line once the summary proper starts: *Thought for 0:31 · 4,120
 which reopens if you want it. Measured to the moment writing began, not to now, so it stops
 climbing once the thinking has stopped.
 
-It is display only. Reasoning has never been part of a Recall summary and still is not —
-SillyTavern separates it out of the response before Recall ever sees it — and nothing here
-is saved with the chat. Switch it off under Advanced if you would rather not see it.
+**And it is kept.** Reasoning that vanished the instant the summary landed could only be read
+by someone who happened to be watching, which is the wrong half of the job — "why did it say
+that" is a question you ask *after* reading what it said. Each summary now stores the
+reasoning that produced it, collapsed under its metadata in the archive, with its token count
+beside the summary's own so you can see which is larger. It usually is.
+
+It is still never sent. The macro resolves a summary's text and nothing else, so this can be
+any size and remain invisible to the model — it costs space in your chat file and nothing in
+context. One switch under Advanced governs both showing and keeping; turn it off and Recall
+stops recording it, while summaries that already have it keep it.
 
 The one refusal that turned on reasoning can now show its evidence. "The model spent its
 entire output budget reasoning and never wrote a summary" is sound advice about raising the
 budget or lowering the effort, and it was impossible to act on without seeing what the model
-had actually been doing with the budget. That text is now kept until the next run and the
-error offers to show it.
+had been doing with the budget. It now reports the reasoning in tokens against the budget it
+overran, and the text is there to read.
+
+**A profile whose saved API key went stale now says so.** A connection profile records which
+stored key to use by id, and rotating or re-entering that key leaves the profile pointing at
+an id that no longer exists. SillyTavern answers a missing id with an empty key rather than
+an error, so the request goes out with no credentials and comes back Unauthorized — while the
+same profile keeps working in the chat, which sends no id and falls back to whichever key is
+active. Recall now checks the reference before it spends a request and names the fix. This
+cost an afternoon to diagnose from the symptom, which is exactly the sort of thing the panel
+should have been able to tell us.
+
+**Sizes are in tokens.** The live pane counted characters, which is the wrong unit next to a
+budget measured in tokens and next to every other figure Recall shows. Counting a growing
+string is a cache miss every time and a round-trip on most tokenizers, so the live figures
+update about once a second rather than on every chunk — the number lags the text slightly by
+design.
 
 **Stop.** Any summary running through a connection profile can now be cancelled, streamed or
 not, from the drawer as well as the manager. Nothing is saved: a half-written summary is not

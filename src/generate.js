@@ -111,6 +111,21 @@ export function getLastReasoning() {
     return lastReasoning;
 }
 
+/**
+ * What of a run's reasoning gets stored on its summary.
+ *
+ * Gated on the same setting that shows it, because the two are one decision:
+ * someone who does not want to see what the model was thinking has no use for a
+ * copy of it in their chat file either, and a second checkbox for a field with
+ * no effect on the prompt is more configuration than the choice is worth.
+ *
+ * @param {string} reasoning
+ * @returns {string}
+ */
+function keptReasoning(reasoning) {
+    return getSettings().showReasoning ? String(reasoning ?? '').trim() : '';
+}
+
 export function isGenerating() {
     return inFlight;
 }
@@ -471,15 +486,21 @@ async function runGeneration(buffer, systemPrompt) {
     }
 
     if (content.length >= settings.minResponseChars) {
-        return content;
+        return { content, reasoning };
     }
 
     if (reasoning.trim().length) {
+        // In tokens, because that is the unit the budget it overran is set in —
+        // a character count would have to be converted by the reader before it
+        // could be compared against the number they are being told to raise.
+        const spent = await getTokenCountAsync(reasoning);
+
         throw new RecallError(
             'The model spent its entire output budget reasoning and never wrote a summary. '
-            + 'Raise the output budget in Advanced, or lower Reasoning Effort for this API. '
-            + `It produced ${reasoning.trim().length.toLocaleString()} characters of reasoning, `
-            + 'which you can read to judge which of those two to change.',
+            + `It produced ${spent.toLocaleString()} tokens of reasoning against an output budget `
+            + `of ${Number(settings.outputBudget).toLocaleString()}. Raise that budget in Advanced, `
+            + 'or lower Reasoning Effort for this API — the reasoning is kept so you can read it '
+            + 'and judge which.',
             { kind: 'reasoning-overrun' },
         );
     }
@@ -576,8 +597,22 @@ async function runViaProfile(buffer, systemPrompt) {
         }
 
         const detail = error?.cause?.message || error?.message || String(error);
+
+        // An auth failure through a profile has one overwhelmingly likely cause,
+        // and it is not the one the word suggests. The profile records which saved
+        // key to use by id; rotating that key leaves the id dangling, ST answers a
+        // dangling id with an empty string rather than an error, and the request
+        // goes out with no credentials. The chat keeps working throughout, because
+        // it sends no id and falls back to the active key — so "Unauthorized" here
+        // reads as a Recall bug rather than as a profile that needs re-saving.
+        const unauthorized = /unauthor|401|invalid[\s_-]*api[\s_-]*key|no[\s_-]*api[\s_-]*key/i.test(detail);
+        const hint = unauthorized
+            ? '\n\nIf this profile works in the chat, its saved API key reference is probably stale: '
+            + 'open Connection Manager, reselect the key for this profile, and save it.'
+            : '';
+
         throw new RecallError(
-            `${describeTarget()}\n\nThe request failed: ${detail}`,
+            `${describeTarget()}\n\nThe request failed: ${detail}${hint}`,
             { kind: 'profile-failed' },
         );
     }
@@ -682,7 +717,7 @@ export async function summarizeNow(steeringNote = '') {
     }
 
     try {
-        const content = await runGeneration(buffer, systemPrompt);
+        const { content, reasoning } = await runGeneration(buffer, systemPrompt);
 
         if (contextChanged(snapshot)) {
             throw new RecallError('The chat changed while the summary was generating, so the result was discarded.', { kind: 'context-changed' });
@@ -703,6 +738,7 @@ export async function summarizeNow(steeringNote = '') {
             // message an earlier summary had already hidden.
             sourceIndices: [...indices],
             steeringNote: String(steeringNote ?? '').trim(),
+            reasoning: keptReasoning(reasoning),
         });
 
         addSummary(record);
@@ -829,7 +865,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
     }
 
     try {
-        const content = await runGeneration(buffer, systemPrompt);
+        const { content, reasoning } = await runGeneration(buffer, systemPrompt);
 
         if (contextChanged(snapshot)) {
             throw new RecallError('The chat changed while the summary was generating, so the result was discarded.', { kind: 'context-changed' });
@@ -849,6 +885,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
             sourceIndices: [...indices],
             sourceIndicesInferred: !!indicesOverride,
             steeringNote: String(steeringNote ?? '').trim(),
+            reasoning: keptReasoning(reasoning),
             // Hide ownership stays with the original. One summary owns a hidden
             // range, always.
             hiddenIndices: [],

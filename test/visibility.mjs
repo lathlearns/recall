@@ -213,16 +213,27 @@ const templateSrc = fs.readFileSync(`${ROOT}/templates/manager.html`, 'utf8');
 // name inside a selector like [data-x-size=...] — counting those made the
 // two sets identical by construction and the check vacuous.
 const emitted = new Set([...uiSrc.matchAll(/(?<!\[)\bdata-([a-z-]+-size)(?=[="\s>])/g)].map(m => m[1]));
+// The same hooks, where they are declared in a template instead of generated.
+// A paint target is equally real either way, and the check is about whether the
+// element exists at all — not about which file wrote it.
+const declared = new Set(
+    [templateSrc, drawer].flatMap(src => [...src.matchAll(/\bdata-([a-z-]+-size)(?=[="\s>])/g)].map(m => m[1])),
+);
 // Attributes ui.js then queries, e.g. [data-summary-size="..."]
 const queried = new Set([...uiSrc.matchAll(/\[data-([a-z-]+-size)[\]=]/g)].map(m => m[1]));
 
 for (const name of queried) {
-    if (!emitted.has(name)) failures.push(`ui.js queries [data-${name}] but never emits it`);
+    if (!emitted.has(name) && !declared.has(name)) {
+        failures.push(`ui.js queries [data-${name}] but nothing emits or declares it`);
+    }
 }
 for (const name of emitted) {
     if (!queried.has(name)) failures.push(`ui.js emits data-${name} but never paints into it`);
 }
-if (!emitted.size) failures.push('no token-count hooks found in ui.js at all');
+for (const name of declared) {
+    if (!queried.has(name)) failures.push(`a template declares data-${name} but ui.js never paints into it`);
+}
+if (!emitted.size && !declared.size) failures.push('no token-count hooks found at all');
 
 // The blocks total lives in the template rather than generated markup.
 if (uiSrc.includes('data-recall="blocks-total"') && !templateSrc.includes('data-recall="blocks-total"')) {

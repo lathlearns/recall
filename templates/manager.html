@@ -216,6 +216,25 @@
                         <p class="recall-guidance-text" data-recall="detail-guidance-text"></p>
                     </div>
 
+                    <!--
+                        What the model was thinking when it wrote this summary,
+                        kept with the summary rather than lost when the run ended.
+                        Collapsed by default: it is usually longer than the summary
+                        and it is reference, not the thing you opened this to read.
+
+                        Not editable, unlike the summary above it. Editing it would
+                        imply it does something, and it does nothing — the macro
+                        resolves `content` and never looks here.
+                    -->
+                    <div class="recall-think recall-think-stored" data-recall="detail-think" hidden>
+                        <div class="recall-think-toggle" data-recall="detail-think-toggle" role="button" tabindex="0">
+                            <i class="fa-solid fa-chevron-right" data-recall="detail-think-chevron"></i>
+                            <span>What the model was thinking</span>
+                            <span class="recall-dim" data-detail-think-size></span>
+                        </div>
+                        <div class="recall-think-body" data-recall="detail-think-body" hidden></div>
+                    </div>
+
                     <div class="recall-banner recall-banner-warn" data-recall="stale-banner" hidden>
                         <i class="fa-solid fa-link-slash"></i>
                         <span>
@@ -324,12 +343,15 @@
 
                 <label class="checkbox_label recall-row">
                     <input type="checkbox" data-recall="show-reasoning">
-                    <span>Show the model's reasoning while it writes</span>
+                    <span>Keep the model's reasoning</span>
                 </label>
                 <p class="recall-help">
-                    Only visible on a connection that streams, and only when the model reasons at
-                    all. It is never part of the summary and is never saved -- SillyTavern
-                    separates it out before Recall sees it.
+                    Shows what the model is thinking while it writes, on a connection that streams,
+                    and keeps it with the finished summary so you can read it afterwards from the
+                    archive. It is never part of the summary and never reaches the model -- the
+                    macro resolves the summary text and nothing else -- so it costs space in your
+                    chat file and nothing in context. Turn this off to stop recording it; summaries
+                    that already have it keep it.
                 </p>
             </section>
 

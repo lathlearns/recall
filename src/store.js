@@ -38,6 +38,7 @@ export const STORE_KEY = 'recall';
  * @property {boolean} stale            Set by drift detection when the anchor is gone.
  * @property {boolean} seededFromLegacy Built on the built-in Summarize's stored summary rather than from scratch.
  * @property {string} steeringNote      One-off guidance sent with this pass. Kept as a record of what produced this result; never replayed.
+ * @property {string} reasoning         What the model was thinking while it wrote this. Display only — see below.
  */
 
 function emptyStore() {
@@ -160,6 +161,17 @@ export function createSummaryRecord(fields) {
         // for one pass, and silently repeating it would make later summaries drift
         // for a reason invisible at the point of pressing the button.
         steeringNote: '',
+        // What the model was thinking while it wrote `content`.
+        //
+        // Kept because "why did it say that" is a question asked after reading
+        // what it said, and a reasoning trace that evaporates the moment the
+        // summary lands can only be read by someone who happened to be watching.
+        //
+        // It is *not* part of the summary and has no path to the prompt. The
+        // macro resolves `content` and nothing else — see resolveRecall — so this
+        // field is invisible to the model no matter how large it gets. It costs
+        // space in the chat file and nothing in context.
+        reasoning: '',
         ...fields,
     };
 }

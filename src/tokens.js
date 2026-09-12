@@ -112,3 +112,62 @@ export async function paintTokens(element, text, { suffix = 'tokens', empty = 'e
 function format(count, suffix) {
     return `${count.toLocaleString()}${suffix ? ` ${suffix}` : ''}`;
 }
+
+/**
+ * A token count for text that is still arriving.
+ *
+ * Counting a growing string is a cache miss every single time — the cache is
+ * keyed by hash, and every chunk makes a new string — and on a Chat Completion
+ * source each miss is a POST to the tokenizer endpoint. The live pane updates
+ * around eight times a second, so counting on every repaint would mean eight
+ * round-trips a second of ever-larger bodies, for a number nobody reads that
+ * fast.
+ *
+ * So it counts on its own schedule and the display lags slightly behind the
+ * text. The previous number stays on screen while the next is in flight rather
+ * than blanking or showing a placeholder: a figure that is a second stale reads
+ * as a counter, whereas one that flickers between a number and an ellipsis reads
+ * as broken.
+ *
+ * @param {{ minIntervalMs?: number }} options
+ */
+export function createStreamingCount({ minIntervalMs = 1000 } = {}) {
+    let value = null;
+    let busy = false;
+    let lastStartedAt = 0;
+
+    return {
+        /** The most recent count, or null before the first one lands. */
+        get current() {
+            return value;
+        },
+
+        /** Called when a new run starts, so one run's figure never labels another's. */
+        reset() {
+            value = null;
+            busy = false;
+            lastStartedAt = 0;
+        },
+
+        /**
+         * Starts a count if one is due. Never awaited by the caller — read
+         * `current` on the next repaint.
+         * @param {string} text
+         */
+        refresh(text) {
+            const now = Date.now();
+
+            if (busy || !text || now - lastStartedAt < minIntervalMs) {
+                return;
+            }
+
+            busy = true;
+            lastStartedAt = now;
+
+            countTokens(text)
+                .then(count => { value = count; })
+                .catch(error => console.warn('[Recall] Live token count failed', error))
+                .finally(() => { busy = false; });
+        },
+    };
+}

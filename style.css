@@ -169,14 +169,6 @@
 }
 
 /*
- * A fixed height, not a growing one.
- *
- * Letting this size to its content means the pane grows by a line every few
- * hundred milliseconds for a minute, pushing the archive down the screen the
- * whole time and reflowing the page under the pointer. A fixed window that
- * scrolls its own text keeps everything below it exactly where it was.
- */
-/*
  * The reasoning region.
  *
  * Visually subordinate to the summary below it on purpose. It is the more
@@ -223,6 +215,14 @@
     font-style: italic;
 }
 
+/*
+ * A fixed height, not a growing one.
+ *
+ * Letting this size to its content means the pane grows by a line every few
+ * hundred milliseconds for a minute, pushing the archive down the screen the
+ * whole time and reflowing the page under the pointer. A fixed window that
+ * scrolls its own text keeps everything below it exactly where it was.
+ */
 .recall-live-body {
     max-height: 11em;
     overflow-y: auto;
@@ -1177,4 +1177,20 @@
     .recall-tab {
         min-height: calc(var(--mainFontSize) * 2.4);
     }
+}
+
+/*
+ * The stored reasoning in the detail pane reuses the live pane's look, minus the
+ * divider: there is nothing below it for the rule to separate it from, and it
+ * gets a little more height because this is read deliberately rather than
+ * glanced at while something else is arriving.
+ */
+.recall-think-stored {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.recall-think-stored .recall-think-body {
+    max-height: 16em;
+    margin-top: 0.3em;
 }

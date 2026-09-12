@@ -51,7 +51,7 @@ import {
 } from './connection.js';
 import { previewContextBlocks, previewPresetBlocks } from './context-blocks.js';
 import { isPresetAvailable } from './preset-blocks.js';
-import { paintTokens } from './tokens.js';
+import { paintTokens, createStreamingCount } from './tokens.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
 
 const EXTENSION_PATH = 'third-party/recall';
@@ -134,6 +134,33 @@ const STICK_THRESHOLD_PX = 48;
 let runTicker = null;
 
 /**
+ * Token counts for the two streams, counted on their own schedule rather than
+ * per repaint — see createStreamingCount for why.
+ */
+const liveCount = createStreamingCount();
+const thinkCount = createStreamingCount();
+
+/**
+ * The size line for text that is still arriving.
+ *
+ * Empty until the first real count lands, rather than falling back to a
+ * character count in the meantime. Two different units alternating in the same
+ * slot is worse than a slot that fills in a second late, and a number without a
+ * unit beside a summary is read as tokens anyway — which for the first second it
+ * would not be.
+ *
+ * @param {number|null} tokens
+ * @param {string} text
+ * @returns {string}
+ */
+function describeLiveSize(tokens, text) {
+    if (!text) {
+        return '';
+    }
+    return tokens === null ? '' : `${tokens.toLocaleString()} tokens`;
+}
+
+/**
  * Whether the reasoning region is open, once the user has said so.
  *
  * `null` means they have not, and it follows the run: open while reasoning is
@@ -143,6 +170,17 @@ let runTicker = null;
  * because by then it is a different run and a different question.
  */
 let thinkOpen = null;
+
+/**
+ * Which saved summaries have their stored reasoning expanded.
+ *
+ * Per summary rather than one flag, so moving between two summaries to compare
+ * their reasoning does not mean reopening the section every time. Lives only as
+ * long as the manager is open.
+ *
+ * @type {Set<string>}
+ */
+const detailThinkOpen = new Set();
 
 // ---------------------------------------------------------------------------
 // Drawer
@@ -304,7 +342,8 @@ function renderLivePane(run) {
     }
 
     if (size) {
-        size.textContent = run.content ? `${run.content.length.toLocaleString()} characters` : '';
+        liveCount.refresh(run.content);
+        size.textContent = describeLiveSize(liveCount.current, run.content);
     }
 
     if (body) {
@@ -362,9 +401,12 @@ function renderThinking(run) {
             ? formatElapsed(run.firstContentAt - run.startedAt)
             : null;
 
+        thinkCount.refresh(reasoning);
+        const size = describeLiveSize(thinkCount.current, reasoning);
+
         summary.textContent = thoughtFor
-            ? `Thought for ${thoughtFor} · ${reasoning.length.toLocaleString()} characters`
-            : `Thinking… ${reasoning.length.toLocaleString()} characters`;
+            ? `Thought for ${thoughtFor}${size ? ` · ${size}` : ''}`
+            : `Thinking…${size ? ` ${size}` : ''}`;
     }
 
     if (chevron) {
@@ -471,6 +513,8 @@ function formatElapsed(ms) {
 function onRunStateChanged(run) {
     if (run && runTicker === null) {
         runTicker = setInterval(renderRunState, 1000);
+        liveCount.reset();
+        thinkCount.reset();
     } else if (!run && runTicker !== null) {
         clearInterval(runTicker);
         runTicker = null;
@@ -625,6 +669,23 @@ function wireManager({ onSummarize }) {
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             toggleThinking();
+        }
+    });
+
+    const detailToggle = q('[data-recall="detail-think-toggle"]');
+    const toggleStoredThinking = () => {
+        const id = currentSummary()?.id;
+        if (!id) {
+            return;
+        }
+        detailThinkOpen.has(id) ? detailThinkOpen.delete(id) : detailThinkOpen.add(id);
+        renderDetail();
+    };
+    detailToggle?.addEventListener('click', toggleStoredThinking);
+    detailToggle?.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleStoredThinking();
         }
     });
 
@@ -970,6 +1031,8 @@ function renderDetail() {
         q('[data-recall="detail-guidance-text"]').textContent = summary.steeringNote ?? '';
     }
 
+    renderStoredReasoning(summary);
+
     q('[data-recall="stale-banner"]').toggleAttribute('hidden', !summary.stale);
 
     // "Old summaries can be regenerated" — flagged once, quietly, at the point of
@@ -985,6 +1048,43 @@ function renderDetail() {
  * What a redo of this summary would actually replay. Coverage is a range; the read
  * set is what was in the buffer, and on any summary after the first those differ.
  */
+/**
+ * The stored reasoning for a saved summary.
+ *
+ * Hidden entirely when there is none — summaries written before this existed,
+ * ones from a model that does not reason, and ones made with the setting off all
+ * look the same from here, and a permanently empty section explaining which
+ * would be worth less than the space it took.
+ *
+ * @param {import('./store.js').RecallSummary} summary
+ */
+function renderStoredReasoning(summary) {
+    const region = q('[data-recall="detail-think"]');
+    if (!region) {
+        return;
+    }
+
+    const reasoning = String(summary.reasoning ?? '');
+    region.toggleAttribute('hidden', !reasoning.trim());
+
+    if (!reasoning.trim()) {
+        return;
+    }
+
+    const open = detailThinkOpen.has(summary.id);
+
+    q('[data-recall="detail-think-chevron"]').className = `fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'}`;
+
+    const body = q('[data-recall="detail-think-body"]');
+    body.toggleAttribute('hidden', !open);
+    // textContent: model output going back onto the page.
+    body.textContent = reasoning;
+
+    // The same units as the summary above it, so the two are comparable — this is
+    // frequently the larger of the two, which is worth being able to see.
+    void paintTokens(q('[data-detail-think-size]'), reasoning);
+}
+
 function describeReadSet(summary) {
     const { exact, indices, extra } = resolveSourceIndices(summary);
 

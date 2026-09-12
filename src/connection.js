@@ -14,6 +14,7 @@
 import { getMaxPromptTokens, main_api, eventSource, event_types } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { getCustomStoppingStrings } from '../../../../power-user.js';
+import { secret_state } from '../../../../secrets.js';
 import { CONNECT_API_MAP } from '../../../../slash-commands.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { getSettings } from './settings.js';
@@ -149,6 +150,56 @@ export function describeStreaming() {
     }
 
     return `Streaming live from "${profile.name}". The summary is written into the manager as it arrives.`;
+}
+
+/**
+ * Whether a profile's stored API key reference still resolves.
+ *
+ * A connection profile records which saved key to use by id, and rotating or
+ * re-entering that key leaves the profile pointing at an id that no longer
+ * exists. `readSecret` answers a missing id with an empty string rather than an
+ * error, so the request goes out with no credentials and the provider replies
+ * 401 — and the profile looks fine in the chat, because the ordinary path sends
+ * no id and falls through to whichever key is active.
+ *
+ * That combination is close to undiagnosable from the symptom: the same profile
+ * works in the chat and fails here, which reads like a bug in Recall.
+ *
+ * `secret_state` is the client's own copy, holding ids, labels and *masked*
+ * values, so this costs no request and never handles a key.
+ *
+ * @param {{id: string, name: string}|null} [profile]
+ * @returns {boolean} False only when the id is definitely missing.
+ */
+export function hasResolvableSecret(profile = getActiveProfile()) {
+    const id = rawProfile(profile?.id)?.['secret-id'];
+
+    if (!id) {
+        // No id recorded means "use the active key", which is exactly what the
+        // chat does and cannot be stale.
+        return true;
+    }
+
+    // An empty state means it has not loaded, not that the key is missing. Only
+    // a populated state can prove absence, and a false alarm here would block a
+    // working setup — so silence is treated as consent.
+    const buckets = Object.values(secret_state ?? {}).filter(Array.isArray);
+    if (!buckets.length) {
+        return true;
+    }
+
+    return buckets.some(list => list.some(secret => secret?.id === id));
+}
+
+/**
+ * The profile as Connection Manager stores it, rather than the reduced shape
+ * `listProfiles` exposes — `secret-id` is not part of the latter.
+ */
+function rawProfile(id) {
+    if (!id) {
+        return null;
+    }
+    return (extension_settings.connectionManager?.profiles ?? []).find(p => p.id === id) ?? null;
 }
 
 /**
@@ -400,6 +451,17 @@ export function describeTarget() {
             return 'That profile no longer exists. Recall is using the main API until you pick another.';
         }
         return `Using the main API (${main_api}), the same connection as your chat.`;
+    }
+
+    // Ahead of everything else about the profile, because none of the rest of it
+    // will happen. Stated as a fault in the profile rather than as a Recall
+    // problem, since that is where it has to be fixed.
+    if (!hasResolvableSecret(profile)) {
+        return `"${profile.name}" points at a saved API key that no longer exists — it was probably `
+            + 'rotated or re-entered after the profile was made. Summaries will come back '
+            + 'Unauthorized even though the chat works, because the chat falls back to whichever '
+            + `key is active and this does not. Open Connection Manager, reselect the key for `
+            + `"${profile.name}", and save the profile.`;
     }
 
     const model = getEffectiveModel();

@@ -212,22 +212,38 @@ if (/think-body[\s\S]{0,400}?\.innerHTML\s*=/.test(uiSrc)) {
     failures.push('the reasoning body is written with innerHTML; partial model output must go in as textContent');
 }
 
-// 5h. Reasoning must never reach a stored summary. It is display-only, and the
-//     one thing that would make this feature a data problem rather than a UI one
-//     is a record field carrying it.
-const storeSrc = fs.readFileSync(`${ROOT}/src/store.js`, 'utf8');
-if (/reasoning/i.test(storeSrc)) {
-    failures.push('src/store.js mentions reasoning; it must never be written to a summary record');
+// 5h. Reasoning is stored with its summary, and must never reach the prompt.
+//
+//     An earlier version of this check simply forbade the field on a record. That
+//     was the wrong invariant — it banned the storage rather than the leak, and
+//     had to go the moment reasoning was kept so it could be read afterwards.
+//     What actually matters is narrower and permanent: the macro resolves the
+//     summary's `content` and nothing else, so reasoning can be any size in the
+//     chat file and still be invisible to the model. These pin that.
+const macroSrc = fs.readFileSync(`${ROOT}/src/macro.js`, 'utf8');
+if (/\breasoning\b/.test(macroSrc)) {
+    failures.push('src/macro.js mentions reasoning; the macro must resolve content and nothing else');
 }
-// Each createSummaryRecord({ ... }); call, up to the first line that closes it.
-const recordCalls = generateSrc.match(/createSummaryRecord\(\{[\s\S]*?\n\s*\}\);/g) ?? [];
-if (!recordCalls.length) {
-    failures.push('no createSummaryRecord call found in generate.js — this check is not looking at anything');
+
+// The buffer is the other way text reaches the model. Reasoning must not appear
+// in the function that builds it, nor in the reference material it assembles.
+const bufferFn = generateSrc.match(/function buildBufferFrom\([\s\S]*?\n\}/)?.[0] ?? '';
+if (!bufferFn) {
+    failures.push('buildBufferFrom not found in generate.js — this check is not looking at anything');
 }
-for (const call of recordCalls) {
-    if (/\breasoning\b/.test(call)) {
-        failures.push('a summary record is being built with a reasoning field');
-    }
+if (/\breasoning\b/.test(bufferFn)) {
+    failures.push('buildBufferFrom mentions reasoning; it must never enter the buffer');
+}
+
+const contextSrc = fs.readFileSync(`${ROOT}/src/context-blocks.js`, 'utf8');
+if (/\breasoning\b/.test(contextSrc)) {
+    failures.push('src/context-blocks.js mentions reasoning; reference material must never carry it');
+}
+
+// And it must stay out of the field the macro does read: nothing may assign a
+// summary's content from a reasoning value.
+if (/\bcontent\s*[:=]\s*[\w.?]*\breasoning\b/.test(generateSrc + uiSrc)) {
+    failures.push('a summary\'s content is being assigned from reasoning');
 }
 
 // 6. The clock must be cleared from the same place it is set. A run that ends by
