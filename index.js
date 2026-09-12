@@ -111,16 +111,29 @@ function onMessageChanged() {
  * no new entry to read yet and would always skip, so only MESSAGE_RECEIVED is
  * wired.
  */
-async function onMessageReceived(mesId) {
-    try {
-        const result = await evaluateNudge(Number(mesId));
-        if (result?.fired) {
-            toastNudge(result);
-        }
-        refreshDrawer();
-    } catch (error) {
-        console.error('[Recall] Nudge evaluation failed', error);
-    }
+function onMessageReceived(mesId) {
+    // Deliberately not awaited, and this function is deliberately not async.
+    //
+    // ST awaits its listeners: on the non-streaming path `MESSAGE_RECEIVED` is
+    // emitted *before* `addOneMessage`, so anything awaited here delays the reply
+    // appearing on screen. And the nudge does await something expensive — on a
+    // text completion API `readPromptUsage` tokenizes the entire final prompt,
+    // which is a server round-trip carrying the whole prompt body, and it is a
+    // cache miss every turn because every turn's prompt is a new string.
+    //
+    // Nothing downstream of this needs to have finished before the message
+    // renders: the result is a toast and a drawer repaint, both of which are
+    // perfectly happy to land a moment later.
+    void evaluateNudge(Number(mesId))
+        .then(result => {
+            if (result?.fired) {
+                toastNudge(result);
+            }
+            refreshDrawer();
+        })
+        .catch(error => {
+            console.error('[Recall] Nudge evaluation failed', error);
+        });
 }
 
 jQuery(async () => {
