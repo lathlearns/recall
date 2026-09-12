@@ -128,6 +128,35 @@ function populate() {
     q('[data-recall="error-text"]').textContent =
         'The summariser returned nothing usable. The connection profile may be pointing at a model that no longer exists.';
 
+    // A summary being written, which is the widest the topbar ever gets: the
+    // running button carries a clock and Stop appears beside it.
+    const run = q('[data-recall="summarize-now"]');
+    run.classList.add('recall-busy');
+    run.querySelector('span').textContent = 'Summarizing… 1:07';
+    q('[data-recall="preview"]').classList.add('disabled');
+    q('[data-recall="stop"]').removeAttribute('hidden');
+
+    const thinking = 'The user wants continuity, relationships and open threads. Let me work '
+        + 'through what actually changed in this stretch. Messages 96-120 cover the ford argument '
+        + 'and the road east, and the writ Mara took at 102 is still an open thread.';
+
+    q('[data-recall="live"]').removeAttribute('hidden');
+    q('[data-recall="live-label"]').textContent = 'Writing the summary…';
+    q('[data-recall="live-size"]').textContent = '412 tokens';
+    q('[data-recall="live-body"]').textContent =
+        '## Continuity\n\nMara and Tev are still travelling east along the Vensk road, four days '
+        + 'out from Halloway. Mara is carrying the sealed writ she took from the courier.';
+    q('[data-recall="think"]').removeAttribute('hidden');
+    q('[data-recall="think-summary"]').textContent = 'Thought for 0:31 · 624 tokens';
+    q('[data-recall="think-body"]').textContent = thinking;
+
+    // And the same reasoning kept on a finished summary, expanded.
+    q('[data-recall="detail-think"]').removeAttribute('hidden');
+    q('[data-detail-think-size]').textContent = '624 tokens';
+    const storedThink = q('[data-recall="detail-think-body"]');
+    storedThink.removeAttribute('hidden');
+    storedThink.textContent = thinking;
+
     q('[data-recall="toggle-override"]').textContent = 'Stop using a character-specific prompt';
     q('[data-recall="restore-defaults"]').textContent = 'Restore defaults';
     q('[data-recall="blocks"]').innerHTML = `
@@ -199,6 +228,30 @@ for (const [pane, view] of [['archive', 'list'], ['archive', 'detail'], ['settin
     }
 }
 
+// 1b. The same rule for everything outside the panes.
+//
+//     The topbar, the guidance field and the pinned fallback banner are siblings
+//     of the panes, not children, so the per-pane check above never looked at
+//     them — and the topbar is the row most likely to burst: it holds three
+//     buttons at once while a summary is running, one of them carrying a clock.
+for (const view of ['list', 'detail']) {
+    await setView(phone, view);
+    for (const escaped of await phone.evaluate(() => {
+        const root = document.querySelector('.recall-manager').getBoundingClientRect();
+        const out = [];
+        for (const el of document.querySelectorAll('.recall-manager *')) {
+            const box = el.getBoundingClientRect();
+            if (!box.width && !box.height) continue;
+            if (box.right > root.right + 1) {
+                out.push(`${el.getAttribute('data-recall') || el.className}: right=${Math.round(box.right)}, manager ends at ${Math.round(root.right)}`);
+            }
+        }
+        return out;
+    })) {
+        failures.push(`at 375px, ${view} overflows the manager — ${escaped}`);
+    }
+}
+
 // 2. No button may be taller than a single line of its own text.
 await setPane(phone, 'settings');
 for (const button of await wordStacked(phone)) {
@@ -241,6 +294,9 @@ const small = await phone.evaluate(() => {
         ['.recall-manager .menu_button', 'button'],
         ['.recall-manager .checkbox_label:not(.recall-block-enable)', 'checkbox row'],
         ['.recall-tab', 'tab'],
+        // Both reasoning folds. They are divs with role="button", so nothing
+        // gives them a usable height unless Recall's own stylesheet does.
+        ['.recall-think-toggle', 'reasoning fold'],
     ];
     for (const [selector, label] of targets) {
         for (const el of document.querySelectorAll(selector)) {

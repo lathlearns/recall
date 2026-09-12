@@ -185,10 +185,20 @@
     border-bottom: 1px dashed var(--SmartThemeBorderColor);
 }
 
+/*
+ * The fold.
+ *
+ * Its own text is small — this is an aside, and it should not shout — but it is
+ * the control for the whole region and gets hit with a thumb. Sized in
+ * --mainFontSize rather than its own em so the height tracks SillyTavern's UI
+ * scale instead of the reduced type size, which would otherwise leave a 16px
+ * target: half of what a touch target needs to be, and exactly what it was.
+ */
 .recall-think-toggle {
     display: flex;
     align-items: center;
     gap: 0.5em;
+    min-height: calc(var(--mainFontSize) * 2.3);
     cursor: pointer;
     font-size: calc(var(--mainFontSize) * 0.85);
     color: var(--SmartThemeEmColor);
