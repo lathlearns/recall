@@ -55,6 +55,50 @@ summaries, the third was regenerated against 151 messages when it had read 56. S
 record their read set at generation time; older ones without that record prompt the user
 rather than guessing.
 
+**`eventSource.emit` is awaited, and `MESSAGE_RECEIVED` fires *before* the message renders.**
+On the non-streaming path `saveReply` emits it and then calls `addOneMessage`, so anything an
+extension awaits in that listener sits between the reply arriving and the reply appearing.
+Recall's nudge was awaiting a tokenizer call on the whole final prompt — a server round-trip
+with the entire prompt as its body, and a cache miss every turn, since every turn's prompt is
+a new string. Chat Completion sources were never affected: they read the pre-summed
+`oaiTotalTokens` off the itemized entry and tokenize nothing, which is also why it went
+unnoticed. The listener is now sync and lets the promise settle on its own. **Nothing in a
+`MESSAGE_RECEIVED` handler should be awaited unless the message genuinely must not render
+until it finishes.**
+
+**Streaming and non-streaming responses are not post-processed alike, and only one of them is
+cleaned up.** `TextCompletionService.processRequest` strips trailing whitespace, walks
+`stopping_strings` removing partial matches from the tail, and truncates at the instruct
+preset's `stop_sequence`, `input_sequence`, `output_sequence` and `last_output_sequence` —
+all of it behind `if (!requestData.stream)`. `ChatCompletionService.processRequest` does none
+of it and returns what the provider sent. So streaming a Chat Completion profile is
+byte-identical to waiting for it, while streaming a text completion profile would save a
+summary still wearing its instruct scaffolding — permanently, in the one artefact that stays
+in context. That asymmetry, not preference, is why Recall's live view is Chat Completion only.
+
+**ST's streaming chunks are cumulative, not deltas.** Each yield from the generator
+`sendRequest` returns carries the whole response so far — `text` and `state.reasoning` both.
+Appending them, which is what a stream reader normally does, yields a response containing
+every prefix of itself: it does not throw, and it looks exactly like a model stuck in a
+repetition loop. Also note the generator is returned as a *factory*: `sendRequest` hands back
+`async function* streamData()` itself, so it must be called before it can be iterated.
+
+**A streamed request's error body is read and then discarded.** On failure the streaming path
+calls `tryParseStreamingError`, which throws `new Error(data)` — an `Error("[object Object]")`
+— into a bare `catch {}` that swallows it, leaving the caller `Got response status 400` and
+nothing else. The provider's actual complaint is unrecoverable on that path. Recall's
+fallback to a non-streamed request exists partly for this: the ordinary path reports what the
+provider said.
+
+**`readSecret` answers an unknown secret id with an empty string, not an error.** A connection
+profile records which stored key to use by id, and rotating or re-entering that key leaves the
+profile pointing at an id that no longer exists. The request then goes out with no credentials
+and comes back 401 — while the same profile keeps working in the chat, because the ordinary
+generation path passes no id and `readSecret` falls through to whichever key is `active`. The
+result is a profile that is healthy everywhere except the one feature that names its key
+explicitly, which reads as a bug in that feature. Recall checks the id against the client's own
+`secret_state` (ids and masked values, no request) before spending a call.
+
 **Request parameters arrive from places the user is not looking.** Two found so far, both
 fixed in 1.1.x: a connection profile sent with no preset gets no sampler parameters at all
 (not ST's defaults — none, so the provider's apply), and `stop` is filled from the global

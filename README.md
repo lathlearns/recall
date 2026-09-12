@@ -84,6 +84,34 @@ summary it produced so you can see which note caused what, but it is never repla
 counts, remaining room — without sending it. It's built through the same code as the real
 request, so it can't drift from it.
 
+### While it's running
+
+A summary can take a minute or more, so the button doesn't just sit there. It counts up,
+elapsed — never a progress bar, because nothing can know how long a pass will take.
+
+On a **Chat Completion connection profile**, you watch the summary being written, and the
+model's reasoning above it while it thinks. The reasoning folds itself away to one line
+(*Thought for 0:31 · 624 tokens*) once the summary proper starts, and is kept with the
+finished summary so you can read it later from the archive. It's never sent to the model —
+the macro resolves the summary text and nothing else — so it costs space in your chat file
+and nothing in context.
+
+Live output needs Chat Completion specifically, and that's deliberate rather than a gap:
+SillyTavern strips instruct scaffolding from a text completion response *only* when it
+didn't stream it, so streaming one would save a summary still wearing its stop sequences.
+Text completion profiles and the main API get the spinner and the clock. The settings panel
+says which you're on. If a connection turns out to refuse streaming altogether, Recall
+reissues the request without it and you still get your summary.
+
+**Stop** cancels a summary running through a connection profile. Nothing is saved — a
+half-written summary isn't a summary.
+
+**Titles.** Recall asks the model to name each summary and puts that name in front of the
+timestamp: *The Long Road North — 2026-09-12 14:31*. The title line is removed before the
+summary is stored, so it never reaches the model and never accumulates. A model that ignores
+the request just gets a timestamp — Recall only removes that line when it actually finds the
+marker, so a summary is never trimmed on a guess.
+
 ---
 
 ## Settings
@@ -93,6 +121,8 @@ request, so it can't drift from it.
 | Hide covered messages | Hide the covered range after a successful summary. |
 | Keep newest N visible | Auto-hide skips this many recent messages. Message 0 is always skipped. |
 | Block sending | Deactivate send buttons while a summary generates. |
+| Have the model name each summary | Ask for a title and use it in the archive name. Removed from the summary before it's stored; never sent to the model. |
+| Keep the model's reasoning | Show reasoning while it writes, on a connection that streams, and store it with the summary. Never sent to the model. |
 | Nudge threshold | In tokens, against the last prompt sent. 0 tracks 80% of the context limit. |
 | **Kept free for the reply** | Context held back so the answer has room. Keep it at least as large as the next row. |
 | **Most the model may write** | The generation limit sent to the API — thinking included, on most sources. |

@@ -449,3 +449,52 @@ export const DEFAULT_BLOCKS = [
 ];
 
 export const DEFAULT_SET_NAME = 'Standard';
+
+/**
+ * The title request, appended after the blocks rather than shipped as one.
+ *
+ * Not a block, for two reasons. A block is the user's to edit or delete, and
+ * deleting this one would leave the feature silently doing nothing with no
+ * explanation — the toggle that turns titles on has to be the thing that
+ * controls it. And blocks only seed a *fresh* install: an existing set lives in
+ * settings and is never re-read from this file, so shipping it as a block would
+ * give it to new users and nobody else.
+ *
+ * It is appended inside `assemblePrompt`, so **Preview request** shows it along
+ * with everything else. Recall does not put anything into a request that the
+ * preview does not show.
+ *
+ * Placed last on purpose. The block order ends with the Quality Check telling
+ * the model to verify and submit; this is a note about the shape of the output,
+ * so it belongs after that rather than inside the instruction body.
+ *
+ * The wording earns its length. The line has to be machine-detectable for the
+ * extractor to remove it safely, so the format is stated exactly and twice —
+ * once as a rule and once as an example — and the model is told what the line is
+ * *for*, because a model that knows it is a label writes a label rather than a
+ * sentence.
+ */
+export const TITLE_INSTRUCTION = [
+    '---',
+    '',
+    '# **OUTPUT FORMAT: TITLE LINE**',
+    '',
+    'Before anything else, output one line in exactly this form:',
+    '',
+    '`TITLE: <a short name for this stretch of the story>`',
+    '',
+    'Rules for that line:',
+    '',
+    '- It must be the **very first line**, with nothing above it.',
+    '- It must begin with the literal word `TITLE:`.',
+    '- At most 8 words. No quotation marks, no markdown, no trailing full stop.',
+    '- Name what *this* part of the story was about, the way a chapter is named.',
+    '  Not the whole chat, and not a description of the summary itself.',
+    '',
+    'Then continue with the summary, in the required structure, starting on the',
+    'next line.',
+    '',
+    'This line is a label for the reader\'s archive. It is removed before the',
+    'summary is stored, it is not part of the required structure, and it does not',
+    'count towards the word limit.',
+].join('\n');

@@ -26,6 +26,7 @@ import { getStringHash } from '../../../../utils.js';
 import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
 import { getFallbackSummary } from './legacy.js';
+import { splitTitle, composeName } from './title.js';
 import { buildContextBlocks } from './context-blocks.js';
 import {
     getActiveProfile,
@@ -472,11 +473,22 @@ function contextChanged(snapshot) {
  */
 async function runGeneration(buffer, systemPrompt) {
     const settings = getSettings();
-    const { content, reasoning } = getActiveProfile()
+    const { content: raw, reasoning } = getActiveProfile()
         ? await runViaProfile(buffer, systemPrompt)
         : await runViaMainApi(buffer, systemPrompt);
 
     lastReasoning = String(reasoning ?? '');
+
+    // Taken off before anything else looks at the response.
+    //
+    // Before the length checks in particular: a model that answers with nothing
+    // but a title line has failed, and measuring the response with the title
+    // still attached could let that through as a summary of a few dozen
+    // characters. Extraction is gated on the same setting as the instruction, so
+    // with titles off a response that happens to begin "TITLE:" is left alone.
+    const { title, content } = settings.generateTitles
+        ? splitTitle(raw)
+        : { title: '', content: raw };
 
     // Checked before the length rules below, because a cancelled run has usually
     // produced *something* — and reporting a deliberate stop as "too short to be a
@@ -717,14 +729,14 @@ export async function summarizeNow(steeringNote = '') {
     }
 
     try {
-        const { content, reasoning } = await runGeneration(buffer, systemPrompt);
+        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
 
         if (contextChanged(snapshot)) {
             throw new RecallError('The chat changed while the summary was generating, so the result was discarded.', { kind: 'context-changed' });
         }
 
         const record = createSummaryRecord({
-            name: defaultSummaryName(),
+            name: composeName(title, timestampName()),
             content,
             coversFrom: 0,
             coversTo,
@@ -865,14 +877,20 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
     }
 
     try {
-        const { content, reasoning } = await runGeneration(buffer, systemPrompt);
+        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
 
         if (contextChanged(snapshot)) {
             throw new RecallError('The chat changed while the summary was generating, so the result was discarded.', { kind: 'context-changed' });
         }
 
         const record = createSummaryRecord({
-            name: `${original.name || 'Summary'} (redo)`,
+            // A redo is a fresh generation, so it gets whatever title that
+            // generation produced rather than inheriting the original's. Without
+            // one it falls back to the original's name, which is what a sibling
+            // was always called.
+            name: title
+                ? `${composeName(title, timestampName())} (redo)`
+                : `${original.name || 'Summary'} (redo)`,
             content,
             coversFrom: original.coversFrom,
             coversTo: original.coversTo,
@@ -915,7 +933,7 @@ function previousSummaryOf(summary) {
         .reduce((newest, s) => (!newest || s.createdAt > newest.createdAt ? s : newest), null);
 }
 
-function defaultSummaryName() {
+function timestampName() {
     const stamp = new Date();
     const pad = n => String(n).padStart(2, '0');
     return `${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())} ${pad(stamp.getHours())}:${pad(stamp.getMinutes())}`;

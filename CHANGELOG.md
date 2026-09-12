@@ -4,6 +4,30 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.3.0
+
+**The model names each summary.** The archive used to be a column of timestamps, which tells
+you when you summarised and nothing about what you summarised. Recall now asks for a short
+title on the first line of the response, takes that line back off before the summary is stored,
+and puts the name in front of the timestamp — *The Long Road North — 2026-09-12 14:31*. It
+arrives before the summary does, so on a streaming connection it becomes the live pane's
+heading while the rest is still being written.
+
+The title is a label, not content. It never reaches the model: it is removed before the summary
+is saved, so it cannot enter the next pass's buffer, cannot accumulate across passes, and is not
+what the macro resolves to. Rename any summary by hand as before; the generated name is only a
+starting point.
+
+**A model that ignores the request just gets a timestamp.** The instruction asks for a marked
+line, and Recall removes that line only when it actually finds the marker. This matters more
+than it sounds: a summary is the one piece of text that stays in context indefinitely, and a
+"remove the first line" that fired regardless would quietly delete real content from it —
+the kind of damage you notice weeks later, if at all. Non-compliance costs you a title, never a
+paragraph.
+
+Turn it off under Advanced and the request goes back to being byte-identical to 1.2.0's. The
+instruction is visible in **Preview request** like everything else Recall sends.
+
 ## 1.2.0
 
 **You can watch the summary being written.** Pressing Summarize now used to produce nothing

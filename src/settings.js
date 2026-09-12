@@ -13,7 +13,7 @@
 
 import { extension_settings, saveMetadataDebounced } from '../../../../extensions.js';
 import { characters, this_chid, saveSettingsDebounced } from '../../../../../script.js';
-import { DEFAULT_BLOCKS, DEFAULT_SET_NAME } from './default-prompt.js';
+import { DEFAULT_BLOCKS, DEFAULT_SET_NAME, TITLE_INSTRUCTION } from './default-prompt.js';
 import { uuid } from './util.js';
 
 export const MODULE = 'recall';
@@ -104,6 +104,18 @@ const DEFAULT_SETTINGS = {
      * summaries that already carry it keep it until they are deleted.
      */
     showReasoning: true,
+
+    /**
+     * Ask the model to name each summary, and use that name in the archive.
+     *
+     * The title is a label, not content: it is taken back off the response before
+     * the summary is stored, so it never reaches the macro, never enters the next
+     * pass's buffer, and cannot accumulate. What it costs is the instruction
+     * itself in every request — visible in Preview like everything else.
+     *
+     * Off leaves the request byte-identical to what it was before this existed.
+     */
+    generateTitles: true,
 
     /** Framing around the previous summary in the buffer. Must survive being empty. */
     framingPrefix: '[Summary: ',
@@ -346,10 +358,18 @@ export function resolveBlocks() {
  * @returns {string}
  */
 export function assemblePrompt() {
-    return resolveBlocks().blocks
+    const parts = resolveBlocks().blocks
         .filter(block => block.enabled)
-        .map(block => block.content)
-        .join('\n\n');
+        .map(block => block.content);
+
+    // Appended rather than shipped as a block — see TITLE_INSTRUCTION. Last, so
+    // it lands after the Quality Check has told the model to verify and submit
+    // rather than inside the instruction body.
+    if (getSettings().generateTitles) {
+        parts.push(TITLE_INSTRUCTION);
+    }
+
+    return parts.join('\n\n');
 }
 
 /**

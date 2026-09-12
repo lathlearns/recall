@@ -90,6 +90,24 @@ rule above, and it is not part of the summary.
 --- END GUIDANCE FOR THIS PASS ---
 ```
 
+### The title request
+
+When titles are enabled, a short instruction is appended to the **system message**, after the
+prompt blocks, asking for one marked line before the summary:
+
+```
+TITLE: <a short name for this stretch of the story>
+```
+
+It is appended rather than shipped as an editable block, for two reasons. A block is the
+user's to delete, and deleting this one would leave the feature silently doing nothing — the
+toggle has to be what controls it. And blocks only seed a *fresh* install; an existing block
+set lives in settings and is never re-read from defaults, so shipping it as a block would give
+it to new users and to nobody else.
+
+It is appended **inside the same assembly the preview reads**, so *Preview request* shows it
+along with everything else. Nothing is put into a request that the preview does not show.
+
 ### What is *not* sent
 
 No summary metadata ever reaches the model. Names, coverage ranges, timestamps, block-set
@@ -318,7 +336,7 @@ Each summary record carries:
 
 | Field | Meaning |
 | --- | --- |
-| Name | User-facing label; defaults to a `YYYY-MM-DD HH:MM` stamp. Never sent to the model. |
+| Name | User-facing label; a model-written title in front of a `YYYY-MM-DD HH:MM` stamp, or the stamp alone. Editable, and never sent to the model. |
 | Content | The summary text. The only field the macro reads. |
 | Covers from / to | The message range it covers. `from` is always 0 in practice; `to` doubles as its anchor. |
 | New from | The first message not covered by the previous summary — display only, so consecutive summaries are distinguishable at a glance (every one covers from 0, so a coverage label alone would look identical across the archive). |
@@ -333,6 +351,33 @@ Each summary record carries:
 | Seeded from legacy | Whether it was built on an older external summary rather than from scratch. |
 | Steering note | The one-off guidance used for that pass, recorded but never replayed. |
 | Reasoning | What the model was thinking while it wrote this, when it reasons and the setting is on. Display only — see section 16. |
+
+### Titles written by the model
+
+An archive of timestamps records when you summarised and nothing about what you summarised. So
+the model is asked to name each summary, and the name goes in front of the timestamp:
+*The Long Road North — 2026-09-12 14:31*. The timestamp always survives; two summaries a model
+names identically would otherwise be indistinguishable, and the date is what orders them.
+
+**The title is taken back off the response before the summary is stored.** It is a label, not
+content: it never reaches the macro, never enters the next pass's buffer, and therefore cannot
+accumulate or drift across passes. Every name stays hand-editable.
+
+**A response without a title is returned untouched.** This is the whole design constraint. A
+model is free to ignore the instruction, and a summary is the one artefact that sits in
+permanent context — so a "remove the first line" that fired regardless would silently delete
+real content, discovered weeks later if at all. Recall removes the line only on an unmistakable
+marker match, allowing for the decoration models add unprompted (a heading hash, bold, a
+full-width colon) but never for a bare first line. Non-compliance costs a title, never a
+paragraph.
+
+Extraction happens **before the response is length-checked**, so a model that replies with
+nothing but a title line is still a failure rather than a very short summary. An over-long
+title is truncated rather than allowed to fill the list, and a marker with nothing usable after
+it still comes off — the line was meant as a title — leaving the summary with a timestamp name.
+
+On a streaming connection the title arrives before the summary does, so it becomes the live
+pane's heading while the rest is still being written.
 
 ### The active pointer
 
@@ -880,6 +925,7 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Hide covered messages after summarizing | on | Auto-hide the covered range after a successful summary. |
 | Keep the newest N messages visible | 5 | How many recent messages auto-hide skips. Message 0 is always skipped regardless. |
 | Block sending while a summary generates | on | Deactivate send controls during generation. |
+| Have the model name each summary | on | Ask for a marked title line, use it in the archive name, and remove it from the stored summary. Never sent to the model. |
 | Keep the model's reasoning | on | Show the model's reasoning while it writes, on a connection that streams, and store it with the finished summary. Never sent to the model at any size. |
 | Connection profile | none (main) | Summarise through a different connection. Its preset's samplers apply. |
 | Model | blank | Free-text override of the profile's model. |
@@ -915,6 +961,8 @@ Stated so a rebuild doesn't inherit them by accident:
 - **No truncation to fit.** Over budget is a refusal with an actionable message.
 - **No partial summary saved on cancel or failure.** A summary that stopped early is discarded,
   never stored as though it had finished.
+- **A title is never prompt material.** It is removed before the summary is stored, so it
+  cannot reach the macro or the next pass's buffer.
 - **Reasoning is never prompt material.** It is stored and displayed; it has no path to the
   model, and there is no setting that gives it one.
 - **No automatic reconciliation.** Coverage mismatch is reported and offered, never applied.

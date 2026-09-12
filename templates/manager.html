@@ -342,6 +342,19 @@
                 </label>
 
                 <label class="checkbox_label recall-row">
+                    <input type="checkbox" data-recall="generate-titles">
+                    <span>Have the model name each summary</span>
+                </label>
+                <p class="recall-help">
+                    Asks for a marked title on the first line, takes that line back off before the
+                    summary is stored, and puts the name in front of the timestamp --
+                    <em>The Long Road North &mdash; 2026-09-12 14:31</em>. A model that ignores the
+                    request simply gets the timestamp; nothing is ever cut from the summary on a
+                    guess. The title is a label and never reaches the model. Like everything else
+                    Recall sends, the instruction is visible in Preview request.
+                </p>
+
+                <label class="checkbox_label recall-row">
                     <input type="checkbox" data-recall="show-reasoning">
                     <span>Keep the model's reasoning</span>
                 </label>

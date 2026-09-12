@@ -52,6 +52,7 @@ import {
 import { previewContextBlocks, previewPresetBlocks } from './context-blocks.js';
 import { isPresetAvailable } from './preset-blocks.js';
 import { paintTokens, createStreamingCount } from './tokens.js';
+import { splitTitle } from './title.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
 
 const EXTENSION_PATH = 'third-party/recall';
@@ -332,24 +333,37 @@ function renderLivePane(run) {
     const size = q('[data-recall="live-size"]');
     const body = q('[data-recall="live-body"]');
 
+    // The title line comes off here too, so what is watched matches what gets
+    // saved. It arrives first and would otherwise sit at the top of the pane for
+    // the whole run and then vanish from the stored summary. Safe on a partial
+    // response: until the line is complete it simply does not match.
+    const { title, content } = getSettings().generateTitles
+        ? splitTitle(run.content)
+        : { title: '', content: run.content };
+
     if (label) {
-        label.textContent = run.content
-            ? LIVE_LABEL[run.kind] ?? 'Writing…'
-            // Before the first chunk there is nothing to show but the fact that the
-            // model has been asked. With a reasoning model that gap is most of the
-            // run, so it gets said out loud rather than left as an empty box.
-            : 'Waiting for the model to start…';
+        // Once the model has named it, the name is the most useful thing the
+        // heading can say — it is the first evidence of what the summary is
+        // actually about, and it arrives long before the summary does.
+        label.textContent = title
+            || (run.content
+                ? LIVE_LABEL[run.kind] ?? 'Writing…'
+                // Before the first chunk there is nothing to show but the fact that
+                // the model has been asked. With a reasoning model that gap is most
+                // of the run, so it gets said out loud rather than left as an empty
+                // box.
+                : 'Waiting for the model to start…');
     }
 
     if (size) {
-        liveCount.refresh(run.content);
-        size.textContent = describeLiveSize(liveCount.current, run.content);
+        liveCount.refresh(content);
+        size.textContent = describeLiveSize(liveCount.current, content);
     }
 
     if (body) {
         // textContent, never innerHTML: this is unrendered model output arriving a
         // chunk at a time, and half a markdown link is still half a tag.
-        body.textContent = run.content;
+        body.textContent = content;
         stickToBottom(body);
     }
 
@@ -1457,6 +1471,7 @@ function wireSettings() {
 
     bindCheckbox('auto-hide', 'autoHide');
     bindCheckbox('blocking', 'blocking');
+    bindCheckbox('generate-titles', 'generateTitles');
     bindCheckbox('show-reasoning', 'showReasoning', renderRunState);
     bindCheckbox('nudge-enabled', 'nudgeEnabled');
     bindCheckbox('deep-integrity', 'deepIntegrityCheck');
@@ -1786,6 +1801,7 @@ function renderSettings() {
 
     setChecked('auto-hide', settings.autoHide);
     setChecked('blocking', settings.blocking);
+    setChecked('generate-titles', settings.generateTitles);
     setChecked('show-reasoning', settings.showReasoning);
     setChecked('nudge-enabled', settings.nudgeEnabled);
     setChecked('deep-integrity', settings.deepIntegrityCheck);
