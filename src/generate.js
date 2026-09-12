@@ -547,10 +547,22 @@ async function runViaMainApi(buffer, systemPrompt) {
  */
 async function runViaProfile(buffer, systemPrompt) {
     try {
-        const { content, reasoning } = await generateViaProfile(systemPrompt, buffer, {
+        const { content, reasoning, streamFailed } = await generateViaProfile(systemPrompt, buffer, {
             signal: activeRun?.controller?.signal ?? null,
             onProgress: makeProgressHandler(),
         });
+
+        // The request fell back to the non-streaming path, so nothing more is
+        // coming through the live pane. Said here rather than left to finish on
+        // its own: the pane would otherwise sit on "waiting for the model to
+        // start" for the whole of the retry, which is the one thing it is
+        // supposed to rule out.
+        if (streamFailed && activeRun) {
+            activeRun.streaming = false;
+            activeRun.streamFailed = true;
+            notifyRunChange();
+        }
+
         return {
             content: removeReasoningFromString(String(content ?? '')).trim(),
             reasoning: String(reasoning ?? ''),

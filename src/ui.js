@@ -476,8 +476,25 @@ function onRunStateChanged(run) {
         runTicker = null;
     }
 
+    // Once per session, not once per run: the live pane vanishing mid-summary
+    // needs explaining the first time, and after that Recall has stopped trying
+    // to stream on this connection, so there is nothing left to be surprised by.
+    if (run?.streamFailed && !streamFallbackAnnounced) {
+        streamFallbackAnnounced = true;
+        toastr.info(
+            'This connection refused the streamed request, so there is no live view of the '
+            + 'summary being written. The summary itself is unaffected and is still coming. '
+            + 'Recall will use the ordinary request for the rest of this session.',
+            'Recall',
+            { timeOut: 10000 },
+        );
+    }
+
     renderRunState();
 }
+
+/** So the fallback is explained once, not on every summary afterwards. */
+let streamFallbackAnnounced = false;
 
 function describeCoverage(summary) {
     const range = `Messages ${summary.coversFrom}–${summary.coversTo}`;

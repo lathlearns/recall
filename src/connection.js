@@ -17,7 +17,7 @@ import { getCustomStoppingStrings } from '../../../../power-user.js';
 import { CONNECT_API_MAP } from '../../../../slash-commands.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { getSettings } from './settings.js';
-import { consumeStream } from './stream.js';
+import { consumeStream, shouldRetryWithoutStreaming } from './stream.js';
 
 /** Connection Manager's own manifest key. Without it, profiles do not exist. */
 const CONNECTION_MANAGER = 'connection-manager';
@@ -99,8 +99,30 @@ export function getActiveProfile() {
  * @returns {boolean}
  */
 export function canStreamProfile(profile = getActiveProfile()) {
-    return !!profile && CONNECT_API_MAP[profile.api]?.selected === 'openai';
+    return !!profile
+        && CONNECT_API_MAP[profile.api]?.selected === 'openai'
+        && !streamingBroken.has(profile.id);
 }
+
+/**
+ * Profiles whose streaming attempt failed but whose non-streaming attempt then
+ * worked, for this session only.
+ *
+ * "Chat Completion" is not one protocol. Plenty of OpenAI-compatible endpoints
+ * accept the exact payload Recall sends and reject it the moment `stream` is
+ * true — a model that has no streaming variant, a gateway that does not proxy
+ * SSE, a provider wanting `stream_options` it was not given. There is no way to
+ * ask in advance, so the answer is learned from the one request that can tell us
+ * and then remembered, instead of paying for a doomed streamed request every
+ * time.
+ *
+ * Cleared by a reload, which is also what changing the model override amounts to
+ * in practice — the entry is keyed by profile, and a profile pointed at a
+ * different model is worth one more attempt.
+ *
+ * @type {Map<string, string>} profile id -> what went wrong
+ */
+const streamingBroken = new Map();
 
 /**
  * Why the live view is or is not available, for the settings panel.
@@ -112,6 +134,12 @@ export function describeStreaming() {
     if (!profile) {
         return 'The summary appears when it is finished. Live output needs a Chat Completion '
             + 'connection profile — the main API\'s raw-generation path does not stream.';
+    }
+
+    if (streamingBroken.has(profile.id)) {
+        return `"${profile.name}" refused the streamed request, so Recall is using the ordinary `
+            + 'one for the rest of this session — summaries still work, they just appear all at '
+            + 'once. Not every OpenAI-compatible endpoint streams. Reload SillyTavern to try again.';
     }
 
     if (!canStreamProfile(profile)) {
@@ -264,36 +292,10 @@ export async function generateViaProfile(systemPrompt, buffer, { signal = null, 
         overridePayload.stop = [];
     }
 
-    const stream = !!onProgress && canStreamProfile(profile);
+    const wantsStream = !!onProgress && canStreamProfile(profile);
 
-    const result = await ConnectionManagerRequestService.sendRequest(
-        profile.id,
-        messages,
-        Math.max(1, Number(settings.outputBudget) || 1024),
-        {
-            stream,
-            signal,
-            extractData: true,
-            // Always the profile's own preset. Without it ST sends no sampler
-            // parameters at all — temperature and the rest are undefined and get
-            // stripped from the payload — so the request would run on whatever
-            // the provider defaults to, which is a third sampler set nobody chose
-            // and cannot see. A profile picked for summarising comes with a preset
-            // picked for summarising; that is the one the user can actually edit.
-            //
-            // ST re-applies this payload over the preset's, so the output budget
-            // and any model override still win. The preset's context length lands
-            // as truncation_length on a text completion profile, which is why its
-            // context size is configured separately above.
-            includePreset: true,
-            includeInstruct: true,
-        },
-        overridePayload,
-    );
-
-    if (!stream) {
-        // extractData: true and stream: false means an ExtractedData object, which
-        // already separates reasoning from content — no stripping needed on this path.
+    if (!wantsStream) {
+        const result = await send(false);
         return {
             content: String(result?.content ?? ''),
             reasoning: String(result?.reasoning ?? ''),
@@ -301,17 +303,84 @@ export async function generateViaProfile(systemPrompt, buffer, { signal = null, 
         };
     }
 
-    // On the streaming branch `extractData` is ignored and what comes back is a
-    // *factory*, not the generator — ST returns `async function* streamData()`
-    // itself, so it has to be called before it can be iterated.
-    //
-    // `state.reasoning` arrives populated because ST builds that generator with
-    // `overrideShowThoughts: true`, so reasoning is separated out whether or not
-    // the user has ST's own thought display switched on. Recall only uses it to
-    // tell "spent its whole budget thinking" apart from "returned nothing"; it
-    // never reaches the summary.
-    const { content, reasoning } = await consumeStream(result, onProgress);
-    return { content, reasoning, streamed: true };
+    // Whether anything actually arrived before the failure. A stream that broke
+    // halfway is a real failure and must not be retried: the tokens are spent,
+    // and asking again would charge for them twice. A stream that never started
+    // has cost nothing, so the same request can be tried the other way.
+    let started = false;
+    const watch = progress => {
+        started = started || !!progress.content || !!progress.reasoning;
+        onProgress(progress);
+    };
+
+    try {
+        // On the streaming branch `extractData` is ignored and what comes back is
+        // a *factory*, not the generator — ST returns `async function* streamData()`
+        // itself, so it has to be called before it can be iterated.
+        //
+        // `state.reasoning` arrives populated because ST builds that generator with
+        // `overrideShowThoughts: true`, so reasoning is separated out whether or not
+        // the user has ST's own thought display switched on. Recall only uses it to
+        // tell "spent its whole budget thinking" apart from "returned nothing"; it
+        // never reaches the summary.
+        const { content, reasoning } = await consumeStream(await send(true), watch);
+        return { content, reasoning, streamed: true };
+    } catch (error) {
+        if (!shouldRetryWithoutStreaming({ aborted: !!signal?.aborted, started })) {
+            throw error;
+        }
+
+        // Retried without streaming rather than surfaced, because streaming is a
+        // display feature and must never be why a summary fails. It also recovers
+        // the error message: ST's streaming path reads the provider's response
+        // body, throws `new Error(data)` from tryParseStreamingError — which is an
+        // Error("[object Object]") — and then swallows it in a bare catch, leaving
+        // the caller nothing but "Got response status 400". The ordinary path
+        // reports what the provider actually said.
+        console.warn('[Recall] The streamed request failed; retrying without streaming.', error);
+
+        const result = await send(false);
+
+        // Only now is streaming specifically the problem. Had this failed too it
+        // would be the provider, the key or the network, none of which is a reason
+        // to give up the live view for the session.
+        streamingBroken.set(profile.id, error?.message || String(error));
+
+        return {
+            content: String(result?.content ?? ''),
+            reasoning: String(result?.reasoning ?? ''),
+            streamed: false,
+            streamFailed: true,
+        };
+    }
+
+    /** @param {boolean} stream */
+    function send(stream) {
+        return ConnectionManagerRequestService.sendRequest(
+            profile.id,
+            messages,
+            Math.max(1, Number(settings.outputBudget) || 1024),
+            {
+                stream,
+                signal,
+                extractData: true,
+                // Always the profile's own preset. Without it ST sends no sampler
+                // parameters at all — temperature and the rest are undefined and get
+                // stripped from the payload — so the request would run on whatever
+                // the provider defaults to, which is a third sampler set nobody chose
+                // and cannot see. A profile picked for summarising comes with a preset
+                // picked for summarising; that is the one the user can actually edit.
+                //
+                // ST re-applies this payload over the preset's, so the output budget
+                // and any model override still win. The preset's context length lands
+                // as truncation_length on a text completion profile, which is why its
+                // context size is configured separately above.
+                includePreset: true,
+                includeInstruct: true,
+            },
+            overridePayload,
+        );
+    }
 }
 
 /**

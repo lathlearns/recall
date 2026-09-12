@@ -40,6 +40,16 @@ a summary, and one stored as though it were would sit in permanent context looki
 The main API has no cancellable request to offer — `generateRawData` takes no abort signal —
 so the button stays hidden there rather than appearing and doing nothing.
 
+**A connection that will not stream falls back instead of failing.** "Chat Completion" is not
+one protocol, and plenty of OpenAI-compatible endpoints accept exactly the request Recall
+sends right up until `stream` is true. If the streamed request fails before a single
+character arrives, Recall issues the ordinary one instead and you get your summary; it then
+stops trying to stream on that connection until you reload. Streaming is a way of watching a
+summary being written and is never allowed to be the reason one fails.
+
+It does not retry if text had already arrived — those tokens are billed, and asking again
+would pay for them twice — or if you pressed Stop.
+
 **Live output is Chat Completion only, and this is not an oversight.** SillyTavern strips
 instruct scaffolding — stop sequences, input and output sequences, trailing whitespace — from
 a text completion response only when it did *not* stream it. Streaming a Text Completion

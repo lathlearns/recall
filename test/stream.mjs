@@ -10,7 +10,7 @@
  * Run:  node test/stream.mjs
  */
 
-import { consumeStream } from '../src/stream.js';
+import { consumeStream, shouldRetryWithoutStreaming } from '../src/stream.js';
 
 const failures = [];
 
@@ -140,5 +140,25 @@ function streamOf(...chunks) {
     check('a non-factory is refused', message, 'The connection returned no stream to read.');
 }
 
+// 9. The retry rule. Both conditions cost the user money rather than pixels when
+//    they are wrong, so they are pinned rather than left to a condition in a
+//    catch block that reads plausibly either way.
+{
+    check('a stream that never started is retried',
+        shouldRetryWithoutStreaming({ aborted: false, started: false }), true);
+
+    // The tokens are generated and billed. Asking again pays for them twice and
+    // then throws away the reply that was paid for first.
+    check('a stream that produced text is NOT retried',
+        shouldRetryWithoutStreaming({ aborted: false, started: true }), false);
+
+    // The user pressed Stop. Retrying issues the request they just cancelled.
+    check('a cancelled stream is NOT retried',
+        shouldRetryWithoutStreaming({ aborted: true, started: false }), false);
+
+    check('a cancelled stream that produced text is NOT retried',
+        shouldRetryWithoutStreaming({ aborted: true, started: true }), false);
+}
+
 if (failures.length) { console.log('FAIL:'); failures.forEach(f => console.log('  -', f)); process.exit(1); }
-console.log('All 8 stream-draining checks pass.');
+console.log('All 12 stream-draining and retry checks pass.');

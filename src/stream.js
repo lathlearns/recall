@@ -15,6 +15,28 @@
  */
 
 /**
+ * Whether a failed streamed request may be retried without streaming.
+ *
+ * Two conditions, and getting either wrong costs the user money rather than
+ * pixels, which is why this is a named rule with a test rather than an inline
+ * `&&` inside a catch block.
+ *
+ * `aborted` — the user pressed Stop. Retrying would ignore them and issue the
+ * request they just cancelled.
+ *
+ * `started` — text had already arrived. Those tokens are generated and billed;
+ * asking again pays for them twice and produces a summary from the second reply
+ * while the first is discarded. A stream that never yielded anything has cost
+ * nothing, and only that one is free to try the other way.
+ *
+ * @param {{ aborted: boolean, started: boolean }} state
+ * @returns {boolean}
+ */
+export function shouldRetryWithoutStreaming({ aborted, started }) {
+    return !aborted && !started;
+}
+
+/**
  * @typedef {object} StreamChunk
  * @property {string} [text]                     The whole response so far.
  * @property {{ reasoning?: string }} [state]    Accumulated reasoning, if any.
