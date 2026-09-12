@@ -14,6 +14,7 @@ import { main_api } from '../../../../../script.js';
 import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { power_user } from '../../../../power-user.js';
 import { getStringHash } from '../../../../utils.js';
+import { createLimiter } from './limit.js';
 
 /** @type {Map<string, number>} */
 const cache = new Map();
@@ -40,6 +41,22 @@ export function peekTokens(text) {
 }
 
 /**
+ * How many uncached counts may be in flight at once.
+ *
+ * Opening the manager paints a token count into every summary row, and on most
+ * tokenizers each uncached count is a POST carrying the whole summary. Twenty
+ * summaries meant twenty simultaneous requests the moment the popup appeared —
+ * a burst that only ever arrives all at once, because the rows are rendered in
+ * one loop.
+ *
+ * A cap rather than a serial queue: the counts are independent and a few in
+ * parallel finish sooner than one at a time, while still arriving as a queue
+ * rather than a stampede. Every repeat is free afterwards — the cache below and
+ * ST's own both hold the answer — so this only has to survive the first open.
+ */
+const limit = createLimiter(4);
+
+/**
  * @param {string} text
  * @returns {Promise<number>}
  */
@@ -55,9 +72,19 @@ export async function countTokens(text) {
         return known;
     }
 
-    const count = await getTokenCountAsync(value);
-    cache.set(key, count);
-    return count;
+    return await limit(async () => {
+        // Re-checked after queueing: an identical string waiting behind this one
+        // is the normal case when a list repaints, and by now the count it was
+        // queued for may already have landed.
+        const cached = cache.get(key);
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const count = await getTokenCountAsync(value);
+        cache.set(key, count);
+        return count;
+    });
 }
 
 /**

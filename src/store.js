@@ -344,17 +344,36 @@ export function runDriftDetection(deepCheck = false) {
         return { shifted, staled, drifted };
     }
 
-    /** @type {Map<number, number[]>} hash -> indices */
-    const hashIndex = new Map();
-    for (let i = 0; i < chat.length; i++) {
-        const hash = getStringHash(chat[i]?.mes ?? '');
-        const bucket = hashIndex.get(hash);
-        if (bucket) {
-            bucket.push(i);
-        } else {
-            hashIndex.set(hash, [i]);
+    // Built on demand, not up front.
+    //
+    // This index exists for one job: finding where an anchor *moved to* after a
+    // delete shifted the indices above it. That is the rare case. The common case
+    // is that every anchor still matches, and building the index anyway meant
+    // hashing every message in the chat on every edit and every delete, then
+    // throwing the result away — on a long chat, a full pass over the whole
+    // history for an event that changed one message.
+    //
+    // Deferred to the first anchor that actually fails, and shared by the rest.
+    /** @type {Map<number, number[]>|null} hash -> indices */
+    let hashIndex = null;
+
+    const getHashIndex = () => {
+        if (hashIndex) {
+            return hashIndex;
         }
-    }
+
+        hashIndex = new Map();
+        for (let i = 0; i < chat.length; i++) {
+            const hash = getStringHash(chat[i]?.mes ?? '');
+            const bucket = hashIndex.get(hash);
+            if (bucket) {
+                bucket.push(i);
+            } else {
+                hashIndex.set(hash, [i]);
+            }
+        }
+        return hashIndex;
+    };
 
     for (const summary of store.summaries) {
         const anchor = chat[summary.coversTo];
@@ -371,7 +390,7 @@ export function runDriftDetection(deepCheck = false) {
             continue;
         }
 
-        const candidates = hashIndex.get(summary.anchorHash);
+        const candidates = getHashIndex().get(summary.anchorHash);
 
         if (candidates?.length) {
             // The anchor still exists and simply moved. Pick the nearest match:
