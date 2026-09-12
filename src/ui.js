@@ -38,13 +38,14 @@ import {
     persist,
 } from './store.js';
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
-import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, isGenerating } from './generate.js';
+import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, onRunChange, cancelRun } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
     listProfiles,
     getActiveProfile,
     describeTarget,
+    describeStreaming,
     isConnectionManagerAvailable,
     getPromptBudget,
 } from './connection.js';
@@ -93,6 +94,45 @@ let draftContent = null;
 let draftName = null;
 let draftBlocks = null;
 
+/**
+ * Buttons that start or depend on a generation. While one is in flight the
+ * button that started it counts up, and the rest are disabled — a second request
+ * would be refused by the guards anyway, and a button that looks pressable but
+ * answers with a warning toast is worse than one that plainly is not.
+ */
+const ACTION_SELECTORS = [
+    '[data-recall="summarize-now"]',
+    '[data-recall="regenerate"]',
+    '[data-recall="preview"]',
+];
+
+/** Which button does the counting, per kind of run. */
+const RUN_BUTTON = {
+    summarize: 'summarize-now',
+    regenerate: 'regenerate',
+};
+
+const RUN_LABEL = {
+    summarize: 'Summarizing…',
+    regenerate: 'Regenerating…',
+};
+
+/** The live pane's heading, once text has started arriving. */
+const LIVE_LABEL = {
+    summarize: 'Writing the summary…',
+    regenerate: 'Writing the redo…',
+};
+
+/**
+ * How close to the bottom the live pane must already be for it to follow new
+ * text. Wide enough to absorb a chunk landing between the measurement and the
+ * scroll, narrow enough that a user who has scrolled up to read is left alone.
+ */
+const STICK_THRESHOLD_PX = 48;
+
+/** Handle for the elapsed clock. Live only while a run is in flight. */
+let runTicker = null;
+
 // ---------------------------------------------------------------------------
 // Drawer
 // ---------------------------------------------------------------------------
@@ -104,6 +144,11 @@ export async function initDrawer({ onSummarize }) {
 
     drawerRoot.find('[data-recall="summarize-now"]').on('click', () => onSummarize());
     drawerRoot.find('[data-recall="open-manager"]').on('click', () => openManager({ onSummarize }));
+    drawerRoot.find('[data-recall="stop"]').on('click', () => cancelRun());
+
+    // Subscribed once, for the life of the page. The drawer outlives every run and
+    // every manager, so it is the right place to own the clock.
+    onRunChange(onRunStateChanged);
 
     refreshDrawer();
 }
@@ -140,7 +185,222 @@ export function refreshDrawer() {
         notice.attr('hidden', 'hidden');
     }
 
-    drawerRoot.find('[data-recall="summarize-now"]').toggleClass('disabled', isGenerating());
+    renderRunState();
+}
+
+// ---------------------------------------------------------------------------
+// Working state
+// ---------------------------------------------------------------------------
+
+/**
+ * Every action button currently in the document, drawer and manager alike.
+ *
+ * Both roots are swept on every paint rather than cached, because the manager's
+ * DOM is built fresh on open and thrown away on close: a run started from the
+ * drawer must be able to find the manager's buttons if it is opened mid-flight,
+ * and must not hold references to a popup that has since closed.
+ *
+ * @returns {HTMLElement[]}
+ */
+function actionButtons() {
+    const found = [];
+
+    for (const selector of ACTION_SELECTORS) {
+        if (drawerRoot?.length) {
+            found.push(...drawerRoot.find(selector).toArray());
+        }
+        if (managerRoot) {
+            found.push(...managerRoot.querySelectorAll(selector));
+        }
+    }
+
+    return found;
+}
+
+/**
+ * Paints the working state onto every action button.
+ *
+ * Called both on transitions and once a second while a run is in flight, so it
+ * has to be idempotent — it derives the whole button from the run rather than
+ * toggling anything cumulatively.
+ */
+function renderRunState() {
+    const run = getActiveRun();
+
+    for (const button of actionButtons()) {
+        paintRunButton(button, run);
+    }
+
+    renderStopButtons(run);
+    renderLivePane(run);
+}
+
+/**
+ * Shows Stop for a request that can actually be stopped.
+ *
+ * Swept across both roots like the action buttons, and hidden rather than
+ * disabled when there is nothing to cancel: a permanently greyed Stop sitting
+ * next to Summarize now would read as a feature that is broken.
+ *
+ * @param {ReturnType<typeof getActiveRun>} run
+ */
+function renderStopButtons(run) {
+    const show = !!run?.cancellable;
+
+    const buttons = [
+        ...(drawerRoot?.length ? drawerRoot.find('[data-recall="stop"]').toArray() : []),
+        ...(managerRoot?.querySelectorAll('[data-recall="stop"]') ?? []),
+    ];
+
+    for (const button of buttons) {
+        button.toggleAttribute('hidden', !show);
+    }
+}
+
+/**
+ * Paints the streamed summary as it arrives.
+ *
+ * Only for a run that is actually streaming. A non-streaming profile and the main
+ * API both produce nothing until they produce everything, and an empty pane
+ * labelled "writing" would be claiming to show progress that does not exist.
+ *
+ * @param {ReturnType<typeof getActiveRun>} run
+ */
+function renderLivePane(run) {
+    const pane = q('[data-recall="live"]');
+    if (!pane) {
+        return;
+    }
+
+    if (!run?.streaming) {
+        pane.setAttribute('hidden', 'hidden');
+        return;
+    }
+
+    pane.removeAttribute('hidden');
+
+    const label = q('[data-recall="live-label"]');
+    const size = q('[data-recall="live-size"]');
+    const body = q('[data-recall="live-body"]');
+
+    if (label) {
+        label.textContent = run.content
+            ? LIVE_LABEL[run.kind] ?? 'Writing…'
+            // Before the first chunk there is nothing to show but the fact that the
+            // model has been asked. With a reasoning model that gap is most of the
+            // run, so it gets said out loud rather than left as an empty box.
+            : 'Waiting for the model to start…';
+    }
+
+    if (size) {
+        size.textContent = run.content ? `${run.content.length.toLocaleString()} characters` : '';
+    }
+
+    if (body) {
+        // textContent, never innerHTML: this is unrendered model output arriving a
+        // chunk at a time, and half a markdown link is still half a tag.
+        body.textContent = run.content;
+        stickToBottom(body);
+    }
+}
+
+/**
+ * Keeps the live pane scrolled to the newest text, unless the user has scrolled
+ * up to read something — in which case it leaves them where they are, because
+ * yanking the view back on every chunk makes the text unreadable.
+ *
+ * @param {HTMLElement} element
+ */
+function stickToBottom(element) {
+    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (distance < STICK_THRESHOLD_PX) {
+        element.scrollTop = element.scrollHeight;
+    }
+}
+
+/**
+ * @param {HTMLElement} button
+ * @param {{ kind: string, startedAt: number }|null} run
+ */
+function paintRunButton(button, run) {
+    const icon = button.querySelector('i');
+    const label = button.querySelector('span');
+
+    // Captured from the markup the first time each button is touched, so the idle
+    // wording and icon stay in the template where they can be read, rather than
+    // being duplicated here as strings to restore.
+    if (icon && button.dataset.recallIdleIcon === undefined) {
+        button.dataset.recallIdleIcon = icon.className;
+    }
+    if (label && button.dataset.recallIdleLabel === undefined) {
+        button.dataset.recallIdleLabel = label.textContent ?? '';
+    }
+
+    if (!run) {
+        button.classList.remove('disabled', 'recall-busy');
+        if (icon) {
+            icon.className = button.dataset.recallIdleIcon;
+        }
+        if (label) {
+            label.textContent = button.dataset.recallIdleLabel;
+        }
+        return;
+    }
+
+    const isRunner = button.dataset.recall === RUN_BUTTON[run.kind];
+
+    // The running button is not given `.disabled`: ST's rule for that greys it to
+    // half opacity and full greyscale, which would make the spinner it is trying
+    // to show almost invisible. It gets its own class, which only stops clicks.
+    button.classList.toggle('recall-busy', isRunner);
+    button.classList.toggle('disabled', !isRunner);
+
+    if (!isRunner) {
+        return;
+    }
+
+    if (icon) {
+        icon.className = 'fa-solid fa-spinner fa-spin';
+    }
+    if (label) {
+        label.textContent = `${RUN_LABEL[run.kind] ?? 'Working…'} ${formatElapsed(Date.now() - run.startedAt)}`;
+    }
+}
+
+/**
+ * Elapsed time as `m:ss`.
+ *
+ * Elapsed, never remaining, and never a bar. Nothing here knows how long the
+ * request will take — it depends on the model, the buffer and how much of the
+ * output budget gets spent thinking — so a proportion would be invented. A
+ * number that only counts up cannot be wrong.
+ *
+ * @param {number} ms
+ * @returns {string}
+ */
+function formatElapsed(ms) {
+    const seconds = Math.max(0, Math.floor(ms / 1000));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Starts and stops the elapsed clock as runs come and go.
+ *
+ * The interval only exists while something is running, so an idle Recall costs
+ * nothing — and it is cleared from the same place it is set, so a run that ends
+ * by throwing cannot leave it ticking against a button that is no longer busy.
+ *
+ * @param {{ kind: string, startedAt: number }|null} run
+ */
+function onRunStateChanged(run) {
+    if (run && runTicker === null) {
+        runTicker = setInterval(renderRunState, 1000);
+    } else if (!run && runTicker !== null) {
+        clearInterval(runTicker);
+        runTicker = null;
+    }
+
+    renderRunState();
 }
 
 function describeCoverage(summary) {
@@ -257,6 +517,8 @@ function wireManager({ onSummarize }) {
         renderAll();
     });
 
+    on('[data-recall="stop"]', 'click', () => cancelRun());
+
     on('[data-recall="preview"]', 'click', showPreview);
     on('[data-recall="view-legacy"]', 'click', showLegacySummary);
 
@@ -364,6 +626,10 @@ function renderAll() {
     renderList();
     renderDetail();
     renderSettings();
+    // Last, because the three above rewrite the panes wholesale: a manager opened
+    // while a run is in flight has to be told about it, and a re-render mid-run
+    // would otherwise repaint the buttons back to their idle wording.
+    renderRunState();
 }
 
 /**
@@ -1124,6 +1390,11 @@ function renderProfile() {
     const status = q('[data-recall="profile-status"]');
     if (status) {
         status.textContent = describeTarget();
+    }
+
+    const streaming = q('[data-recall="streaming-status"]');
+    if (streaming) {
+        streaming.textContent = describeStreaming();
     }
 }
 

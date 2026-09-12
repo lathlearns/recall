@@ -104,6 +104,91 @@
     border-color: var(--SmartThemeQuoteColor);
 }
 
+/*
+ * The button that is currently generating.
+ *
+ * Deliberately not `.disabled`: that rule dims to 40% and ST's own greys out
+ * besides, which would hide the spinner this state exists to show. The only
+ * thing borrowed from it is the refusal to be clicked again.
+ *
+ * The width is pinned as the label changes from "Summarize now" to
+ * "Summarizing… 1:07" and back, a swing of a couple of characters every minute.
+ * Without it the button resizes under the pointer, and in the drawer's wrapping
+ * flex row it can drag the button beside it onto another line mid-run.
+ */
+.menu_button.recall-busy {
+    pointer-events: none;
+    min-width: 12em;
+    justify-content: center;
+}
+
+.menu_button.recall-busy span {
+    font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Stop. Red enough to read as the destructive one, not so red that it competes
+ * with the error banner it sits above — it is a correction, not a failure.
+ */
+.recall-action-stop {
+    border-color: var(--crimson70a);
+}
+
+/* ========================================================================== */
+/* Live pane                                                                  */
+/* ========================================================================== */
+
+/*
+ * The summary as it streams in. Sits with the banners because it is the same
+ * kind of thing: transient, about right now, and gone when it stops being true.
+ */
+.recall-live {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    padding: 0.6em 0.8em;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-left: 3px solid var(--SmartThemeQuoteColor);
+    border-radius: 4px;
+    background-color: var(--black30a);
+}
+
+.recall-live-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6em;
+    font-size: calc(var(--mainFontSize) * 0.92);
+}
+
+.recall-live-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+    color: var(--SmartThemeQuoteColor);
+}
+
+/*
+ * A fixed height, not a growing one.
+ *
+ * Letting this size to its content means the pane grows by a line every few
+ * hundred milliseconds for a minute, pushing the archive down the screen the
+ * whole time and reflowing the page under the pointer. A fixed window that
+ * scrolls its own text keeps everything below it exactly where it was.
+ */
+.recall-live-body {
+    max-height: 11em;
+    overflow-y: auto;
+    scrollbar-gutter: var(--recall-scroll-stable, stable);
+    padding-right: var(--recall-scroll-gutter, 0.6em);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: calc(var(--mainFontSize) * 0.88);
+    line-height: 1.45;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.9;
+}
+
 .menu_button.disabled,
 .menu_button[disabled] {
     opacity: 0.4;

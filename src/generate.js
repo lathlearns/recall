@@ -33,6 +33,7 @@ import {
     getPromptBudget,
     describeTarget,
     suppressStoppingStrings,
+    canStreamProfile,
 } from './connection.js';
 
 import {
@@ -58,8 +59,148 @@ const BUDGET_PADDING = 64;
 /** Set while a Recall generation is in flight, so a second trigger is refused. */
 let inFlight = false;
 
+/**
+ * What is running and since when, or null when nothing is.
+ *
+ * A summary is one request that can take a minute or more — longer with a
+ * reasoning model and a 15k output budget — and until it lands the user has no
+ * evidence anything is happening at all. The elapsed time is the cheapest honest
+ * signal there is: nothing here can predict how long the request will take, so
+ * there is no progress to report, only liveness.
+ *
+ * `content` and `reasoning` fill in as a streamed response arrives, and stay empty
+ * on a connection that cannot stream — the UI reads `streaming` to know which it
+ * is looking at, rather than inferring it from emptiness, which is also what a
+ * model that has not said anything yet looks like.
+ *
+ * @type {{
+ *   kind: 'summarize'|'regenerate', startedAt: number, streaming: boolean,
+ *   cancellable: boolean, content: string, reasoning: string,
+ *   controller: AbortController,
+ * }|null}
+ */
+let activeRun = null;
+
+/** @type {Set<(run: typeof activeRun) => void>} */
+const runListeners = new Set();
+
+/**
+ * How often a streamed run is allowed to wake the UI.
+ *
+ * Chunks arrive many times a second and each one carries the whole response, so
+ * repainting per chunk is both wasteful and pointless — nobody reads a pane that
+ * reflows thirty times a second. This is fast enough to read as live and slow
+ * enough to stay out of the way of the response being assembled.
+ */
+const PROGRESS_INTERVAL_MS = 120;
+
 export function isGenerating() {
     return inFlight;
+}
+
+/** @returns {typeof activeRun} */
+export function getActiveRun() {
+    return activeRun;
+}
+
+/**
+ * Subscribes to starts and finishes.
+ *
+ * The manager is a popup the user can close mid-run, so the UI cannot be the
+ * thing that knows a generation is happening — it has to be able to ask, and to
+ * be told when it next opens. Returns its own unsubscribe.
+ *
+ * @param {(run: typeof activeRun) => void} listener
+ * @returns {() => void}
+ */
+export function onRunChange(listener) {
+    runListeners.add(listener);
+    return () => runListeners.delete(listener);
+}
+
+function notifyRunChange() {
+    for (const listener of runListeners) {
+        try {
+            listener(activeRun);
+        } catch (error) {
+            // A broken listener must not take the generation down with it: by the
+            // time these fire, the request has either been sent or has landed.
+            console.error('[Recall] A run listener failed', error);
+        }
+    }
+}
+
+/** @param {'summarize'|'regenerate'} kind */
+function beginRun(kind) {
+    inFlight = true;
+    const profile = getActiveProfile();
+
+    activeRun = {
+        kind,
+        startedAt: Date.now(),
+        streaming: !!profile && canStreamProfile(profile),
+        // Every profile request goes through fetch with this signal, streamed or
+        // not, so both can be stopped. `generateRawData` takes no signal at all,
+        // so the main API path cannot — and the button is hidden there rather
+        // than offered and then found to do nothing.
+        cancellable: !!profile,
+        content: '',
+        reasoning: '',
+        controller: new AbortController(),
+    };
+    notifyRunChange();
+}
+
+function endRun() {
+    inFlight = false;
+    activeRun = null;
+    notifyRunChange();
+}
+
+/**
+ * Asks the running generation to stop.
+ *
+ * The abort propagates into `fetch`, which rejects the read the stream is waiting
+ * on, which throws out of the `for await` and unwinds through the same `finally`
+ * that a normal finish uses. Nothing is written: a half-streamed summary is not a
+ * summary, and one saved as though it were would sit in context looking complete.
+ *
+ * @returns {boolean} Whether there was anything to cancel.
+ */
+export function cancelRun() {
+    if (!activeRun) {
+        return false;
+    }
+    activeRun.controller.abort(new DOMException('Cancelled by the user', 'AbortError'));
+    return true;
+}
+
+/**
+ * Records streamed progress and wakes the UI, at most every
+ * `PROGRESS_INTERVAL_MS`.
+ *
+ * The run's own fields are updated on every chunk regardless of the throttle, so
+ * a listener that paints on some other schedule — the elapsed clock, a manager
+ * that has just opened — always reads the latest text rather than the text as of
+ * the last notification.
+ */
+function makeProgressHandler() {
+    let lastNotified = 0;
+
+    return ({ content, reasoning }) => {
+        if (!activeRun) {
+            return;
+        }
+
+        activeRun.content = content;
+        activeRun.reasoning = reasoning;
+
+        const now = Date.now();
+        if (now - lastNotified >= PROGRESS_INTERVAL_MS) {
+            lastNotified = now;
+            notifyRunChange();
+        }
+    };
 }
 
 /**
@@ -293,6 +434,13 @@ async function runGeneration(buffer, systemPrompt) {
         ? await runViaProfile(buffer, systemPrompt)
         : await runViaMainApi(buffer, systemPrompt);
 
+    // Checked before the length rules below, because a cancelled run has usually
+    // produced *something* — and reporting a deliberate stop as "too short to be a
+    // summary" would read as a failure the user did not cause.
+    if (wasCancelled()) {
+        throw new RecallError('Summary cancelled. Nothing was saved.', { kind: 'cancelled' });
+    }
+
     if (content.length >= settings.minResponseChars) {
         return content;
     }
@@ -368,18 +516,33 @@ async function runViaMainApi(buffer, systemPrompt) {
  */
 async function runViaProfile(buffer, systemPrompt) {
     try {
-        const { content, reasoning } = await generateViaProfile(systemPrompt, buffer);
+        const { content, reasoning } = await generateViaProfile(systemPrompt, buffer, {
+            signal: activeRun?.controller?.signal ?? null,
+            onProgress: makeProgressHandler(),
+        });
         return {
             content: removeReasoningFromString(String(content ?? '')).trim(),
             reasoning: String(reasoning ?? ''),
         };
     } catch (error) {
+        // A cancel unwinds as an abort from deep inside fetch, and dressing that up
+        // as "the request failed" would blame the provider for something the user
+        // just did. The caller turns this into the cancellation message.
+        if (wasCancelled()) {
+            return { content: '', reasoning: '' };
+        }
+
         const detail = error?.cause?.message || error?.message || String(error);
         throw new RecallError(
             `${describeTarget()}\n\nThe request failed: ${detail}`,
             { kind: 'profile-failed' },
         );
     }
+}
+
+/** Whether the run in flight was stopped by the user rather than by the model. */
+function wasCancelled() {
+    return !!activeRun?.controller?.signal?.aborted;
 }
 
 /**
@@ -470,7 +633,7 @@ export async function summarizeNow(steeringNote = '') {
     const coversTo = indices[indices.length - 1];
     const snapshot = captureContext();
 
-    inFlight = true;
+    beginRun('summarize');
     if (settings.blocking) {
         deactivateSendButtons();
     }
@@ -508,7 +671,7 @@ export async function summarizeNow(steeringNote = '') {
 
         return record;
     } finally {
-        inFlight = false;
+        endRun();
         if (settings.blocking) {
             activateSendButtons();
         }
@@ -617,7 +780,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
 
     const snapshot = captureContext();
 
-    inFlight = true;
+    beginRun('regenerate');
     if (settings.blocking) {
         deactivateSendButtons();
     }
@@ -652,7 +815,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
         addSummary(record, { makeActive: false });
         return record;
     } finally {
-        inFlight = false;
+        endRun();
         if (settings.blocking) {
             activateSendButtons();
         }

@@ -38,6 +38,16 @@
                     <i class="fa-solid fa-book-open"></i>
                     <span>Open manager</span>
                 </div>
+                <!--
+                    Here as well as in the manager, because the manager is a popup
+                    the user may never have opened: a request you cannot see is
+                    still a request you should be able to stop.
+                -->
+                <div class="menu_button menu_button_icon recall-action-stop" data-recall="stop"
+                    title="Stop this summary. Nothing is saved." hidden>
+                    <i class="fa-solid fa-stop"></i>
+                    <span>Stop</span>
+                </div>
             </div>
         </div>
     </div>

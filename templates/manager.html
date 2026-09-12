@@ -31,6 +31,18 @@
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                 <span>Summarize now</span>
             </div>
+            <!--
+                Separate from the running button rather than replacing its label.
+                The running button is a status readout that changes every second,
+                and putting a destructive action under a moving target invites the
+                cancel you did not mean. Shown only when there is a request that
+                can actually be stopped — see `cancellable` in generate.js.
+            -->
+            <div class="menu_button menu_button_icon recall-action-stop" data-recall="stop"
+                title="Stop this summary. Nothing is saved." hidden>
+                <i class="fa-solid fa-stop"></i>
+                <span>Stop</span>
+            </div>
         </div>
     </div>
 
@@ -86,6 +98,28 @@
             is reaching the prompt, and it is the only one that cannot be dismissed.
         -->
         <div class="recall-banners" data-recall="banners">
+            <!--
+                The live pane. Inside the banners container deliberately: it is the
+                same kind of thing they are — a transient strip about right now,
+                not part of the archive — and being in here means it follows the
+                visible tab with them instead of needing its own relocation.
+
+                Shown only while a streamed run is in flight, and never populated
+                from anything but the run in flight. Nothing here is editable and
+                nothing here is saved; the summary lands in the list when it is
+                finished, like it always did.
+            -->
+            <div class="recall-live" data-recall="live" hidden>
+                <div class="recall-live-head">
+                    <span class="recall-live-title">
+                        <i class="fa-solid fa-pen-nib"></i>
+                        <span data-recall="live-label">Writing the summary…</span>
+                    </span>
+                    <span class="recall-dim" data-recall="live-size"></span>
+                </div>
+                <div class="recall-live-body" data-recall="live-body"></div>
+            </div>
+
             <div class="recall-banner recall-banner-error" data-recall="error" hidden>
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <span data-recall="error-text"></span>
@@ -284,6 +318,12 @@
                 </div>
 
                 <p class="recall-help" data-recall="profile-status"></p>
+                <!--
+                    Whether you get to watch it write. Stated next to the picker
+                    because the picker is what decides it, and the difference is
+                    otherwise only discoverable by pressing the button and waiting.
+                -->
+                <p class="recall-help" data-recall="streaming-status"></p>
 
                 <p class="recall-help">
                     Summarising is a different job from roleplaying and often wants a different model.

@@ -14,8 +14,10 @@
 import { getMaxPromptTokens, main_api, eventSource, event_types } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { getCustomStoppingStrings } from '../../../../power-user.js';
+import { CONNECT_API_MAP } from '../../../../slash-commands.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { getSettings } from './settings.js';
+import { consumeStream } from './stream.js';
 
 /** Connection Manager's own manifest key. Without it, profiles do not exist. */
 const CONNECTION_MANAGER = 'connection-manager';
@@ -68,6 +70,57 @@ export function getActiveProfile() {
         return null;
     }
     return listProfiles().find(profile => profile.id === id) ?? null;
+}
+
+/**
+ * Whether Recall will stream this profile's response rather than wait for it.
+ *
+ * **Chat Completion only, and this is a correctness boundary, not a preference.**
+ *
+ * `ChatCompletionService.processRequest` returns what the provider sent and does
+ * nothing else to it, so streaming a Chat Completion profile produces byte-for-byte
+ * what waiting for it would have produced.
+ *
+ * `TextCompletionService.processRequest` does not. After the request it strips
+ * trailing whitespace, walks `stopping_strings` removing any partial match from
+ * the tail, truncates at the instruct preset's `stop_sequence` and `input_sequence`,
+ * and deletes every line of its `output_sequence` and `last_output_sequence` — and
+ * all of that sits behind `if (!requestData.stream)`. Streaming a text completion
+ * profile would therefore save a summary still wearing its instruct scaffolding.
+ *
+ * Recall passes `includeInstruct: true`, so those sequences are always set for a
+ * profile that has an instruct preset. Reproducing forty lines of ST's internals
+ * here to undo them is not a trade worth making for a progress display: the
+ * summary is the artefact that lives in context forever, and it would be silently
+ * wrong the first time the two copies drift. So text completion profiles keep the
+ * non-streaming path, and the UI says why.
+ *
+ * @param {{api: string}|null} [profile]
+ * @returns {boolean}
+ */
+export function canStreamProfile(profile = getActiveProfile()) {
+    return !!profile && CONNECT_API_MAP[profile.api]?.selected === 'openai';
+}
+
+/**
+ * Why the live view is or is not available, for the settings panel.
+ * @returns {string}
+ */
+export function describeStreaming() {
+    const profile = getActiveProfile();
+
+    if (!profile) {
+        return 'The summary appears when it is finished. Live output needs a Chat Completion '
+            + 'connection profile — the main API\'s raw-generation path does not stream.';
+    }
+
+    if (!canStreamProfile(profile)) {
+        return `"${profile.name}" is a Text Completion profile, so the summary appears when it is `
+            + 'finished. SillyTavern only strips instruct sequences from a response it did not '
+            + 'stream, and a summary keeping them would be wrong for as long as it stays active.';
+    }
+
+    return `Streaming live from "${profile.name}". The summary is written into the manager as it arrives.`;
 }
 
 /**
@@ -157,10 +210,15 @@ export function suppressStoppingStrings() {
  *
  * @param {string} systemPrompt
  * @param {string} buffer
- * @param {AbortSignal} [signal]
- * @returns {Promise<{ content: string, reasoning: string }>}
+ * @param {object} [options]
+ * @param {AbortSignal|null} [options.signal]
+ * @param {((progress: {content: string, reasoning: string}) => void)|null} [options.onProgress]
+ *        Called with the cumulative text as it arrives. Supplying it is what asks
+ *        for streaming; it is still ignored on a profile that cannot stream, so a
+ *        caller never has to check first.
+ * @returns {Promise<{ content: string, reasoning: string, streamed: boolean }>}
  */
-export async function generateViaProfile(systemPrompt, buffer, signal = null) {
+export async function generateViaProfile(systemPrompt, buffer, { signal = null, onProgress = null } = {}) {
     const settings = getSettings();
     const profile = getActiveProfile();
 
@@ -206,12 +264,14 @@ export async function generateViaProfile(systemPrompt, buffer, signal = null) {
         overridePayload.stop = [];
     }
 
+    const stream = !!onProgress && canStreamProfile(profile);
+
     const result = await ConnectionManagerRequestService.sendRequest(
         profile.id,
         messages,
         Math.max(1, Number(settings.outputBudget) || 1024),
         {
-            stream: false,
+            stream,
             signal,
             extractData: true,
             // Always the profile's own preset. Without it ST sends no sampler
@@ -231,12 +291,27 @@ export async function generateViaProfile(systemPrompt, buffer, signal = null) {
         overridePayload,
     );
 
-    // extractData: true and stream: false means an ExtractedData object, which
-    // already separates reasoning from content — no stripping needed on this path.
-    return {
-        content: String(result?.content ?? ''),
-        reasoning: String(result?.reasoning ?? ''),
-    };
+    if (!stream) {
+        // extractData: true and stream: false means an ExtractedData object, which
+        // already separates reasoning from content — no stripping needed on this path.
+        return {
+            content: String(result?.content ?? ''),
+            reasoning: String(result?.reasoning ?? ''),
+            streamed: false,
+        };
+    }
+
+    // On the streaming branch `extractData` is ignored and what comes back is a
+    // *factory*, not the generator — ST returns `async function* streamData()`
+    // itself, so it has to be called before it can be iterated.
+    //
+    // `state.reasoning` arrives populated because ST builds that generator with
+    // `overrideShowThoughts: true`, so reasoning is separated out whether or not
+    // the user has ST's own thought display switched on. Recall only uses it to
+    // tell "spent its whole budget thinking" apart from "returned nothing"; it
+    // never reaches the summary.
+    const { content, reasoning } = await consumeStream(result, onProgress);
+    return { content, reasoning, streamed: true };
 }
 
 /**

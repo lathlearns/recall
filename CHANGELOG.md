@@ -4,6 +4,37 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.2.0
+
+**You can watch the summary being written.** Pressing Summarize now used to produce nothing
+at all until the summary landed — no spinner, no clock, no sign the button had registered —
+which on a reasoning model with a 15,000-token ceiling is a minute or more of a panel that
+looks broken. The button now counts up while it works, and on a Chat Completion connection
+profile the summary is written into the manager as it arrives.
+
+Elapsed time, never a progress bar. Nothing here knows how long a pass will take — it
+depends on the model, the size of the buffer, and how much of the output budget gets spent
+thinking before a word is written — so a proportion would be invented. A number that only
+counts up cannot be wrong.
+
+**Stop.** Any summary running through a connection profile can now be cancelled, streamed or
+not, from the drawer as well as the manager. Nothing is saved: a half-written summary is not
+a summary, and one stored as though it were would sit in permanent context looking complete.
+The main API has no cancellable request to offer — `generateRawData` takes no abort signal —
+so the button stays hidden there rather than appearing and doing nothing.
+
+**Live output is Chat Completion only, and this is not an oversight.** SillyTavern strips
+instruct scaffolding — stop sequences, input and output sequences, trailing whitespace — from
+a text completion response only when it did *not* stream it. Streaming a Text Completion
+profile would save a summary still wearing all of it, in the one piece of text that stays in
+context indefinitely. Text completion profiles and the main API keep the existing path and
+get the spinner and the clock; the settings panel says which one you are on and why.
+
+**Replies appear sooner on text completion APIs.** Recall's context nudge tokenizes the whole
+prompt to read how full the window is, and it was doing that in a listener SillyTavern waits
+for before it paints the message — so every reply waited on a tokenizer round-trip that had
+nothing to do with displaying it. Chat Completion users were never affected.
+
 ## 1.1.6
 
 **Less of it on screen.** 1.1.5 read better than what it replaced but still put fifteen lines
