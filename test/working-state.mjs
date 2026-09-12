@@ -166,6 +166,70 @@ if (/live-body[\s\S]{0,400}?\.innerHTML\s*=/.test(uiSrc)) {
     failures.push('the live body is written with innerHTML; partial model output must go in as textContent');
 }
 
+// 5e. The reasoning region: present, hidden to begin with, scrolling rather than
+//     growing, and shorter than the summary window below it — reasoning is long
+//     and repetitive and must not bury the thing being waited for.
+for (const hook of ['think', 'think-toggle', 'think-summary', 'think-chevron', 'think-body']) {
+    const found = await p.$$eval(`[data-recall="${hook}"]`, els => els.length);
+    if (!found) failures.push(`ui.js paints [data-recall="${hook}"] but the template has none`);
+}
+
+const think = await p.evaluate(() => {
+    const region = document.querySelector('[data-recall="think"]');
+    const hiddenAtRest = region.hasAttribute('hidden') && getComputedStyle(region).display === 'none';
+    region.removeAttribute('hidden');
+    region.closest('[data-recall="live"]').removeAttribute('hidden');
+
+    const body = getComputedStyle(document.querySelector('[data-recall="think-body"]'));
+    const live = getComputedStyle(document.querySelector('[data-recall="live-body"]'));
+    const px = value => parseFloat(value) || Infinity;
+
+    return {
+        hiddenAtRest,
+        maxHeight: body.maxHeight,
+        overflowY: body.overflowY,
+        shorterThanSummary: px(body.maxHeight) <= px(live.maxHeight),
+        toggleRole: document.querySelector('[data-recall="think-toggle"]').getAttribute('role'),
+        toggleTabIndex: document.querySelector('[data-recall="think-toggle"]').getAttribute('tabindex'),
+    };
+});
+
+if (!think.hiddenAtRest) failures.push('the reasoning region is not hidden before a run produces any');
+if (think.maxHeight === 'none') failures.push('the reasoning body has no max-height, so it grows without bound');
+if (!['auto', 'scroll'].includes(think.overflowY)) failures.push(`the reasoning body does not scroll (overflow-y: ${think.overflowY})`);
+if (!think.shorterThanSummary) failures.push('the reasoning window is taller than the summary window it sits above');
+
+// 5f. The toggle is a div, so the browser gives it no keyboard behaviour of its
+//     own. If it claims to be a button it has to act like one.
+if (think.toggleRole !== 'button') failures.push(`the reasoning toggle has role="${think.toggleRole}", not "button"`);
+if (think.toggleTabIndex === null) failures.push('the reasoning toggle is not reachable by keyboard (no tabindex)');
+if (!/think-toggle[\s\S]{0,600}?addEventListener\('keydown'/.test(uiSrc)) {
+    failures.push('the reasoning toggle has role="button" but no keydown handler, so Enter and Space do nothing');
+}
+
+// 5g. Reasoning is model output too, and goes in as text for the same reason.
+if (/think-body[\s\S]{0,400}?\.innerHTML\s*=/.test(uiSrc)) {
+    failures.push('the reasoning body is written with innerHTML; partial model output must go in as textContent');
+}
+
+// 5h. Reasoning must never reach a stored summary. It is display-only, and the
+//     one thing that would make this feature a data problem rather than a UI one
+//     is a record field carrying it.
+const storeSrc = fs.readFileSync(`${ROOT}/src/store.js`, 'utf8');
+if (/reasoning/i.test(storeSrc)) {
+    failures.push('src/store.js mentions reasoning; it must never be written to a summary record');
+}
+// Each createSummaryRecord({ ... }); call, up to the first line that closes it.
+const recordCalls = generateSrc.match(/createSummaryRecord\(\{[\s\S]*?\n\s*\}\);/g) ?? [];
+if (!recordCalls.length) {
+    failures.push('no createSummaryRecord call found in generate.js — this check is not looking at anything');
+}
+for (const call of recordCalls) {
+    if (/\breasoning\b/.test(call)) {
+        failures.push('a summary record is being built with a reasoning field');
+    }
+}
+
 // 6. The clock must be cleared from the same place it is set. A run that ends by
 //    throwing would otherwise leave an interval repainting a button forever.
 if (!/clearInterval\(runTicker\)/.test(uiSrc)) {

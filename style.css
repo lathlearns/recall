@@ -176,6 +176,53 @@
  * whole time and reflowing the page under the pointer. A fixed window that
  * scrolls its own text keeps everything below it exactly where it was.
  */
+/*
+ * The reasoning region.
+ *
+ * Visually subordinate to the summary below it on purpose. It is the more
+ * *interesting* text and the less *important* one: what the model was working
+ * through, not what it decided, and the thing the user is actually waiting for
+ * is underneath. Dimmer, smaller, and set apart by a rule rather than a box, so
+ * it reads as an aside to the pane rather than a second pane.
+ */
+.recall-think {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    padding-bottom: 0.4em;
+    border-bottom: 1px dashed var(--SmartThemeBorderColor);
+}
+
+.recall-think-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    cursor: pointer;
+    font-size: calc(var(--mainFontSize) * 0.85);
+    color: var(--SmartThemeEmColor);
+}
+
+.recall-think-toggle:hover,
+.recall-think-toggle:focus-visible {
+    color: var(--SmartThemeBodyColor);
+}
+
+/* Fixed and shorter than the summary's window: reasoning is long, repetitive,
+ * and not the thing being waited for. Enough to see it moving, not enough to
+ * bury the summary under it. */
+.recall-think-body {
+    max-height: 7em;
+    overflow-y: auto;
+    scrollbar-gutter: var(--recall-scroll-stable, stable);
+    padding-right: var(--recall-scroll-gutter, 0.6em);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: calc(var(--mainFontSize) * 0.82);
+    line-height: 1.4;
+    color: var(--SmartThemeEmColor);
+    font-style: italic;
+}
+
 .recall-live-body {
     max-height: 11em;
     overflow-y: auto;

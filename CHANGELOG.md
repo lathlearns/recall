@@ -17,6 +17,23 @@ depends on the model, the size of the buffer, and how much of the output budget 
 thinking before a word is written — so a proportion would be invented. A number that only
 counts up cannot be wrong.
 
+**You can read what it was thinking.** On a reasoning model the first half of a pass produces
+no summary at all — it is thinking, and until now that was indistinguishable from a stalled
+request. The reasoning now streams into the same pane, above the summary, and folds itself
+away to a single line once the summary proper starts: *Thought for 0:31 · 4,120 characters*,
+which reopens if you want it. Measured to the moment writing began, not to now, so it stops
+climbing once the thinking has stopped.
+
+It is display only. Reasoning has never been part of a Recall summary and still is not —
+SillyTavern separates it out of the response before Recall ever sees it — and nothing here
+is saved with the chat. Switch it off under Advanced if you would rather not see it.
+
+The one refusal that turned on reasoning can now show its evidence. "The model spent its
+entire output budget reasoning and never wrote a summary" is sound advice about raising the
+budget or lowering the effort, and it was impossible to act on without seeing what the model
+had actually been doing with the budget. That text is now kept until the next run and the
+error offers to show it.
+
 **Stop.** Any summary running through a connection profile can now be cancelled, streamed or
 not, from the drawer as well as the manager. Nothing is saved: a half-written summary is not
 a summary, and one stored as though it were would sit in permanent context looking complete.

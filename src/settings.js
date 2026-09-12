@@ -86,6 +86,21 @@ const DEFAULT_SETTINGS = {
     /** Deactivate send buttons while a summary generates. */
     blocking: true,
 
+    /**
+     * Show the model's reasoning in the live pane while it works.
+     *
+     * On by default, and it costs nothing when there is none: a model that does
+     * not reason streams no reasoning, and the region stays hidden. On one that
+     * does, this is usually the only thing happening for the first half of the
+     * run — the alternative is an empty pane and a clock.
+     *
+     * Display only. Reasoning has never reached a summary and does not now: ST
+     * separates it out of the stream before Recall sees it, and the only other
+     * thing Recall does with it is tell "spent its whole budget thinking" apart
+     * from "returned nothing".
+     */
+    showReasoning: true,
+
     /** Framing around the previous summary in the buffer. Must survive being empty. */
     framingPrefix: '[Summary: ',
     framingSuffix: ']',

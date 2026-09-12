@@ -117,12 +117,41 @@
                     </span>
                     <span class="recall-dim" data-recall="live-size"></span>
                 </div>
+                <!--
+                    The model's reasoning, above the summary because that is the
+                    order it arrives in: on a thinking model this is the only
+                    thing happening for the first half of the run, and the pane
+                    would otherwise be an empty box and a clock.
+
+                    A summary line and a body, so it can fold itself away once
+                    the summary proper starts arriving without losing what it
+                    said. Never editable, never saved, never sent.
+                -->
+                <div class="recall-think" data-recall="think" hidden>
+                    <div class="recall-think-toggle" data-recall="think-toggle" role="button" tabindex="0">
+                        <i class="fa-solid fa-chevron-down" data-recall="think-chevron"></i>
+                        <span data-recall="think-summary">Thinking…</span>
+                    </div>
+                    <div class="recall-think-body" data-recall="think-body"></div>
+                </div>
+
                 <div class="recall-live-body" data-recall="live-body"></div>
             </div>
 
             <div class="recall-banner recall-banner-error" data-recall="error" hidden>
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <span data-recall="error-text"></span>
+                <!--
+                    Shown only when the last run left reasoning behind, which in
+                    practice means the one refusal where it is evidence: the model
+                    thought until its budget ran out and never wrote anything. The
+                    message can say that happened; only this can show what it was
+                    thinking about, which is what decides whether to raise the
+                    budget or lower the effort.
+                -->
+                <div class="recall-banner-actions" data-recall="error-actions" hidden>
+                    <div class="menu_button" data-recall="view-reasoning">Read what it thought</div>
+                </div>
                 <div class="recall-banner-dismiss" data-recall="error-dismiss" title="Dismiss">
                     <i class="fa-solid fa-xmark"></i>
                 </div>
@@ -292,6 +321,16 @@
                     <input type="checkbox" data-recall="blocking">
                     <span>Block sending while a summary generates</span>
                 </label>
+
+                <label class="checkbox_label recall-row">
+                    <input type="checkbox" data-recall="show-reasoning">
+                    <span>Show the model's reasoning while it writes</span>
+                </label>
+                <p class="recall-help">
+                    Only visible on a connection that streams, and only when the model reasons at
+                    all. It is never part of the summary and is never saved -- SillyTavern
+                    separates it out before Recall sees it.
+                </p>
             </section>
 
             <section class="recall-section">

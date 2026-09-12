@@ -75,8 +75,8 @@ let inFlight = false;
  *
  * @type {{
  *   kind: 'summarize'|'regenerate', startedAt: number, streaming: boolean,
- *   cancellable: boolean, content: string, reasoning: string,
- *   controller: AbortController,
+ *   cancellable: boolean, firstContentAt: number,
+ *   content: string, reasoning: string, controller: AbortController,
  * }|null}
  */
 let activeRun = null;
@@ -93,6 +93,23 @@ const runListeners = new Set();
  * enough to stay out of the way of the response being assembled.
  */
 const PROGRESS_INTERVAL_MS = 120;
+
+/**
+ * The reasoning from the most recent run, kept after the run itself is gone.
+ *
+ * Exists for one case: the model spends its entire output budget thinking and
+ * writes no summary. That refusal can currently only assert what happened — the
+ * evidence is thrown away at the moment it becomes worth reading, which is also
+ * the moment the user has to decide whether to raise the budget or lower the
+ * effort. Kept in memory only, never written to chat metadata: it is large, it
+ * is about one attempt rather than about the chat, and it is not a summary.
+ */
+let lastReasoning = '';
+
+/** @returns {string} */
+export function getLastReasoning() {
+    return lastReasoning;
+}
 
 export function isGenerating() {
     return inFlight;
@@ -144,6 +161,7 @@ function beginRun(kind) {
         // so the main API path cannot — and the button is hidden there rather
         // than offered and then found to do nothing.
         cancellable: !!profile,
+        firstContentAt: 0,
         content: '',
         reasoning: '',
         controller: new AbortController(),
@@ -190,6 +208,15 @@ function makeProgressHandler() {
     return ({ content, reasoning }) => {
         if (!activeRun) {
             return;
+        }
+
+        // Stamped once, at the transition. A thinking model streams reasoning for
+        // most of the run and then the summary, so this is the boundary between
+        // the two — and the only point from which "thought for N" can be measured.
+        // Read off the clock afterwards it would just be the elapsed total, which
+        // keeps growing while the summary is written.
+        if (!activeRun.content && content) {
+            activeRun.firstContentAt = Date.now();
         }
 
         activeRun.content = content;
@@ -434,6 +461,8 @@ async function runGeneration(buffer, systemPrompt) {
         ? await runViaProfile(buffer, systemPrompt)
         : await runViaMainApi(buffer, systemPrompt);
 
+    lastReasoning = String(reasoning ?? '');
+
     // Checked before the length rules below, because a cancelled run has usually
     // produced *something* — and reporting a deliberate stop as "too short to be a
     // summary" would read as a failure the user did not cause.
@@ -448,7 +477,9 @@ async function runGeneration(buffer, systemPrompt) {
     if (reasoning.trim().length) {
         throw new RecallError(
             'The model spent its entire output budget reasoning and never wrote a summary. '
-            + 'Raise the output budget in Advanced, or lower Reasoning Effort for this API.',
+            + 'Raise the output budget in Advanced, or lower Reasoning Effort for this API. '
+            + `It produced ${reasoning.trim().length.toLocaleString()} characters of reasoning, `
+            + 'which you can read to judge which of those two to change.',
             { kind: 'reasoning-overrun' },
         );
     }

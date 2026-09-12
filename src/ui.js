@@ -38,7 +38,7 @@ import {
     persist,
 } from './store.js';
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
-import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, onRunChange, cancelRun } from './generate.js';
+import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, onRunChange, cancelRun, getLastReasoning } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
@@ -132,6 +132,17 @@ const STICK_THRESHOLD_PX = 48;
 
 /** Handle for the elapsed clock. Live only while a run is in flight. */
 let runTicker = null;
+
+/**
+ * Whether the reasoning region is open, once the user has said so.
+ *
+ * `null` means they have not, and it follows the run: open while reasoning is
+ * all there is, folded away when the summary starts. The moment it is clicked
+ * this holds a boolean and the automatic fold stops — someone reading something
+ * should not have it shut by the next chunk. Reset when the manager reopens,
+ * because by then it is a different run and a different question.
+ */
+let thinkOpen = null;
 
 // ---------------------------------------------------------------------------
 // Drawer
@@ -302,6 +313,71 @@ function renderLivePane(run) {
         body.textContent = run.content;
         stickToBottom(body);
     }
+
+    renderThinking(run);
+}
+
+/**
+ * Paints the model's reasoning as it arrives.
+ *
+ * Folds itself away the moment the summary proper starts. Reasoning is the
+ * interesting thing right up until there is something better to look at, and
+ * then it is a wall of text between the user and the summary they are waiting
+ * for — but it is not thrown away, because "why did it write that" is a question
+ * you ask *after* reading what it wrote.
+ *
+ * The fold is only automatic until the user touches it. Someone who opened the
+ * region to read something should not have it shut in their face by the next
+ * chunk, so `thinkOpen` stops tracking the content once it has been set by hand.
+ *
+ * @param {ReturnType<typeof getActiveRun>} run
+ */
+function renderThinking(run) {
+    const region = q('[data-recall="think"]');
+    if (!region) {
+        return;
+    }
+
+    const reasoning = getSettings().showReasoning ? String(run.reasoning ?? '') : '';
+
+    if (!reasoning.trim()) {
+        region.setAttribute('hidden', 'hidden');
+        return;
+    }
+
+    region.removeAttribute('hidden');
+
+    // Before the summary starts, reasoning is the whole show. After, it is
+    // reference. The user's own choice outranks both.
+    const open = thinkOpen ?? !run.content;
+
+    const summary = q('[data-recall="think-summary"]');
+    const chevron = q('[data-recall="think-chevron"]');
+    const body = q('[data-recall="think-body"]');
+
+    if (summary) {
+        // Measured to the first content chunk, not to now — otherwise "thought
+        // for" would keep climbing through the minute spent writing the summary.
+        const thoughtFor = run.firstContentAt
+            ? formatElapsed(run.firstContentAt - run.startedAt)
+            : null;
+
+        summary.textContent = thoughtFor
+            ? `Thought for ${thoughtFor} · ${reasoning.length.toLocaleString()} characters`
+            : `Thinking… ${reasoning.length.toLocaleString()} characters`;
+    }
+
+    if (chevron) {
+        chevron.className = `fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'}`;
+    }
+
+    if (body) {
+        body.toggleAttribute('hidden', !open);
+        body.textContent = reasoning;
+        if (open) {
+            stickToBottom(body);
+        }
+    }
 }
 
 /**
@@ -453,6 +529,7 @@ function resetDraft() {
     draftContent = null;
     draftName = null;
     draftBlocks = null;
+    thinkOpen = null;
 }
 
 /**
@@ -519,8 +596,24 @@ function wireManager({ onSummarize }) {
 
     on('[data-recall="stop"]', 'click', () => cancelRun());
 
+    // Keyboard-reachable: it is a div with role="button", so Enter and Space have
+    // to be wired by hand — the browser only does that for real buttons.
+    const thinkToggle = q('[data-recall="think-toggle"]');
+    const toggleThinking = () => {
+        thinkOpen = !(thinkOpen ?? !getActiveRun()?.content);
+        renderRunState();
+    };
+    thinkToggle?.addEventListener('click', toggleThinking);
+    thinkToggle?.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleThinking();
+        }
+    });
+
     on('[data-recall="preview"]', 'click', showPreview);
     on('[data-recall="view-legacy"]', 'click', showLegacySummary);
+    on('[data-recall="view-reasoning"]', 'click', showLastReasoning);
 
     on('[data-recall="error-dismiss"]', 'click', () => hideBanner('error'));
     on('[data-recall="notice-dismiss"]', 'click', () => hideBanner('notice'));
@@ -615,6 +708,47 @@ function showBanner(kind, text) {
     }
     label.textContent = text;
     banner.removeAttribute('hidden');
+
+    // Offered whenever the failed run left reasoning behind, rather than keyed to
+    // one error kind: any refusal is easier to act on when you can see what the
+    // model was doing, and a run that produced none simply does not show it.
+    if (kind === 'error') {
+        q('[data-recall="error-actions"]')?.toggleAttribute('hidden', !getLastReasoning().trim());
+    }
+}
+
+/**
+ * Opens the reasoning from the last run.
+ *
+ * Read-only and kept in memory only — this is a record of one attempt, not part
+ * of the chat, and it is emphatically not a summary. Same shape as the built-in
+ * summary viewer so the two read as the same kind of thing.
+ */
+async function showLastReasoning() {
+    const text = getLastReasoning();
+    if (!text.trim()) {
+        showBanner('notice', 'The last run left no reasoning to read.');
+        return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'recall-preview';
+    wrapper.innerHTML = `
+        <p class="recall-dim">
+            What the model was thinking on the last run. Not part of any summary, not saved
+            with the chat, and replaced by the next run.
+        </p>
+        <div class="recall-editor-head">
+            <span class="recall-editor-label">Reasoning from the last attempt</span>
+            <i class="editor_maximize fa-solid fa-maximize right_menu_button"
+                data-for="recall_reasoning_view" title="Expand the editor"></i>
+        </div>
+        <textarea id="recall_reasoning_view" class="text_pole textarea_compact recall-preview-text"
+            rows="20" readonly></textarea>`;
+
+    wrapper.querySelector('#recall_reasoning_view').value = text;
+
+    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', popupOptions()).show();
 }
 
 function hideBanner(kind) {
@@ -1206,6 +1340,7 @@ function wireSettings() {
 
     bindCheckbox('auto-hide', 'autoHide');
     bindCheckbox('blocking', 'blocking');
+    bindCheckbox('show-reasoning', 'showReasoning', renderRunState);
     bindCheckbox('nudge-enabled', 'nudgeEnabled');
     bindCheckbox('deep-integrity', 'deepIntegrityCheck');
     bindCheckbox('legacy-fallback', 'legacyFallback', () => { renderAll(); refreshDrawer(); });
@@ -1534,6 +1669,7 @@ function renderSettings() {
 
     setChecked('auto-hide', settings.autoHide);
     setChecked('blocking', settings.blocking);
+    setChecked('show-reasoning', settings.showReasoning);
     setChecked('nudge-enabled', settings.nudgeEnabled);
     setChecked('deep-integrity', settings.deepIntegrityCheck);
     setChecked('legacy-fallback', settings.legacyFallback);
