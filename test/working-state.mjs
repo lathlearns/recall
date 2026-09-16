@@ -287,6 +287,28 @@ if (/\{\{/.test(instruction)) {
     failures.push('TITLE_INSTRUCTION contains a macro, which the host would expand before sending');
 }
 
+// Never tell the model its output will be thrown away.
+//
+// An earlier wording said the title line "is removed before the summary is
+// saved", meaning it kindly — it is what makes writing one harmless. A reasoning
+// model chose a title, checked it against every rule, and then left it out:
+// informed the line would be discarded and was "not part of the summary", it
+// treated the summary as the deliverable and dropped the scaffolding. What
+// becomes of the line afterwards is Recall's business and must stay out of the
+// prompt.
+if (/removed before the summary|is removed before|will be discarded|thrown away|deleted before/i.test(instruction)) {
+    failures.push('TITLE_INSTRUCTION tells the model its title line will be discarded, which invites it to omit the line');
+}
+
+// And it has to be stated as required output, or a model that plans one in its
+// reasoning can consider the instruction satisfied without ever writing it.
+if (!/must begin|must start|required/i.test(instruction)) {
+    failures.push('TITLE_INSTRUCTION does not state that the title line is required');
+}
+if (!/planning|reasoning/i.test(instruction)) {
+    failures.push('TITLE_INSTRUCTION does not say that planning a title is not the same as writing one');
+}
+
 // 6. The clock must be cleared from the same place it is set. A run that ends by
 //    throwing would otherwise leave an interval repainting a button forever.
 if (!/clearInterval\(runTicker\)/.test(uiSrc)) {

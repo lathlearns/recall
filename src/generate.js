@@ -500,6 +500,19 @@ async function runGeneration(buffer, systemPrompt) {
         ? splitTitle(raw)
         : { title: '', content: raw };
 
+    // Says which of the two silent outcomes happened when a title was asked for
+    // and none arrived: the model never wrote the line, or it wrote one the
+    // matcher did not accept. From the outside both look identical — a summary
+    // named after a timestamp — and telling them apart otherwise means reading
+    // the chat file. The first line is enough to tell, and is logged rather than
+    // surfaced because a missing title is not a problem the user has to act on.
+    if (settings.generateTitles && !title) {
+        console.debug(
+            '[Recall] No title line in the response. It begins:',
+            JSON.stringify(String(raw).slice(0, 120)),
+        );
+    }
+
     // Checked before the length rules below, because a cancelled run has usually
     // produced *something* — and reporting a deliberate stop as "too short to be a
     // summary" would read as a failure the user did not cause.
