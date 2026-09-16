@@ -204,6 +204,26 @@ check('the rule restated is not a title',
     titleFromReasoning('- Must begin with literal word TITLE followed by a colon.'),
     '');
 
+// Weighing options is not deciding. Taken from a real run, where this would
+// otherwise have become the summary's name.
+check('comparing candidates is not a decision',
+    titleFromReasoning('TITLE: "The Omega on the Hood" or "Honda" - hood is American for bonnet, but the scene reads better'),
+    '');
+check('a quoted single candidate is still refused',
+    titleFromReasoning('So maybe TITLE: "The Ford" works'),
+    '');
+
+// Longer than the rule allows is prose about the title, not the title.
+check('an over-long candidate is refused',
+    titleFromReasoning('TITLE: this is a very long run on sentence that clearly is not a chapter name at all'),
+    '');
+check('but a normal-length name survives',
+    titleFromReasoning('TITLE: The Omega on the Hood'),
+    'The Omega on the Hood');
+check('and eight words is still allowed',
+    titleFromReasoning('TITLE: Smoke and silver on the long road north'),
+    'Smoke and silver on the long road north');
+
 // The instruction's own example, quoted back while reasoning about the format.
 check('the template placeholder is refused',
     titleFromReasoning('The format is TITLE: a short name for this stretch of the story'),

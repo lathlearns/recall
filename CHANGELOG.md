@@ -4,6 +4,14 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.4.1
+
+**The reasoning fallback no longer mistakes deliberation for a decision.** A model weighing
+options writes them out — *"The Omega on the Hood" or "Honda" - hood is American for bonnet…* —
+and that would have become a summary name had the model not written its title line properly.
+Candidates carrying quotation marks, or running longer than the eight words the instruction
+asks for, are now refused: a real title has neither. Checked against every summary on disk.
+
 ## 1.4.0
 
 **Titles work. They never had.** Every release since they were added extracted the title

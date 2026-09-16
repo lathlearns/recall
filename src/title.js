@@ -193,6 +193,27 @@ function isPlaceholder(candidate) {
         return true;
     }
 
+    // Weighing options rather than naming one. A model comparing candidates
+    // writes them quoted and joined — `"The Omega on the Hood" or "Honda" - hood
+    // is American for bonnet…` — which has letters, no brackets, and nothing
+    // else to distinguish it from a decision. A real title contains no quotation
+    // marks: the instruction says so, and one that does is a sentence about
+    // titles.
+    if (/["“”]/.test(candidate)) {
+        return true;
+    }
+
+    // Longer than the instruction allows.
+    //
+    // Deliberation runs on; a decision does not. Eight words is the stated rule,
+    // and a couple of words of slack keeps a hyphenated or subtitled name from
+    // being refused while still rejecting prose. This also catches anything the
+    // length cap had to truncate, which is by definition too long to be the
+    // answer.
+    if (candidate.split(/\s+/).filter(Boolean).length > 10 || candidate.endsWith('…')) {
+        return true;
+    }
+
     // A name has letters in it.
     return !/\p{L}/u.test(candidate);
 }
