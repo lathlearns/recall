@@ -108,9 +108,13 @@ half-written summary isn't a summary.
 
 **Titles.** Recall asks the model to name each summary and puts that name in front of the
 timestamp: *The Long Road North — 2026-09-12 14:31*. The title line is removed before the
-summary is stored, so it never reaches the model and never accumulates. A model that ignores
-the request just gets a timestamp — Recall only removes that line when it actually finds the
-marker, so a summary is never trimmed on a guess.
+summary is stored, so it never reaches the model and never accumulates, and every name stays
+editable by hand.
+
+A model that ignores the request just gets a timestamp — Recall only removes that line when it
+actually finds the marker, so a summary is never trimmed on a guess. And if a reasoning model
+decides on a title while thinking but leaves it out of its answer, Recall takes it from the
+reasoning rather than losing it.
 
 ---
 

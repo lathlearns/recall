@@ -12,7 +12,7 @@
  * Run:  node test/title.mjs
  */
 
-import { splitTitle, composeName } from '../src/title.js';
+import { splitTitle, composeName, titleFromReasoning } from '../src/title.js';
 
 const failures = [];
 
@@ -134,6 +134,67 @@ for (const partial of ['T', 'TIT', 'TITLE', 'TITLE:']) {
     const { title } = splitTitle('TITLE: The Long\n');
     check('a partially written title is readable', title, 'The Long');
 }
+
+// --------------------------------------------------------------------------
+// The title at the end, which is where the prompt now asks for it
+// --------------------------------------------------------------------------
+
+{
+    const { title, content } = splitTitle('## Continuity\n\nMara and Tev.\n\nTITLE: The Long Road North');
+    check('a trailing title is taken', title, 'The Long Road North');
+    check('the summary above it survives', content, '## Continuity\n\nMara and Tev.');
+}
+
+{
+    // Trailing blank lines after it, which streamed responses often carry.
+    const { title, content } = splitTitle('Body text.\n\nTITLE: The Ford\n\n\n');
+    check('trailing blanks do not hide the line', title, 'The Ford');
+    check('content after a trailing title', content, 'Body text.');
+}
+
+{
+    // Both ends marked: the first wins, and only one line is removed.
+    const { title, content } = splitTitle('TITLE: First\n\nBody.\n\nTITLE: Second');
+    check('the leading marker wins', title, 'First');
+    check('the trailing one is left in the text', content, 'Body.\n\nTITLE: Second');
+}
+
+{
+    // A single line that is only a marker must not be counted twice.
+    const { title, content } = splitTitle('TITLE: Only Line');
+    check('a lone title line', title, 'Only Line');
+    check('leaves no content', content, '');
+}
+
+// Still nothing may be cut from the middle, now that both ends are eligible.
+{
+    const text = '## Continuity\n\nTITLE: not a title\n\nMore text.';
+    const { title, content } = splitTitle(text);
+    check('a mid-text marker is still ignored', title, '');
+    check('and the text is still untouched', content, text);
+}
+
+// --------------------------------------------------------------------------
+// The reasoning fallback
+// --------------------------------------------------------------------------
+
+check('a title is found in reasoning',
+    titleFromReasoning('Let me think.\n\nTITLE: Omega on the Ridge\n\nNow the summary.'),
+    'Omega on the Ridge');
+
+// Thinking is a draft, so a model that reconsiders has its answer at the end.
+check('the last decision wins',
+    titleFromReasoning('TITLE: First Idea\nhmm, no.\nTITLE: Better Idea'),
+    'Better Idea');
+
+check('reasoning without a title yields nothing', titleFromReasoning('No title here at all.'), '');
+check('empty reasoning yields nothing', titleFromReasoning(''), '');
+check('null reasoning yields nothing', titleFromReasoning(null), '');
+
+// The same decoration handling as the response path, since it is the same line.
+check('decoration in reasoning is cleaned',
+    titleFromReasoning('**TITLE:** "The Ford".'),
+    'The Ford');
 
 // --------------------------------------------------------------------------
 // Names

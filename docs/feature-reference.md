@@ -94,28 +94,38 @@ rule above, and it is not part of the summary.
 ### The title request
 
 When titles are enabled, a fenced instruction is added to the **user message, after the
-chat**, asking for one marked line before the summary:
+chat**, asking for one marked line as the response's **last** line:
 
 ```
 TITLE: a short name for this stretch of the story
 ```
 
-**Placement is the feature, and getting it wrong makes the whole thing inert.** Put at the end
-of the system message — the obvious place, since it is an instruction — it was ignored by every
-model tried. Everything in the user message lands *after* the system message, so a rule about
-output format written there is separated from the point of generation by the reference
-material, the previous summary and every visible message. It belongs in the same region as the
-steering guidance and for the same reason, and immediately before it, so the user's own
-guidance keeps the last word.
+Three things about this were learned the hard way, and a reimplementation will hit all three.
 
-The wording has to do something else that is specific to a recursive summariser. The summary
-prompt's thesis is *revise the existing document in place, never overwrite it, keep the
-required structure* — and the previous summary in the buffer has no title line, because it was
-removed before storing. So the model is shown a document beginning with the structure's first
-heading and told not to deviate from it; a line above that heading is exactly what it has been
-forbidden to add. The instruction therefore states explicitly that the title is exempt from
-those rules, and that the block being revised has no title in it precisely because the last one
-was already taken off.
+**Where the instruction goes.** Put at the end of the system message — the obvious place, since
+it is an instruction — it was ignored outright. Everything in the user message lands *after* the
+system message, so a rule about output format written there is separated from the point of
+generation by the reference material, the previous summary and every visible message. It belongs
+in the same region as the steering guidance and for the same reason, and immediately before it,
+so the user's own guidance keeps the last word.
+
+**Where the title goes: last, not first.** Asking for a leading line failed repeatedly even once
+the instruction was being read — the model would choose a title in its reasoning, verify it
+against every rule, and then produce a response beginning at the summary's first heading. The
+conflict is structural, not verbal: the summary prompt insists the document is revised in place
+and keeps its required structure, so when the model begins writing it begins the document, and a
+line above the first heading gets squeezed out however firmly it was requested. Appending after
+the finished document does not compete with that. An extractor should accept either end anyway,
+since some models will still lead with it.
+
+**Never tell the model the line will be discarded.** A wording that said the title "is removed
+before the summary is saved" — meant to reassure, since that is what makes writing one harmless
+— caused the model to omit it: told the line was scaffolding that would be thrown away, it
+returned the summary alone. What becomes of the line afterwards is the extension's business and
+does not belong in the prompt. Say only that the line is required, where it goes, and that the
+revise-in-place rules govern the summary rather than the line. Say explicitly, too, that
+deciding on a title while reasoning does not satisfy the requirement — a model that drafts its
+answer in thinking will otherwise consider the instruction met without ever writing it.
 
 It is not an editable prompt block, for two reasons. A block is the user's to delete, and
 deleting this one would leave the feature silently doing nothing — the toggle has to be what
@@ -394,8 +404,19 @@ nothing but a title line is still a failure rather than a very short summary. An
 title is truncated rather than allowed to fill the list, and a marker with nothing usable after
 it still comes off — the line was meant as a title — leaving the summary with a timestamp name.
 
-On a streaming connection the title arrives before the summary does, so it becomes the live
-pane's heading while the rest is still being written.
+**A title decided in reasoning, but never written, is recovered from there.** This is a last
+resort and exists because of a failure no amount of prompt wording fixed reliably: a reasoning
+model drafts its whole answer while thinking, settles on a title, checks it against every
+constraint, and then writes a response without it. The decision is sitting in the reasoning, and
+discarding it to preserve a rule about where titles come from would leave the user with a
+timestamp for no benefit. The last title named in the reasoning wins, because thinking is a
+draft and a model that reconsiders has its answer at the end.
+
+This reaches the archive's name only. Reasoning still has no path to the summary text, the
+buffer or the prompt — a name is metadata the user can edit, not content.
+
+On a streaming connection the title arrives at the very end, so it becomes the live pane's
+heading only as the response finishes.
 
 ### The active pointer
 

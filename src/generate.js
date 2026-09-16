@@ -27,7 +27,7 @@ import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
 import { getFallbackSummary } from './legacy.js';
 import { TITLE_INSTRUCTION } from './default-prompt.js';
-import { splitTitle, composeName } from './title.js';
+import { splitTitle, composeName, titleFromReasoning } from './title.js';
 import { buildContextBlocks } from './context-blocks.js';
 import {
     getActiveProfile,
@@ -496,9 +496,23 @@ async function runGeneration(buffer, systemPrompt) {
     // still attached could let that through as a summary of a few dozen
     // characters. Extraction is gated on the same setting as the instruction, so
     // with titles off a response that happens to begin "TITLE:" is left alone.
-    const { title, content } = settings.generateTitles
+    const { title: written, content } = settings.generateTitles
         ? splitTitle(raw)
         : { title: '', content: raw };
+
+    // Falls back to the title the model settled on while thinking.
+    //
+    // Not the first choice, and not a substitute for asking properly — but a
+    // reasoning model can decide on a title, verify it against every rule, and
+    // then write a response without it, which is a failure no wording has
+    // reliably fixed. The decision is sitting in the reasoning; throwing it away
+    // to honour a rule about where titles come from would leave the user with a
+    // timestamp for no benefit.
+    //
+    // Only ever reaches the archive's name. Reasoning still has no path to the
+    // summary text, the buffer or the prompt.
+    const title = written
+        || (settings.generateTitles ? titleFromReasoning(reasoning) : '');
 
     // Says which of the two silent outcomes happened when a title was asked for
     // and none arrived: the model never wrote the line, or it wrote one the
@@ -506,10 +520,12 @@ async function runGeneration(buffer, systemPrompt) {
     // named after a timestamp — and telling them apart otherwise means reading
     // the chat file. The first line is enough to tell, and is logged rather than
     // surfaced because a missing title is not a problem the user has to act on.
-    if (settings.generateTitles && !title) {
+    if (settings.generateTitles && !written) {
         console.debug(
-            '[Recall] No title line in the response. It begins:',
-            JSON.stringify(String(raw).slice(0, 120)),
+            title
+                ? '[Recall] No title line in the response; recovered one from the reasoning:'
+                : '[Recall] No title line in the response, and none in the reasoning either. It ends:',
+            title || JSON.stringify(String(raw).slice(-120)),
         );
     }
 

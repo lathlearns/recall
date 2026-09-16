@@ -61,28 +61,79 @@ const MAX_TITLE_LENGTH = 72;
  */
 export function splitTitle(response) {
     const text = String(response ?? '');
+    const lines = text.split('\n');
 
-    // Only the first non-empty line is eligible. A "TITLE:" appearing further
-    // down is either part of the summary or a second attempt, and removing it
-    // from the middle of the text would be exactly the silent edit this is
-    // written to avoid.
-    const match = text.match(/^\s*\n*([^\n]*)(\n[\s\S]*)?$/);
-    if (!match) {
+    // The two ends, and only the two ends.
+    //
+    // The prompt asks for the line last, because a model revising a document with
+    // a required first heading reliably normalises a *leading* extra line away —
+    // it drops it while writing the answer even after deciding on one. Appending
+    // after the document is finished does not compete with that.
+    //
+    // The first line is still accepted, because some models put it there anyway
+    // and earlier versions asked them to. A marker anywhere *between* the two is
+    // ignored: it is either part of the summary or a second attempt, and cutting
+    // from the middle of the text is precisely the silent edit this file exists
+    // to avoid.
+    const firstIndex = lines.findIndex(line => line.trim());
+    if (firstIndex === -1) {
         return { title: '', content: text };
     }
 
-    const [, firstLine, rest = ''] = match;
-    const titleMatch = normaliseLine(firstLine).match(TITLE_LINE);
-
-    if (!titleMatch) {
-        return { title: '', content: text };
+    let lastIndex = lines.length - 1;
+    while (lastIndex > firstIndex && !lines[lastIndex].trim()) {
+        lastIndex--;
     }
 
-    const title = cleanTitle(titleMatch[1]);
+    for (const index of firstIndex === lastIndex ? [firstIndex] : [firstIndex, lastIndex]) {
+        const found = normaliseLine(lines[index]).match(TITLE_LINE);
+        if (!found) {
+            continue;
+        }
 
-    // A marker with nothing usable after it is still a marker: the line was meant
-    // as a title, so it comes off, but there is no title to show.
-    return { title, content: rest.replace(/^\n+/, '') };
+        const remaining = lines.slice();
+        remaining.splice(index, 1);
+
+        // A marker with nothing usable after it is still a marker: the line was
+        // meant as a title, so it comes off, but there is no title to show.
+        return {
+            title: cleanTitle(found[1]),
+            content: remaining.join('\n').replace(/^\n+/, '').replace(/\n+$/, ''),
+        };
+    }
+
+    return { title: '', content: text };
+}
+
+/**
+ * The title a model settled on while thinking, for when it never wrote one.
+ *
+ * A last resort, and only ever used for the archive's name — reasoning has no
+ * path to the summary text or the prompt, and this does not give it one.
+ *
+ * It exists because of a failure that two rounds of prompt wording did not fix:
+ * a reasoning model drafts the whole answer in its thinking, picks a title,
+ * verifies it against every rule, and then writes a final response without it.
+ * The decision is right there and discarding it to preserve a principle about
+ * where titles come from would leave the user with a timestamp for no reason.
+ *
+ * The *last* match wins, because thinking is a draft: a model that reconsiders
+ * has its final answer at the end.
+ *
+ * @param {string} reasoning
+ * @returns {string} '' when the reasoning names no title.
+ */
+export function titleFromReasoning(reasoning) {
+    const lines = String(reasoning ?? '').split('\n');
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const found = normaliseLine(lines[i]).match(TITLE_LINE);
+        if (found) {
+            return cleanTitle(found[1]);
+        }
+    }
+
+    return '';
 }
 
 /**
@@ -93,10 +144,23 @@ export function splitTitle(response) {
 function cleanTitle(raw) {
     let title = String(raw ?? '').trim();
 
-    // Paired wrappers, innermost last: **"A Title"** is not unusual.
-    for (let i = 0; i < 3; i++) {
+    // Newlines cannot survive: this goes in a single-line field.
+    title = title.replace(/\s+/g, ' ').trim();
+
+    // Wrappers and trailing punctuation strip in the same loop, because either
+    // can hide the other. A model writing `"The Ford".` puts the full stop
+    // outside the quotes, so stripping quotes first finds no closing quote and
+    // gives up; stripping punctuation first would miss `"The Ford."`, where it
+    // is inside. Alternating until nothing changes handles both, and **"A
+    // Title"** — several layers at once — falls out for free.
+    for (let i = 0; i < 4; i++) {
         const before = title;
         title = title
+            // Trailing sentence punctuation reads as a truncated sentence in a
+            // list of names. A question or exclamation mark can *be* the title,
+            // so those stay.
+            .replace(/[.,;:]+$/, '')
+            .trim()
             .replace(/^\*\*([\s\S]*)\*\*$/, '$1')
             .replace(/^__([\s\S]*)__$/, '$1')
             .replace(/^\*([\s\S]*)\*$/, '$1')
@@ -110,13 +174,6 @@ function cleanTitle(raw) {
             break;
         }
     }
-
-    // Newlines cannot survive: this goes in a single-line field.
-    title = title.replace(/\s+/g, ' ').trim();
-
-    // Trailing sentence punctuation reads as a truncated sentence in a list of
-    // names. A question mark or an exclamation can be the title, so those stay.
-    title = title.replace(/[.,;:]+$/, '').trim();
 
     if (title.length > MAX_TITLE_LENGTH) {
         title = `${title.slice(0, MAX_TITLE_LENGTH - 1).trimEnd()}…`;

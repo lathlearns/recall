@@ -4,6 +4,34 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.3.3
+
+**Titles ask to go last, and are recovered from the reasoning when they still don't arrive.**
+Two rounds of rewording didn't fix this, so the request changed shape instead.
+
+Asking for the title on the *first* line was fighting the summary prompt rather than the model.
+That prompt insists the summary is revised in place and keeps its required structure — so when
+the model starts writing, it starts the document, and a line above the first heading gets
+squeezed out no matter how firmly it was asked for. Models were choosing a title, verifying it
+against every rule, and then omitting it. The request now comes after the finished summary,
+which doesn't compete with the structure at all. A title written at the top is still accepted,
+in case your model prefers it there.
+
+And when a model decides on a title while thinking but never writes it, Recall now takes it
+from the reasoning instead of losing it. That only ever fills the archive's name — reasoning
+still has no route to the summary text or the prompt — and the name is editable like any other.
+
+Also fixes title cleanup for `"A Title".`, where the full stop sits outside the quotes:
+stripping quotes first found no closing quote, so the quotes survived.
+
+## 1.3.2
+
+Titles were still being dropped. The instruction told the model the title line "is removed
+before the summary is saved" — meant as reassurance, read as *this is scaffolding you can
+skip*. Never tell a model its output will be discarded. It now says only that the line is
+required and where it goes, and adds that deciding on a title while thinking doesn't count as
+writing one.
+
 ## 1.3.1
 
 **Titles actually get written now.** 1.3.0 asked for them at the end of the system prompt,

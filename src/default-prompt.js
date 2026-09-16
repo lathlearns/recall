@@ -484,6 +484,16 @@ export const DEFAULT_SET_NAME = 'Standard';
  * Fenced and labelled like the steering block, so a model that has just read a
  * long roleplay can tell this is an instruction to it rather than more material.
  *
+ * **Asked for last, not first.** Two wordings asked for a leading line and both
+ * were dropped in the same way: the model read the rule, chose a title, checked
+ * it against every constraint in its reasoning, and then produced a response
+ * beginning at the summary's first heading. The conflict is structural rather
+ * than verbal. The summary prompt insists the document is revised in place and
+ * keeps its required structure, so when the model starts writing the answer it
+ * starts the document — and a line above the first heading is squeezed out no
+ * matter how firmly it was requested. Appending after the document is finished
+ * does not compete with that, and the extractor accepts either end.
+ *
  * **Never tell the model its output will be discarded.** The second version of
  * this said the title line "is removed before the summary is saved" — meant to
  * reassure, since that is what makes it safe to write one. A reasoning model read
@@ -502,37 +512,34 @@ export const DEFAULT_SET_NAME = 'Standard';
 export const TITLE_INSTRUCTION = [
     '--- BEGIN REQUIRED OUTPUT FORMAT ---',
     '',
-    '**Your response must begin with a title line.** Write it first, then the',
-    'summary. A response that does not start with a title line is incomplete.',
+    'Write the summary exactly as instructed above, starting with its normal first',
+    'heading. Nothing about the summary changes.',
     '',
-    'The first line of your response, in exactly this form:',
+    '**Then, after the summary is complete, add one final line:**',
     '',
     'TITLE: a short name for this stretch of the story',
     '',
-    'Rules for that line:',
+    'Rules for that last line:',
     '',
+    '- It must be the final line of your response, after the finished summary.',
     '- It must begin with the literal word TITLE followed by a colon.',
     '- At most 8 words. No quotation marks, no markdown, no trailing full stop.',
     '- Name what *this* part of the story was about, the way a chapter is named.',
     '  Not the whole chat, and not a description of the summary itself.',
     '',
     '**Write it in the response itself, not only while planning.** Deciding on a',
-    'title during your reasoning does not satisfy this requirement: the line has to',
-    'be present in the answer you actually produce, as its first line, or it does',
-    'not exist.',
+    'title while you think does not satisfy this: the line has to appear in the',
+    'answer you actually produce, or it does not exist.',
     '',
-    '**The title sits above the summary, not inside it.** It is not a section, not',
-    'part of the required structure, and it does not count towards the word limit.',
-    'Writing it is therefore not overwriting the summary and not a deviation from',
-    'the structure — the rules about revising in place govern the summary below it,',
-    'not this line.',
+    '**The title is not a section of the summary.** It goes after the summary ends,',
+    'it is not part of the required structure, and it does not count towards the',
+    'word limit. Adding it is therefore not overwriting the summary and not a',
+    'deviation from the structure — the rules about revising in place govern the',
+    'summary above it, not this line.',
     '',
-    'The [Summary:…] block above contains no title line of its own. That is',
+    'The [Summary:…] block you are revising has no title line of its own. That is',
     'expected, and it is not a reason to leave yours out: write a fresh title every',
     'time, including when you are revising rather than starting over.',
-    '',
-    'After that one line, continue with the summary exactly as instructed, starting',
-    'with its normal first heading.',
     '',
     '--- END REQUIRED OUTPUT FORMAT ---',
 ].join('\n');
