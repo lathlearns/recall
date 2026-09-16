@@ -412,6 +412,13 @@ discarding it to preserve a rule about where titles come from would leave the us
 timestamp for no benefit. The last title named in the reasoning wins, because thinking is a
 draft and a model that reconsiders has its answer at the end.
 
+Matching is deliberately looser here than in the response. Reasoning is prose *about* the task —
+the marker turns up mid-sentence ("Let me make sure it fits: TITLE: ..."), never on a line of its
+own — so requiring it at the start of a line, which is right for the response, recovers nothing
+from real thinking. The stakes differ too: a wrong match in the response deletes a line of the
+summary, while a wrong match here only puts an editable name on one. The instruction's own
+example is refused, since a model reasoning about the format often quotes it back.
+
 This reaches the archive's name only. Reasoning still has no path to the summary text, the
 buffer or the prompt — a name is metadata the user can edit, not content.
 

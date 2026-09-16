@@ -182,6 +182,36 @@ check('a title is found in reasoning',
     titleFromReasoning('Let me think.\n\nTITLE: Omega on the Ridge\n\nNow the summary.'),
     'Omega on the Ridge');
 
+// The shape reasoning actually takes. A model talks its way to the answer, so
+// the marker sits mid-sentence — requiring it at the start of a line, which is
+// correct for the response, recovers nothing at all from real thinking.
+check('a marker mid-line is found',
+    titleFromReasoning('Let me make sure it fits: TITLE: Smoke and silver on asphalt'),
+    'Smoke and silver on asphalt');
+
+check('a marker after a short prefix is found',
+    titleFromReasoning('Possible titles:\n- one\n- two\n\nSo: TITLE: Smoke and silver on asphalt\n\nYes.'),
+    'Smoke and silver on asphalt');
+
+// Prose about the rules must not be mistaken for a decision.
+check('"the TITLE line" is not a title',
+    titleFromReasoning('Finally the TITLE line. Needs to be at most 8 words.'),
+    '');
+check('"Possible titles:" is not a title',
+    titleFromReasoning('Possible titles:\n- The Mask and the True Name'),
+    '');
+check('the rule restated is not a title',
+    titleFromReasoning('- Must begin with literal word TITLE followed by a colon.'),
+    '');
+
+// The instruction's own example, quoted back while reasoning about the format.
+check('the template placeholder is refused',
+    titleFromReasoning('The format is TITLE: a short name for this stretch of the story'),
+    '');
+check('and does not mask a real decision made earlier',
+    titleFromReasoning('TITLE: The Real One\n\nThe format is TITLE: a short name for this stretch of the story'),
+    'The Real One');
+
 // Thinking is a draft, so a model that reconsiders has its answer at the end.
 check('the last decision wins',
     titleFromReasoning('TITLE: First Idea\nhmm, no.\nTITLE: Better Idea'),

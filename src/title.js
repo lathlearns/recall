@@ -50,6 +50,30 @@ function normaliseLine(line) {
 const MAX_TITLE_LENGTH = 72;
 
 /**
+ * The marker anywhere inside a line, for reading reasoning only.
+ *
+ * Reasoning is prose about the task, not the task's output: a model writes
+ * "Let me make sure it fits: TITLE: Smoke and silver on asphalt" and "So: TITLE:
+ * …", never a bare line. Requiring the marker at the start of a line — which is
+ * right for the response, where a wrong match deletes a line of the summary —
+ * finds none of that, and the first version of this reused that rule and
+ * therefore never recovered a single title.
+ *
+ * Looser here because the stakes are not the same. Nothing is removed from
+ * anything: the worst a false match can do is put a slightly wrong name on a
+ * summary, in a field the user can edit.
+ */
+const TITLE_IN_TEXT = /\btitle[ \t]*[:：][ \t]*([^\n]*)/gi;
+
+/**
+ * The example from the instruction, lowercased.
+ *
+ * A model reasoning about the format frequently quotes the template back to
+ * itself. Recovering *that* would name every summary after the placeholder.
+ */
+const TEMPLATE_TITLE = 'a short name for this stretch of the story';
+
+/**
  * Splits a model response into its title and the summary proper.
  *
  * Safe to call on a partial response: while the line is still arriving it simply
@@ -124,16 +148,20 @@ export function splitTitle(response) {
  * @returns {string} '' when the reasoning names no title.
  */
 export function titleFromReasoning(reasoning) {
-    const lines = String(reasoning ?? '').split('\n');
+    const text = String(reasoning ?? '');
+    let found = '';
 
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const found = normaliseLine(lines[i]).match(TITLE_LINE);
-        if (found) {
-            return cleanTitle(found[1]);
+    for (const match of text.matchAll(TITLE_IN_TEXT)) {
+        const candidate = cleanTitle(match[1]);
+
+        if (!candidate || candidate.toLowerCase() === TEMPLATE_TITLE) {
+            continue;
         }
+
+        found = candidate;
     }
 
-    return '';
+    return found;
 }
 
 /**
@@ -146,6 +174,13 @@ function cleanTitle(raw) {
 
     // Newlines cannot survive: this goes in a single-line field.
     title = title.replace(/\s+/g, ' ').trim();
+
+    // Strong emphasis and code ticks, wherever they fall. The response path has
+    // already normalised the whole line, but the reasoning path matches
+    // mid-sentence and can capture a stray closing `**` with no opener — which
+    // the paired stripper below will not touch. Neither can appear in a real
+    // title, so removing them outright costs nothing.
+    title = title.replace(/\*\*|__|`/g, '').trim();
 
     // Wrappers and trailing punctuation strip in the same loop, because either
     // can hide the other. A model writing `"The Ford".` puts the full stop

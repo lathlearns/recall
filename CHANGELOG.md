@@ -4,6 +4,19 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.3.4
+
+**The reasoning fallback now actually finds the title.** 1.3.3 added it and it never fired
+once, because it looked for the marker only at the *start* of a line — a rule borrowed from the
+response extractor, where it belongs. Reasoning is prose about the task: models write
+*"Let me make sure it fits: TITLE: Smoke and silver on asphalt"*, not a bare line. Matching is
+looser there now, which is safe, because reading reasoning removes nothing from anything — the
+worst a wrong match can do is put an editable name on a summary. The instruction's own example
+is still refused, since a model reasoning about the format often quotes it back.
+
+Checked against real stored summaries rather than invented ones: a summary that had been named
+*2026-09-16 14:07* comes out as *Smoke and silver on asphalt — 2026-09-16 14:07*.
+
 ## 1.3.3
 
 **Titles ask to go last, and are recovered from the reasoning when they still don't arrive.**
