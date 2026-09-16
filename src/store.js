@@ -15,6 +15,7 @@ import { chat, chat_metadata, saveChatConditional, saveMetadata } from '../../..
 import { saveMetadataDebounced } from '../../../../extensions.js';
 import { getStringHash } from '../../../../utils.js';
 import { uuid } from './util.js';
+import { chooseActiveSummary } from './realign.js';
 
 export const STORE_KEY = 'recall';
 
@@ -467,6 +468,56 @@ export function computeRangeHash(from, to) {
     // Explicit NUL separator: it cannot occur in message text, so two different
     // splits of the same characters cannot collide into one hash.
     return getStringHash(parts.join('\u0000'));
+}
+
+/**
+ * Moves the active pointer off a summary that covers messages this chat does not
+ * have.
+ *
+ * **Why this is automatic when nothing else here is.**
+ *
+ * Branching copies `chat_metadata` wholesale and truncates the chat to the branch
+ * point, so the new chat inherits every summary *and* the pointer — which now
+ * names a summary describing events that only happened in the abandoned future.
+ * The macro resolves that content regardless of the stale flag, so the model is
+ * handed memory of things that never occurred in this branch.
+ *
+ * That is not the coverage mismatch this file otherwise refuses to fix on the
+ * user's behalf. A mismatch is frequently deliberate — an older summary activated
+ * to compare against — and reporting it is the right response. A summary of
+ * messages that do not exist is never deliberate, and reporting it would leave
+ * the wrong memory in context until the user happened to read the notice.
+ *
+ * Deliberately narrow: only when the coverage runs past the end of the chat,
+ * which is unambiguous. A summary that went stale because its anchor was *edited*
+ * is a different situation with a different remedy — re-anchoring — and the user
+ * may well want the summary they have, so it is left alone.
+ *
+ * Run after drift detection, whose `stale` flag this trusts for "the anchor is
+ * still the message it was".
+ *
+ * @returns {{ moved: boolean, from: RecallSummary|null, to: RecallSummary|null }}
+ *          `moved` is false when nothing needed doing. `to` is null when no
+ *          summary fits at all, in which case the pointer was cleared.
+ */
+export function realignActiveSummary() {
+    const store = getStore();
+    const from = getActiveSummary();
+
+    const { moved, id } = chooseActiveSummary(store.summaries, store.activeSummaryId, chat.length);
+
+    if (!moved) {
+        return { moved: false, from, to: from };
+    }
+
+    // Cleared rather than left pointing at nothing real. With no Recall summary
+    // active the macro resolves empty — and the built-in's stored summary stands
+    // in if the user has that fallback on, which on a branch is the one from the
+    // branch point, because it is read from the messages themselves.
+    store.activeSummaryId = id;
+    persist({ immediate: true });
+
+    return { moved: true, from, to: getActiveSummary() };
 }
 
 /**

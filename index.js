@@ -13,7 +13,7 @@ import { eventSource, event_types } from '../../../../script.js';
 import { extension_settings } from '../../../extensions.js';
 
 import { getSettings } from './src/settings.js';
-import { getStore, runDriftDetection } from './src/store.js';
+import { getStore, runDriftDetection, realignActiveSummary } from './src/store.js';
 import { registerMacro, registerSlashCommand } from './src/macro.js';
 import { summarizeNow, RecallError } from './src/generate.js';
 import { evaluateNudge, resetNudge, disarmNudge } from './src/nudge.js';
@@ -87,7 +87,30 @@ function onChatChanged() {
 
     const { staled } = runDriftDetection(getSettings().deepIntegrityCheck);
 
-    if (staled.length) {
+    // Before the stale warning, because on a branch it explains it. Every summary
+    // from beyond the branch point is stale, and "3 summaries are anchored to
+    // messages that no longer exist" is alarming on its own and unremarkable once
+    // you know you just branched.
+    const realigned = realignActiveSummary();
+
+    if (realigned.moved) {
+        toastr.info(
+            realigned.to
+                ? `The active summary covered messages this chat does not have — it was probably `
+                  + `branched. "${realigned.to.name || 'Untitled'}" is active instead, covering `
+                  + `messages ${realigned.to.coversFrom}–${realigned.to.coversTo}.`
+                : 'The active summary covered messages this chat does not have — it was probably '
+                  + 'branched, and no earlier summary fits. Recall has no summary active here; '
+                  + 'generate one when you are ready.',
+            'Recall',
+            { timeOut: 15000, extendedTimeOut: 8000 },
+        );
+    }
+
+    // Suppressed when the pointer just moved: the summaries left stale by a branch
+    // are the ones from after it, and nothing is wrong with them that re-anchoring
+    // would fix.
+    if (staled.length && !realigned.moved) {
         toastr.warning(
             `${staled.length} summar${staled.length === 1 ? 'y is' : 'ies are'} anchored to messages that no longer exist. `
             + 'Open the Recall manager to re-anchor or delete them.',

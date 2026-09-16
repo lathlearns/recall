@@ -4,6 +4,26 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.5.0
+
+**Branching picks up the summary that was right at the branch point.** Branching copies the
+whole archive and the active pointer, then cuts the chat back — so the pointer kept naming a
+summary covering messages the branch does not have, and the macro resolved it anyway. The model
+was handed memory of events from the timeline you abandoned.
+
+Recall now moves the pointer to the newest summary that actually describes the branch, and says
+which one and why. If none fits — you branched before your first summary — the pointer clears,
+which is the honest state and also lets *Use its old summary* stand in the built-in's summary as
+it was at that point, since that one is stored on the messages themselves.
+
+Deliberately narrow: this only fires when a summary covers messages that do not exist. One that
+went stale because you edited its anchor is left alone, because re-anchoring is the remedy there
+and the summary may be exactly the one you want.
+
+The stale-summaries warning is suppressed when this fires. Every summary from past the branch
+point is stale by definition, and a warning that three of them are anchored to missing messages
+is alarming on its own and unremarkable once you know you just branched.
+
 ## 1.4.1
 
 **The reasoning fallback no longer mistakes deliberation for a decision.** A model weighing

@@ -425,6 +425,29 @@ buffer or the prompt — a name is metadata the user can edit, not content.
 On a streaming connection the title arrives at the very end, so it becomes the live pane's
 heading only as the response finishes.
 
+### Branching, and the summary that was active then
+
+Branching copies the whole archive and the active pointer into the new chat, then truncates the
+chat to the branch point. The pointer therefore arrives naming a summary that covers messages the
+branch does not have — describing events from the timeline that was abandoned — and the macro
+resolves its text regardless of any stale flag. Left alone, the model is handed memory of things
+that never happened here.
+
+So on load, a summary whose coverage runs past the end of the chat is replaced as active by the
+newest one that still describes it, and the user is told which and why. If none fits, the pointer
+is cleared: that is the truthful state, and it is also what lets an older external summary stand
+in (section 17), which on a branch is automatically the one from the branch point, because that
+kind of summary is stored on the messages themselves rather than in chat metadata.
+
+**This is the one automatic reconciliation Recall performs, and the boundary is exact.** It fires
+only when coverage runs past the end of the chat, which is never something the user meant. A
+summary that went stale because its anchor was *edited* still describes this chat, its remedy is
+re-anchoring, and it is left alone — as is every coverage-versus-visibility mismatch, which is
+frequently deliberate and is only ever reported (section 8).
+
+Stale summaries are not promoted, either: their anchor is gone or changed, so their coverage no
+longer means what it says, and trading a wrong summary for an untrustworthy one is not a gain.
+
 ### The active pointer
 
 One summary at a time is **active**, and that is what the macro resolves to. New summaries
@@ -1011,7 +1034,10 @@ Stated so a rebuild doesn't inherit them by accident:
   cannot reach the macro or the next pass's buffer.
 - **Reasoning is never prompt material.** It is stored and displayed; it has no path to the
   model, and there is no setting that gives it one.
-- **No automatic reconciliation.** Coverage mismatch is reported and offered, never applied.
+- **No automatic reconciliation**, with one named exception. Coverage mismatch is reported and
+  offered, never applied. The exception is an active summary covering messages the chat does not
+  have, which is never intentional and silently feeds the model a memory of events that did not
+  happen — see section 7.
 - **No automatic merging of prompt edits** into overriding characters — only a quiet marker.
 
 ---
