@@ -451,50 +451,67 @@ export const DEFAULT_BLOCKS = [
 export const DEFAULT_SET_NAME = 'Standard';
 
 /**
- * The title request, appended after the blocks rather than shipped as one.
+ * The title request.
  *
- * Not a block, for two reasons. A block is the user's to edit or delete, and
+ * **Goes at the end of the buffer, not in the system prompt.** The first version
+ * of this sat at the end of the assembled prompt blocks and was ignored outright
+ * by every model tried, for two reasons worth recording because both are easy to
+ * repeat.
+ *
+ * It was too far from generation. Everything in the user message — reference
+ * material, the previous summary, the entire visible chat — lands *after* the
+ * system prompt, so a format instruction placed there competes with tens of
+ * thousands of tokens of material before the model writes anything. This is the
+ * same reasoning `buildBufferFrom` already applies to the steering note, and it
+ * applies at least as strongly to a rule about the shape of the output.
+ *
+ * And it read as a contradiction. The summary prompt's whole thesis is *revise
+ * the existing document in place, never overwrite it, keep the required
+ * structure* — while the previous summary in the buffer has no title line,
+ * because Recall strips it before storing. So the model is shown a document that
+ * begins with the structure's first heading and told not to deviate from it; a
+ * line above that heading is exactly what it has been forbidden to add. The
+ * wording below therefore spends most of its length granting an explicit
+ * exemption and explaining why the block being revised has no title to copy.
+ *
+ * It is not a prompt block. A block is the user's to edit or delete, and
  * deleting this one would leave the feature silently doing nothing with no
  * explanation — the toggle that turns titles on has to be the thing that
- * controls it. And blocks only seed a *fresh* install: an existing set lives in
+ * controls it. Blocks also only seed a *fresh* install: an existing set lives in
  * settings and is never re-read from this file, so shipping it as a block would
  * give it to new users and nobody else.
  *
- * It is appended inside `assemblePrompt`, so **Preview request** shows it along
- * with everything else. Recall does not put anything into a request that the
- * preview does not show.
- *
- * Placed last on purpose. The block order ends with the Quality Check telling
- * the model to verify and submit; this is a note about the shape of the output,
- * so it belongs after that rather than inside the instruction body.
- *
- * The wording earns its length. The line has to be machine-detectable for the
- * extractor to remove it safely, so the format is stated exactly and twice —
- * once as a rule and once as an example — and the model is told what the line is
- * *for*, because a model that knows it is a label writes a label rather than a
- * sentence.
+ * Fenced and labelled like the steering block, so a model that has just read a
+ * long roleplay can tell this is an instruction to it rather than more material.
  */
 export const TITLE_INSTRUCTION = [
-    '---',
+    '--- BEGIN OUTPUT FORMAT FOR THIS PASS ---',
     '',
-    '# **OUTPUT FORMAT: TITLE LINE**',
+    'Begin your response with one title line, then the summary.',
     '',
-    'Before anything else, output one line in exactly this form:',
+    'The title line must be **the very first line**, in exactly this form:',
     '',
-    '`TITLE: <a short name for this stretch of the story>`',
+    'TITLE: a short name for this stretch of the story',
     '',
     'Rules for that line:',
     '',
-    '- It must be the **very first line**, with nothing above it.',
-    '- It must begin with the literal word `TITLE:`.',
+    '- It must begin with the literal word TITLE followed by a colon.',
     '- At most 8 words. No quotation marks, no markdown, no trailing full stop.',
     '- Name what *this* part of the story was about, the way a chapter is named.',
     '  Not the whole chat, and not a description of the summary itself.',
     '',
-    'Then continue with the summary, in the required structure, starting on the',
-    'next line.',
+    '**This line is not part of the summary.** It is a label for the reader\'s',
+    'archive, it is removed before the summary is saved, and it does not count',
+    'towards the word limit.',
     '',
-    'This line is a label for the reader\'s archive. It is removed before the',
-    'summary is stored, it is not part of the required structure, and it does not',
-    'count towards the word limit.',
+    '**It is therefore not covered by the rules about revising in place or keeping',
+    'the required structure.** Writing it is not overwriting the summary and not a',
+    'deviation from the structure. The [Summary:…] block above has no title line',
+    'in it precisely because the previous one was already removed — so write a',
+    'fresh title every time, even when you are revising rather than starting over.',
+    '',
+    'After that one line, continue with the summary exactly as instructed, starting',
+    'with its normal first heading.',
+    '',
+    '--- END OUTPUT FORMAT FOR THIS PASS ---',
 ].join('\n');

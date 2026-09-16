@@ -74,8 +74,9 @@ Assembled in this order, each part separated by a blank line:
    message text
    ```
    with a blank line between messages.
-4. **One-off steering guidance** (section 9), if the user typed any for this pass — last,
-   after the chat, because recency is the point.
+4. **The title request**, if titles are enabled — after the chat, for the reason below.
+5. **One-off steering guidance** (section 9), if the user typed any for this pass — last,
+   after everything, because recency is the point.
 
 The steering block is fenced and labelled:
 
@@ -92,21 +93,38 @@ rule above, and it is not part of the summary.
 
 ### The title request
 
-When titles are enabled, a short instruction is appended to the **system message**, after the
-prompt blocks, asking for one marked line before the summary:
+When titles are enabled, a fenced instruction is added to the **user message, after the
+chat**, asking for one marked line before the summary:
 
 ```
-TITLE: <a short name for this stretch of the story>
+TITLE: a short name for this stretch of the story
 ```
 
-It is appended rather than shipped as an editable block, for two reasons. A block is the
-user's to delete, and deleting this one would leave the feature silently doing nothing — the
-toggle has to be what controls it. And blocks only seed a *fresh* install; an existing block
-set lives in settings and is never re-read from defaults, so shipping it as a block would give
-it to new users and to nobody else.
+**Placement is the feature, and getting it wrong makes the whole thing inert.** Put at the end
+of the system message — the obvious place, since it is an instruction — it was ignored by every
+model tried. Everything in the user message lands *after* the system message, so a rule about
+output format written there is separated from the point of generation by the reference
+material, the previous summary and every visible message. It belongs in the same region as the
+steering guidance and for the same reason, and immediately before it, so the user's own
+guidance keeps the last word.
 
-It is appended **inside the same assembly the preview reads**, so *Preview request* shows it
-along with everything else. Nothing is put into a request that the preview does not show.
+The wording has to do something else that is specific to a recursive summariser. The summary
+prompt's thesis is *revise the existing document in place, never overwrite it, keep the
+required structure* — and the previous summary in the buffer has no title line, because it was
+removed before storing. So the model is shown a document beginning with the structure's first
+heading and told not to deviate from it; a line above that heading is exactly what it has been
+forbidden to add. The instruction therefore states explicitly that the title is exempt from
+those rules, and that the block being revised has no title in it precisely because the last one
+was already taken off.
+
+It is not an editable prompt block, for two reasons. A block is the user's to delete, and
+deleting this one would leave the feature silently doing nothing — the toggle has to be what
+controls it. And blocks only seed a *fresh* install; an existing block set lives in settings
+and is never re-read from defaults, so shipping it as a block would give it to new users and to
+nobody else.
+
+It is assembled by the same path the preview reads, so *Preview request* shows it along with
+everything else. Nothing is put into a request that the preview does not show.
 
 ### What is *not* sent
 

@@ -246,6 +246,47 @@ if (/\bcontent\s*[:=]\s*[\w.?]*\breasoning\b/.test(generateSrc + uiSrc)) {
     failures.push('a summary\'s content is being assigned from reasoning');
 }
 
+// 5i. The title instruction goes in the buffer, after the chat — not in the
+//     system prompt.
+//
+//     It shipped in the system prompt first and was ignored by every model tried,
+//     because everything in the user message lands after it: the reference
+//     material, the previous summary and the entire visible chat sit between a
+//     format rule written there and the point of generation. The placement is the
+//     feature, so it is pinned rather than left to a comment.
+const settingsSrc = fs.readFileSync(`${ROOT}/src/settings.js`, 'utf8');
+
+if (/TITLE_INSTRUCTION/.test(settingsSrc)) {
+    failures.push('settings.js references TITLE_INSTRUCTION — the title rule belongs in the buffer, not the system prompt');
+}
+if (!/\bTITLE_INSTRUCTION\b/.test(bufferFn)) {
+    failures.push('buildBufferFrom does not add TITLE_INSTRUCTION, so nothing asks the model for a title');
+}
+
+// And before the steering note, so the user's own guidance keeps the last word.
+const titleAt = bufferFn.indexOf('TITLE_INSTRUCTION');
+const steeringAt = bufferFn.indexOf('BEGIN GUIDANCE FOR THIS PASS');
+if (titleAt !== -1 && steeringAt !== -1 && titleAt > steeringAt) {
+    failures.push('the title instruction is placed after the steering note, displacing the user\'s guidance from last position');
+}
+
+// The marker the extractor looks for has to be the one the prompt asks for, or
+// every title is silently dropped.
+const promptSrc = fs.readFileSync(`${ROOT}/src/default-prompt.js`, 'utf8');
+const titleSrc = fs.readFileSync(`${ROOT}/src/title.js`, 'utf8');
+const instruction = promptSrc.match(/export const TITLE_INSTRUCTION = \[([\s\S]*?)\]\.join/)?.[1] ?? '';
+
+if (!instruction) {
+    failures.push('TITLE_INSTRUCTION not found in default-prompt.js');
+}
+if (!/TITLE/.test(instruction) || !/title/i.test(titleSrc)) {
+    failures.push('the prompt and the extractor disagree about the marker word');
+}
+// A brace macro here would be resolved by the host before the model sees it.
+if (/\{\{/.test(instruction)) {
+    failures.push('TITLE_INSTRUCTION contains a macro, which the host would expand before sending');
+}
+
 // 6. The clock must be cleared from the same place it is set. A run that ends by
 //    throwing would otherwise leave an interval repainting a button forever.
 if (!/clearInterval\(runTicker\)/.test(uiSrc)) {

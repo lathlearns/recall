@@ -4,6 +4,25 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.3.1
+
+**Titles actually get written now.** 1.3.0 asked for them at the end of the system prompt,
+which is the obvious place for an instruction and the wrong one: everything in the user message
+— the reference material, the previous summary, your entire visible chat — lands *after* the
+system prompt, so the request was thousands of tokens away from the point where the model
+starts writing. It was ignored outright.
+
+The request now sits at the end of the buffer, just before your steering note, which is where
+Recall already puts the one other instruction that has to survive a long chat.
+
+It also had to stop contradicting the summary prompt. That prompt's whole thesis is *revise the
+existing document in place, never overwrite it, keep the required structure* — and the summary
+being revised has no title line in it, because Recall takes the title off before saving. So the
+model was shown a document starting with its first heading, told firmly not to deviate from it,
+and asked to add a line above that heading. The request now says outright that the title is
+exempt from those rules, and that the block has no title in it precisely because the previous
+one was already removed.
+
 ## 1.3.0
 
 **The model names each summary.** The archive used to be a column of timestamps, which tells

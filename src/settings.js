@@ -13,7 +13,7 @@
 
 import { extension_settings, saveMetadataDebounced } from '../../../../extensions.js';
 import { characters, this_chid, saveSettingsDebounced } from '../../../../../script.js';
-import { DEFAULT_BLOCKS, DEFAULT_SET_NAME, TITLE_INSTRUCTION } from './default-prompt.js';
+import { DEFAULT_BLOCKS, DEFAULT_SET_NAME } from './default-prompt.js';
 import { uuid } from './util.js';
 
 export const MODULE = 'recall';
@@ -358,18 +358,10 @@ export function resolveBlocks() {
  * @returns {string}
  */
 export function assemblePrompt() {
-    const parts = resolveBlocks().blocks
+    return resolveBlocks().blocks
         .filter(block => block.enabled)
-        .map(block => block.content);
-
-    // Appended rather than shipped as a block — see TITLE_INSTRUCTION. Last, so
-    // it lands after the Quality Check has told the model to verify and submit
-    // rather than inside the instruction body.
-    if (getSettings().generateTitles) {
-        parts.push(TITLE_INSTRUCTION);
-    }
-
-    return parts.join('\n\n');
+        .map(block => block.content)
+        .join('\n\n');
 }
 
 /**

@@ -26,6 +26,7 @@ import { getStringHash } from '../../../../utils.js';
 import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
 import { getFallbackSummary } from './legacy.js';
+import { TITLE_INSTRUCTION } from './default-prompt.js';
 import { splitTitle, composeName } from './title.js';
 import { buildContextBlocks } from './context-blocks.js';
 import {
@@ -305,6 +306,15 @@ function buildBufferFrom(indices, previousSummary, steeringNote = '') {
         if (chat[index]) {
             parts.push(formatMessage(index));
         }
+    }
+
+    // After the chat for the same reason the steering note is, and before it so
+    // the user's own guidance keeps the last word. A format rule at the end of
+    // the system prompt is separated from generation by the entire buffer — the
+    // reference material, the previous summary and every visible message — and
+    // was ignored outright from there. See TITLE_INSTRUCTION.
+    if (getSettings().generateTitles) {
+        parts.push(TITLE_INSTRUCTION);
     }
 
     // Last, after the chat. Recency is the whole point — this is a correction to
