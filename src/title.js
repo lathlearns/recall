@@ -154,7 +154,7 @@ export function titleFromReasoning(reasoning) {
     for (const match of text.matchAll(TITLE_IN_TEXT)) {
         const candidate = cleanTitle(match[1]);
 
-        if (!candidate || candidate.toLowerCase() === TEMPLATE_TITLE) {
+        if (isPlaceholder(candidate)) {
             continue;
         }
 
@@ -165,10 +165,47 @@ export function titleFromReasoning(reasoning) {
 }
 
 /**
+ * Whether a recovered string is the model talking about titles rather than
+ * naming one.
+ *
+ * Reasoning is a workspace, and a model planning its output writes the *shape*
+ * of the line as often as the line itself: `TITLE: [at most 8 words]`,
+ * `TITLE: <name>`, or the instruction's own example quoted back. An early
+ * version of this recovered "[at most 8 words]" from a real run and would have
+ * named the summary that — worse than leaving it untitled, because a wrong name
+ * looks deliberate.
+ *
+ * @param {string} candidate
+ * @returns {boolean}
+ */
+function isPlaceholder(candidate) {
+    if (!candidate || candidate.toLowerCase() === TEMPLATE_TITLE) {
+        return true;
+    }
+
+    // Brackets of any kind are a slot, not a name.
+    if (/[[\]<>{}]/.test(candidate)) {
+        return true;
+    }
+
+    // Phrases from the instruction, restated as a reminder to itself.
+    if (/\bat most\b|\bwords?\b|\bshort name\b|\bplaceholder\b|\bstretch of the story\b/i.test(candidate)) {
+        return true;
+    }
+
+    // A name has letters in it.
+    return !/\p{L}/u.test(candidate);
+}
+
+/**
  * Strips the decoration a model adds around a title it was asked to leave bare.
  * @param {string} raw
  * @returns {string}
  */
+export function cleanTitleText(raw) {
+    return cleanTitle(raw);
+}
+
 function cleanTitle(raw) {
     let title = String(raw ?? '').trim();
 

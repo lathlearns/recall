@@ -346,12 +346,17 @@
                     <span>Have the model name each summary</span>
                 </label>
                 <p class="recall-help">
-                    Asks for a marked title on the first line, takes that line back off before the
-                    summary is stored, and puts the name in front of the timestamp --
-                    <em>The Long Road North &mdash; 2026-09-12 14:31</em>. A model that ignores the
-                    request simply gets the timestamp; nothing is ever cut from the summary on a
-                    guess. The title is a label and never reaches the model. Like everything else
+                    Asks for a marked title line, takes it back off before the summary is stored, and
+                    puts the name in front of the timestamp --
+                    <em>The Long Road North &mdash; 2026-09-12 14:31</em>. Nothing is ever cut from a
+                    summary on a guess, and the title never reaches the model. Like everything else
                     Recall sends, the instruction is visible in Preview request.
+                </p>
+                <p class="recall-help">
+                    If the model does not write the line, Recall uses the title it named while
+                    thinking; failing that, it asks for one in a separate short request -- the
+                    finished summary in, a few words back. That costs one small extra call, and only
+                    on summaries where the first two didn't work. Turn this off to stop all of it.
                 </p>
 
                 <label class="checkbox_label recall-row">

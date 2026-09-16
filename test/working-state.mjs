@@ -309,6 +309,64 @@ if (!/planning|reasoning/i.test(instruction)) {
     failures.push('TITLE_INSTRUCTION does not say that planning a title is not the same as writing one');
 }
 
+// 5j. The title has to survive the trip from the response to the record.
+//
+//     It did not, for four releases. runGeneration extracted a title and then
+//     returned `{ content, reasoning }` without it, so every caller destructured
+//     `title` and got undefined, and every summary was named after a timestamp
+//     however well the model had complied. Nothing failed, nothing logged, and
+//     the symptom was indistinguishable from a model ignoring the instruction —
+//     which is what it was mistaken for, three times.
+//
+//     Every hop is checked, because the break was at the one hop nobody looked
+//     at.
+const runGenerationFn = generateSrc.match(/async function runGeneration\([\s\S]*?\n\}/)?.[0] ?? '';
+if (!runGenerationFn) {
+    failures.push('runGeneration not found in generate.js — this check is not looking at anything');
+}
+
+const successfulReturn = runGenerationFn.match(/return \{[^}]*\};/g) ?? [];
+if (!successfulReturn.length) {
+    failures.push('runGeneration has no object return to check');
+}
+for (const ret of successfulReturn) {
+    if (!/\btitle\b/.test(ret)) {
+        failures.push(`runGeneration returns ${ret.trim()} without a title — every summary would be named after its timestamp`);
+    }
+}
+
+// Both callers must take it off the result and put it into the name.
+const callSites = (generateSrc.match(/const \{[^}]*\} = await runGeneration\(/g) ?? []);
+if (callSites.length < 2) {
+    failures.push(`expected both summarize and regenerate to call runGeneration, found ${callSites.length}`);
+}
+for (const call of callSites) {
+    if (!/\btitle\b/.test(call)) {
+        failures.push(`a runGeneration caller does not destructure title: ${call.trim()}`);
+    }
+}
+
+// And composeName must actually receive it, rather than being handed a stamp.
+const composeCalls = generateSrc.match(/composeName\([^)]*\)/g) ?? [];
+if (!composeCalls.length) {
+    failures.push('nothing calls composeName, so no title ever reaches a name');
+}
+for (const call of composeCalls) {
+    if (!/\btitle\b/.test(call)) {
+        failures.push(`composeName is called without a title: ${call}`);
+    }
+}
+
+// 5k. Diagnostics meant for a person must be visible without changing the
+//     console's log level. `console.debug` is Verbose in Chrome and hidden by
+//     default, so an earlier diagnostic reported nothing to the user it was
+//     written for.
+for (const line of generateSrc.split('\n')) {
+    if (/console\.debug\(/.test(line)) {
+        failures.push('generate.js logs a diagnostic with console.debug, which browsers hide by default');
+    }
+}
+
 // 6. The clock must be cleared from the same place it is set. A run that ends by
 //    throwing would otherwise leave an interval repainting a button forever.
 if (!/clearInterval\(runTicker\)/.test(uiSrc)) {

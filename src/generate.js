@@ -27,7 +27,7 @@ import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
 import { getFallbackSummary } from './legacy.js';
 import { TITLE_INSTRUCTION } from './default-prompt.js';
-import { splitTitle, composeName, titleFromReasoning } from './title.js';
+import { splitTitle, composeName, titleFromReasoning, cleanTitleText } from './title.js';
 import { buildContextBlocks } from './context-blocks.js';
 import {
     getActiveProfile,
@@ -500,35 +500,6 @@ async function runGeneration(buffer, systemPrompt) {
         ? splitTitle(raw)
         : { title: '', content: raw };
 
-    // Falls back to the title the model settled on while thinking.
-    //
-    // Not the first choice, and not a substitute for asking properly — but a
-    // reasoning model can decide on a title, verify it against every rule, and
-    // then write a response without it, which is a failure no wording has
-    // reliably fixed. The decision is sitting in the reasoning; throwing it away
-    // to honour a rule about where titles come from would leave the user with a
-    // timestamp for no benefit.
-    //
-    // Only ever reaches the archive's name. Reasoning still has no path to the
-    // summary text, the buffer or the prompt.
-    const title = written
-        || (settings.generateTitles ? titleFromReasoning(reasoning) : '');
-
-    // Says which of the two silent outcomes happened when a title was asked for
-    // and none arrived: the model never wrote the line, or it wrote one the
-    // matcher did not accept. From the outside both look identical — a summary
-    // named after a timestamp — and telling them apart otherwise means reading
-    // the chat file. The first line is enough to tell, and is logged rather than
-    // surfaced because a missing title is not a problem the user has to act on.
-    if (settings.generateTitles && !written) {
-        console.debug(
-            title
-                ? '[Recall] No title line in the response; recovered one from the reasoning:'
-                : '[Recall] No title line in the response, and none in the reasoning either. It ends:',
-            title || JSON.stringify(String(raw).slice(-120)),
-        );
-    }
-
     // Checked before the length rules below, because a cancelled run has usually
     // produced *something* — and reporting a deliberate stop as "too short to be a
     // summary" would read as a failure the user did not cause.
@@ -537,7 +508,10 @@ async function runGeneration(buffer, systemPrompt) {
     }
 
     if (content.length >= settings.minResponseChars) {
-        return { content, reasoning };
+        // Resolved only once the response is known to be a usable summary. The
+        // title costs a request in the worst case, and spending it on a response
+        // that is about to be rejected would be paying for a label on nothing.
+        return { content, reasoning, title: await resolveTitle(written, content, reasoning) };
     }
 
     if (reasoning.trim().length) {
@@ -668,6 +642,118 @@ async function runViaProfile(buffer, systemPrompt) {
         );
     }
 }
+
+/**
+ * Where a summary's name comes from, cheapest source first.
+ *
+ * Three sources, and the order is about cost rather than quality: the line the
+ * model wrote is free, the one it named while thinking is free, and asking again
+ * costs a request.
+ *
+ * Each step is logged at `info` rather than `debug`. A diagnostic written for
+ * someone to read has to appear at a browser console's default level; `debug`
+ * maps to Verbose, which is hidden unless you go looking, so an earlier version
+ * of this reported nothing no matter what happened.
+ *
+ * @param {string} written   The title taken out of the response, if any.
+ * @param {string} content   The finished summary, for the fallback request.
+ * @param {string} reasoning
+ * @returns {Promise<string>}
+ */
+async function resolveTitle(written, content, reasoning) {
+    if (!getSettings().generateTitles) {
+        return '';
+    }
+
+    if (written) {
+        return written;
+    }
+
+    // The title the model settled on while thinking but never wrote out. Free,
+    // and reaches the archive's name only — reasoning still has no path to the
+    // summary text, the buffer or the prompt.
+    const remembered = titleFromReasoning(reasoning);
+    if (remembered) {
+        console.info('[Recall] No title in the response; took the one from the reasoning:', remembered);
+        return remembered;
+    }
+
+    const asked = await requestTitle(content);
+    console.info(
+        asked
+            ? '[Recall] No title in the response or the reasoning; asked for one separately:'
+            : '[Recall] No title anywhere, and the separate request produced none. Using the timestamp.',
+        asked || '',
+    );
+    return asked;
+}
+
+/**
+ * Asks for a title in its own small request.
+ *
+ * **Why a second request, after saying one was not worth it.** Getting the title
+ * out of the summary response failed on every arrangement tried: leading line,
+ * trailing line, three wordings, and a fallback that reads the reasoning. The
+ * cause is the same each time and is not really about wording — the summary
+ * prompt is long, emphatic and entirely about producing one specific document,
+ * and a second deliverable sharing that response loses. In its own request there
+ * is nothing to lose to: the whole task is the title.
+ *
+ * It costs a request per summary, which is why it is the *last* resort rather
+ * than the first: a model that did write the line, or that named one in its
+ * reasoning, never reaches this.
+ *
+ * Cheap in the way that matters. The input is the finished summary rather than
+ * the whole chat — a thousand tokens or so, not tens of thousands — and the
+ * output is capped at a few dozen. A failure here is swallowed: the summary is
+ * already written and is not going to be lost over its label.
+ *
+ * @param {string} summary
+ * @returns {Promise<string>} '' if the request fails or returns nothing usable.
+ */
+async function requestTitle(summary) {
+    const system = 'You name chapters. You are given a summary of part of a story. '
+        + 'Reply with a title for it and nothing else.';
+
+    const user = [
+        summary,
+        '---',
+        'Give the above a title: at most 8 words, naming what this part of the story was '
+        + 'about, the way a chapter is named. Reply with the title alone — no quotation '
+        + 'marks, no markdown, no trailing full stop, no explanation.',
+    ].join('\n\n');
+
+    try {
+        const { content } = getActiveProfile()
+            ? await generateViaProfile(system, user, {
+                signal: activeRun?.controller?.signal ?? null,
+                maxTokens: TITLE_REQUEST_TOKENS,
+            })
+            : {
+                content: extractMessageFromData(
+                    await generateRawData({
+                        prompt: user,
+                        systemPrompt: system,
+                        responseLength: TITLE_REQUEST_TOKENS,
+                    }),
+                    main_api,
+                ),
+            };
+
+        // Run through the same cleaner as an in-band title, and through the same
+        // splitter first: asked for a bare title, a model may still answer
+        // "TITLE: The Ford" because that is the form it was shown earlier.
+        const raw = removeReasoningFromString(String(content ?? '')).trim();
+        const { title, content: rest } = splitTitle(raw);
+        return title || cleanTitleText(rest);
+    } catch (error) {
+        console.warn('[Recall] The title request failed; the summary keeps its timestamp.', error);
+        return '';
+    }
+}
+
+/** Enough for eight words and a stray token, and not enough for a paragraph. */
+const TITLE_REQUEST_TOKENS = 32;
 
 /** Whether the run in flight was stopped by the user rather than by the model. */
 function wasCancelled() {

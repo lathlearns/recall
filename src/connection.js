@@ -297,7 +297,7 @@ export function suppressStoppingStrings() {
  *        caller never has to check first.
  * @returns {Promise<{ content: string, reasoning: string, streamed: boolean }>}
  */
-export async function generateViaProfile(systemPrompt, buffer, { signal = null, onProgress = null } = {}) {
+export async function generateViaProfile(systemPrompt, buffer, { signal = null, onProgress = null, maxTokens = 0 } = {}) {
     const settings = getSettings();
     const profile = getActiveProfile();
 
@@ -410,7 +410,7 @@ export async function generateViaProfile(systemPrompt, buffer, { signal = null, 
         return ConnectionManagerRequestService.sendRequest(
             profile.id,
             messages,
-            Math.max(1, Number(settings.outputBudget) || 1024),
+            Math.max(1, Number(maxTokens) || Number(settings.outputBudget) || 1024),
             {
                 stream,
                 signal,

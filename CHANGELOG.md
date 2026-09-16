@@ -4,6 +4,31 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.4.0
+
+**Titles work. They never had.** Every release since they were added extracted the title
+correctly and then threw it away one line later — the function that produced it returned the
+summary and the reasoning and quietly dropped the title, so every caller read `undefined` and
+every summary was named after its timestamp no matter how well the model had complied. Nothing
+errored and nothing logged, and the symptom was identical to a model ignoring the instruction,
+which is what it was mistaken for three times running. Fixed, and now guarded at every hop
+between the response and the stored name.
+
+**A title is now asked for separately when it isn't in the summary.** Three sources, cheapest
+first: the line the model wrote, the title it named while thinking, and — only if neither
+worked — a short request of its own, with the finished summary in and a few words back. That
+last one costs one small extra call on affected summaries only. Turning the setting off stops
+all three.
+
+**The reasoning fallback no longer invents titles.** It could recover a model's *plan* rather
+than its decision — a real run would have been named "[at most 8 words]", which is worse than
+no title, because a wrong name looks deliberate. Placeholders, bracketed slots and phrases
+restated from the instruction are now refused.
+
+**Diagnostics are visible.** The "why is there no title" logging used `console.debug`, which
+browsers hide by default, so it reported nothing to the person it was written for. It now says
+which of the three sources produced the name, at a level you can actually see.
+
 ## 1.3.4
 
 **The reasoning fallback now actually finds the title.** 1.3.3 added it and it never fired
