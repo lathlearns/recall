@@ -7,6 +7,13 @@ Recall is a chat-summary system for a roleplay frontend. It keeps **one running 
 the whole chat** in permanent context, regenerates that summary on demand, and keeps every
 version it has ever produced in a per-chat archive.
 
+**One spec, two hosts.** Recall runs on SillyTavern and LumiRecall on Lumiverse, and they
+are meant to behave identically. This file is the specification for both, and it is kept
+byte-identical in both repositories: a change to either extension's behaviour updates it in
+both. Where a host forces a different answer, that is recorded in the host's own notes —
+`docs/implementation-notes.md` for SillyTavern, `docs/porting-notes.md` for Lumiverse — not
+here. "Recall" below means either. Field names follow section 22.
+
 ---
 
 ## 1. The three rules everything else follows
@@ -373,6 +380,7 @@ Each summary record carries:
 | Created / edited timestamps | Edited stays "never" until the user hand-edits it. |
 | Generated with | Which prompt set produced it, and whether that was a character override. |
 | Regenerated from | The id of the summary this is a sibling redo of, if any. |
+| Built on | The id of the summary this one revised — what was active when it was generated. A redo rebuilds on this, not on whatever is active now. |
 | Read set | The exact list of messages that were in the buffer. Not the same as the coverage range — see section 10. |
 | Hidden indices | Exactly the messages *this* summary flipped to hidden. |
 | Stale | Set when drift detection can no longer find its anchor. |
@@ -421,6 +429,17 @@ example is refused, since a model reasoning about the format often quotes it bac
 
 This reaches the archive's name only. Reasoning still has no path to the summary text, the
 buffer or the prompt — a name is metadata the user can edit, not content.
+
+**When neither has one, a title is asked for separately.** Three sources, cheapest first: the
+line the model wrote, the title it named while thinking, and only then a small request of its
+own — the finished summary in, a title of at most 8 words out, capped at a few dozen tokens.
+Getting the title out of the summary response fails on some models however it is worded: the
+summary prompt is long, emphatic and entirely about one document, and a second deliverable
+sharing that response loses. In its own request the whole task is the title. It costs one small
+call on the summaries that need it. It asks for no thinking where the host can say so per
+request, because a thinking model would spend a ceiling that small thinking and name nothing. A
+failure is swallowed: the summary is written and is not lost over its label. Stop reaches this
+request too, and a stop during naming saves nothing, as a stop does anywhere else.
 
 On a streaming connection the title arrives at the very end, so it becomes the live pane's
 heading only as the response finishes.
@@ -548,7 +567,8 @@ drop out"*. It applies to the **next action the user presses** and then clears i
 - It is **never replayed**. A note is a correction for one pass; silently repeating it would
   make later summaries drift for a reason invisible at the point of pressing the button.
 - A regeneration does not inherit the original's note — the whole point of a sibling is that
-  the user chose what changed between them.
+  the user chose what changed between them. A note typed before pressing Regenerate is that
+  choice: the redo uses it, consumes it, and records it on the sibling.
 
 The same thing is available from the chat bar: anything typed after the slash command is used
 as that pass's guidance.
@@ -1091,3 +1111,34 @@ For porting, the surface Recall depends on:
 - The preview, assembled through the same path as the real request.
 - Plain-sentence status lines that say what is actually in effect, rather than leaving the user
   to infer it from a checkbox plus a dropdown.
+
+---
+
+## 22. Field names
+
+The spec's names for stored fields, and what each host actually stores them as. The stored
+names were not unified: they live in every existing chat's archive and in saved settings, and
+renaming them would break existing chats for no gain but consistency. So the code keeps its
+names, and this table is how a change is carried from one extension to the other without
+guessing which field is which.
+
+**Per summary**
+
+| Spec | Recall (SillyTavern) | LumiRecall (Lumiverse) |
+| --- | --- | --- |
+| Read set | `sourceIndices` | `readSet` |
+| How the read set was obtained | `sourceIndicesInferred` (true = user-supplied) | `readSetSource` (`'recorded'` / `'user'`) |
+| Built on | derived by `previousSummaryOf()` from `createdAt` | `builtOn` |
+| Reasoning | `reasoning` | `reasoning` |
+
+**Settings**
+
+| Spec | Recall (SillyTavern) | LumiRecall (Lumiverse) |
+| --- | --- | --- |
+| Keep the newest N visible | `tailPin` | `keepVisibleTail` |
+| Minimum summary length | `minResponseChars` | `minSummaryLength` |
+| Have the model name each summary | `generateTitles` | `titleSummaries` |
+| Show and keep the model's reasoning | `showReasoning` | `keepThinking` |
+| Connection profile | `profileId` | `connectionId` |
+| Example dialogue (reference material) | `contextBlocks.examples` | `reference.exampleDialogue` |
+| Per-character overrides | `characters[avatar]` | `characterPrompts[characterId]` |
