@@ -4,6 +4,25 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.6.0
+
+**Regenerate rebuilds on the right summary.** Each summary now records what it was built on.
+Before, a redo guessed from creation times, which was wrong whenever the active summary was
+not the newest one — and a redo of a redo was built on top of its own sibling. Summaries
+written before this keep the guess, now walked back to the start of their redo chain. If the
+recorded summary has since been deleted, the redo that replaced it stands in.
+
+**The live pane stays after the run.** A fast summary used to vanish before it could be read.
+The pane now stays, headed "finished", "stopped" or "did not finish", until the next run, until
+you hide it, or until you change chat.
+
+**Sizes are counted with the model that writes the summary.** SillyTavern counts with the
+tokenizer of your main connection, so summarising through a profile on another model family
+got every size, the budget check and the preview 10–20% wrong. A chat completion profile
+running a different model now has its own model counted. Text completion profiles still count
+with the main connection's tokenizer, because theirs is only reachable while that backend is
+connected.
+
 ## 1.5.0
 
 **Branching picks up the summary that was right at the branch point.** Branching copies the

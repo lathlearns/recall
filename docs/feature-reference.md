@@ -586,7 +586,8 @@ active on its own, and the user reads both and picks. The rejected one is delete
   had already hidden something. The two coincide only for the first summary in a chat.
 - It rebuilds on **what the original was built on** — the previous summary in the chain, or the
   original's own seed — not on whatever is currently active. Otherwise the sibling is not
-  comparable.
+  comparable. That basis is recorded on each summary when it is written ("Built on"); if it
+  has since been deleted, the redo that replaced it stands in.
 - It touches no state at all: no hiding, no unhiding, no pointer move. The sibling starts with
   an empty hide record; hide ownership stays with the original.
 - Old summaries can be regenerated, but the manager quietly flags that every later summary was
@@ -972,10 +973,12 @@ Two tabs: **Archive** and **Settings**. Above them, always: the steering field, 
 request**, and **Summarize now** — joined by **Stop** while a cancellable summary is running.
 
 **While a summary is being written** (section 16), a live pane sits with the banners, so it
-follows the visible tab and disappears when the run ends: a heading with the running size, the
-model's reasoning folded above, and the summary text arriving in a fixed scrolling window. It
-is not editable and nothing in it is saved from here; the finished summary lands in the archive
-as it always did.
+follows the visible tab: a heading with the running size, the model's reasoning folded above,
+and the summary text arriving in a fixed scrolling window. It is not editable and nothing in it
+is saved from here; the finished summary lands in the archive as it always did. When the run
+ends the pane stays, its heading saying how it ended — finished, stopped, or did not finish —
+until the next run, until it is hidden, or until the chat changes. A fast run would otherwise
+be gone before it could be read.
 
 **Archive tab.**
 - Master list, newest first, with a count. Each row shows name, coverage, "new from N", the
@@ -1077,7 +1080,8 @@ For porting, the surface Recall depends on:
 - A way to send a two-message (system + user) completion request outside the normal chat flow,
   with a settable max-output limit, returning content and — ideally — reasoning as separate
   fields.
-- A token counter matching the active tokenizer.
+- A token counter for the model that will run the summary. Where the host has one tokenizer
+  for everything, that tokenizer, and the sizes are approximate when summaries run elsewhere.
 - The context limit, and the size of the last prompt actually sent.
 - Events for: chat changed, message received, message deleted, message edited.
 
@@ -1128,7 +1132,7 @@ guessing which field is which.
 | --- | --- | --- |
 | Read set | `sourceIndices` | `readSet` |
 | How the read set was obtained | `sourceIndicesInferred` (true = user-supplied) | `readSetSource` (`'recorded'` / `'user'`) |
-| Built on | derived by `previousSummaryOf()` from `createdAt` | `builtOn` |
+| Built on | `builtOn` (from 1.6.0; older records derive it from `createdAt`) | `builtOn` |
 | Reasoning | `reasoning` | `reasoning` |
 
 **Settings**
