@@ -23,13 +23,13 @@ import {
 } from '../../../../../script.js';
 import { is_group_generating, selected_group } from '../../../../group-chats.js';
 import { getStringHash } from '../../../../utils.js';
-import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { removeReasoningFromString, extractReasoningFromData } from '../../../../reasoning.js';
 import { getFallbackSummary } from './legacy.js';
 import { TITLE_INSTRUCTION } from './default-prompt.js';
 import { splitTitle, composeName, titleFromReasoning, cleanTitleText } from './title.js';
 import { buildContextBlocks } from './context-blocks.js';
 import { basisOf } from './lineage.js';
+import { countTokens } from './tokens.js';
 import {
     getActiveProfile,
     generateViaProfile,
@@ -418,10 +418,10 @@ async function enforceBudget(buffer, systemPrompt, indices) {
     // Sized against whichever connection will actually run the request — the main
     // API's context window is the wrong number when a profile is in use.
     const available = getPromptBudget()
-        - await getTokenCountAsync(systemPrompt)
+        - await countTokens(systemPrompt)
         - BUDGET_PADDING;
 
-    const used = await getTokenCountAsync(buffer);
+    const used = await countTokens(buffer);
 
     if (used <= available) {
         return { used, available };
@@ -434,7 +434,7 @@ async function enforceBudget(buffer, systemPrompt, indices) {
     let count = 0;
 
     for (const index of hideable) {
-        reclaimed += await getTokenCountAsync(formatMessage(index));
+        reclaimed += await countTokens(formatMessage(index));
         count++;
         if (used - reclaimed <= available) {
             break;
@@ -560,7 +560,7 @@ async function runGeneration(buffer, systemPrompt) {
         // In tokens, because that is the unit the budget it overran is set in —
         // a character count would have to be converted by the reader before it
         // could be compared against the number they are being told to raise.
-        const spent = await getTokenCountAsync(reasoning);
+        const spent = await countTokens(reasoning);
 
         throw new RecallError(
             'The model spent its entire output budget reasoning and never wrote a summary. '
@@ -841,8 +841,8 @@ export async function previewRequest(steeringNote = '') {
     const { buffer, indices, seededFromLegacy } = buildBuffer(steeringNote);
     const { included } = buildContextBlocks();
 
-    const system = await getTokenCountAsync(systemPrompt);
-    const body = await getTokenCountAsync(buffer);
+    const system = await countTokens(systemPrompt);
+    const body = await countTokens(buffer);
 
     return {
         systemPrompt,

@@ -16,6 +16,7 @@ import { extension_settings } from '../../../../extensions.js';
 import { getCustomStoppingStrings } from '../../../../power-user.js';
 import { secret_state } from '../../../../secrets.js';
 import { CONNECT_API_MAP } from '../../../../slash-commands.js';
+import { getChatCompletionModel } from '../../../../openai.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { getSettings } from './settings.js';
 import { consumeStream, shouldRetryWithoutStreaming } from './stream.js';
@@ -212,6 +213,35 @@ export function getEffectiveModel() {
         return override;
     }
     return getActiveProfile()?.model ?? '';
+}
+
+/**
+ * The model to count summary tokens with, or null to let ST count the way it
+ * does for the chat.
+ *
+ * ST has one tokenizer at a time, chosen from the main connection. Summarising
+ * through a profile that runs a different model family counts with the wrong
+ * one, and the budget check, the preview and every size in the manager are off
+ * by 10–20% — enough to refuse a buffer that fits, or pass one that does not.
+ * The server will count for any model name, so a chat completion profile gets
+ * its own model counted. A text completion profile cannot: its tokenizer is the
+ * backend's, reachable only while that backend is the main connection.
+ *
+ * Null when the profile runs what the chat runs, so that case counts exactly as
+ * it always did, including ST's finer choices for OpenRouter models.
+ *
+ * @returns {string|null}
+ */
+export function getCountingModel() {
+    const profile = getActiveProfile();
+    if (!profile || CONNECT_API_MAP[profile.api]?.selected !== 'openai') {
+        return null;
+    }
+    const model = getEffectiveModel();
+    if (!model || (main_api === 'openai' && model === getChatCompletionModel())) {
+        return null;
+    }
+    return model;
 }
 
 /**

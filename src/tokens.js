@@ -10,22 +10,64 @@
  * frame, and only a genuinely new string ever shows a placeholder.
  */
 
-import { main_api } from '../../../../../script.js';
+import { main_api, getRequestHeaders } from '../../../../../script.js';
 import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { power_user } from '../../../../power-user.js';
 import { getStringHash } from '../../../../utils.js';
 import { createLimiter } from './limit.js';
+import { getCountingModel } from './connection.js';
 
 /** @type {Map<string, number>} */
 const cache = new Map();
 
 /**
- * Counts are only comparable within one tokenizer. Switching API or tokenizer
- * makes every cached number wrong, so it is part of the key rather than something
- * to remember to invalidate.
+ * Counts are only comparable within one tokenizer. Switching API, tokenizer or
+ * summarising model makes every cached number wrong, so all three are part of
+ * the key rather than something to remember to invalidate.
  */
 function cacheKey(text) {
-    return `${main_api}:${power_user?.tokenizer ?? '?'}:${getStringHash(text)}`;
+    const model = getCountingModel();
+    const counter = model ? `model=${model}` : `${main_api}:${power_user?.tokenizer ?? '?'}`;
+    return `${counter}:${getStringHash(text)}`;
+}
+
+/**
+ * Counts with the summarising model when it differs from the chat's, else the
+ * way ST counts for the chat. See getCountingModel for why.
+ *
+ * The same endpoint and message shape ST's own counter uses for chat
+ * completion, so a figure here matches one ST would give with that model
+ * connected. If the server cannot count for it, ST's count stands in: a
+ * slightly wrong size beats a missing one.
+ *
+ * @param {string} text
+ * @returns {Promise<number>}
+ */
+async function countWithModel(text) {
+    const model = getCountingModel();
+    if (!model) {
+        return await getTokenCountAsync(text);
+    }
+
+    try {
+        const response = await fetch(`/api/tokenizers/openai/count?model=${encodeURIComponent(model)}`, {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify([{ role: 'system', content: text }]),
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const count = Number((await response.json())?.token_count);
+        if (!Number.isFinite(count)) {
+            throw new Error('No token_count in the response');
+        }
+        // ST's counter starts from -1 and does the same.
+        return Math.max(0, count - 1);
+    } catch (error) {
+        console.warn(`[Recall] Could not count with ${model}; using the chat's tokenizer instead.`, error);
+        return await getTokenCountAsync(text);
+    }
 }
 
 /**
@@ -81,7 +123,7 @@ export async function countTokens(text) {
             return cached;
         }
 
-        const count = await getTokenCountAsync(value);
+        const count = await countWithModel(value);
         cache.set(key, count);
         return count;
     });
