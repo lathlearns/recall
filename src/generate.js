@@ -549,7 +549,10 @@ async function runGeneration(buffer, systemPrompt) {
         throw new RecallError('Summary cancelled. Nothing was saved.', { kind: 'cancelled' });
     }
 
-    if (content.length >= settings.minResponseChars) {
+    // Counted with the summarising model, like every other size the user sets.
+    const length = content ? await countTokens(content) : 0;
+
+    if (length >= settings.minResponseTokens) {
         // Resolved only once the response is known to be a usable summary. The
         // title costs a request in the worst case, and spending it on a response
         // that is about to be rejected would be paying for a label on nothing.
@@ -577,8 +580,9 @@ async function runGeneration(buffer, systemPrompt) {
     }
 
     throw new RecallError(
-        `The model returned only ${content.length} characters, which is too short to be a summary. `
-        + 'Treating it as a generation failure rather than saving a stub.',
+        `The model returned only ${length.toLocaleString()} tokens, below the minimum summary length `
+        + `of ${Number(settings.minResponseTokens).toLocaleString()}. Treating it as a generation `
+        + 'failure rather than saving a stub.',
         { kind: 'short-response' },
     );
 }

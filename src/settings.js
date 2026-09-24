@@ -121,8 +121,11 @@ const DEFAULT_SETTINGS = {
     framingPrefix: '[Summary: ',
     framingSuffix: ']',
 
-    /** Responses shorter than this after reasoning is stripped are a failure, not a summary. */
-    minResponseChars: 200,
+    /**
+     * Responses shorter than this, in tokens, after reasoning is stripped are a
+     * failure, not a summary. Was `minResponseChars` before 1.7.0; see getSettings.
+     */
+    minResponseTokens: 50,
 
     // --- Where summarization runs ---
 
@@ -227,6 +230,14 @@ export function getSettings() {
     }
 
     const settings = extension_settings[MODULE];
+
+    // The minimum length moved from characters to tokens in 1.7.0, the unit every
+    // other number here is in. A value someone chose is carried over at about four
+    // characters a token rather than reset to the default.
+    if (settings.minResponseTokens === undefined && Number.isFinite(settings.minResponseChars)) {
+        settings.minResponseTokens = Math.round(settings.minResponseChars / 4);
+    }
+    delete settings.minResponseChars;
 
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
         if (settings[key] === undefined) {

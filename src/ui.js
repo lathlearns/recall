@@ -1519,7 +1519,7 @@ function wireSettings() {
     bindNumber('nudge-threshold', 'nudgeThreshold', 0, 10_000_000, renderNudgeHint);
     bindNumber('response-reserve', 'responseReserve', 0, 1_000_000, renderBudgets);
     bindNumber('output-budget', 'outputBudget', 0, 1_000_000, renderBudgets);
-    bindNumber('min-response', 'minResponseChars', 0, 100_000);
+    bindNumber('min-response', 'minResponseTokens', 0, 100_000);
 
     bindText('framing-prefix', 'framingPrefix');
     bindText('framing-suffix', 'framingSuffix');
@@ -1849,7 +1849,7 @@ function renderSettings() {
     setValue('nudge-threshold', settings.nudgeThreshold);
     setValue('response-reserve', settings.responseReserve);
     setValue('output-budget', settings.outputBudget);
-    setValue('min-response', settings.minResponseChars);
+    setValue('min-response', settings.minResponseTokens);
     setValue('framing-prefix', settings.framingPrefix);
     setValue('framing-suffix', settings.framingSuffix);
 

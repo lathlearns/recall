@@ -724,7 +724,7 @@ they would be lost silently.
   could be acted on. The reasoning itself is kept and offered for reading, since which of the
   two remedies applies is a judgement about what the model was actually doing.
 - Response is empty with no reasoning → plain generation failure.
-- Response is shorter than the minimum length (default 200 characters) → treated as a failure,
+- Response is shorter than the minimum length (default 50 tokens) → treated as a failure,
   *not* saved as a stub. A saved stub inside a long archive is easy to miss, and the next pass
   would revise the stub.
 
@@ -1017,19 +1017,19 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Keep the newest N messages visible | 5 | How many recent messages auto-hide skips. Message 0 is always skipped regardless. |
 | Block sending while a summary generates | on | Deactivate send controls during generation. |
 | Have the model name each summary | on | Ask for a marked title line, use it in the archive name, and remove it from the stored summary. Never sent to the model. |
-| Keep the model's reasoning | on | Show the model's reasoning while it writes, on a connection that streams, and store it with the finished summary. Never sent to the model at any size. |
+| Show and keep the model's reasoning | on | Show the model's reasoning while it writes, on a connection that streams, and store it with the finished summary. Never sent to the model at any size. |
 | Connection profile | none (main) | Summarise through a different connection. Its preset's samplers apply. |
 | Model | blank | Free-text override of the profile's model. |
 | Its context size | 0 | The profile's context window, in tokens. 0 means use the main connection's — wrong whenever they differ. |
 | Reference material toggles | all off | Which card/persona fields and which preset prompt blocks to send. |
 | Use the built-in's old summary | on | Stand in an existing external summary until Recall has one, and seed the first pass with it. |
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
-| Nudge enabled | on | Whether to notify at all. |
-| Nudge threshold | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 80% of the context limit. |
+| Warn me when context is filling up | on | Whether to notify at all. |
+| Threshold | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 80% of the context limit. |
 | Kept free for the reply (response reserve) | 2,000 | Context held back when sizing the buffer. |
 | Most the model may write (output budget) | 15,000 | The generation limit sent to the API — thinking included, on most providers. |
 | Framing prefix / suffix | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
-| Minimum summary length | 200 chars | Shorter responses are treated as failures rather than saved as stubs. |
+| Minimum summary length | 50 tokens | Shorter responses are treated as failures rather than saved as stubs. |
 | Deep integrity check | off | Also hash the covered range, catching edits below a summary's anchor. Noisy — flags on any edit anywhere. |
 
 Prompt blocks, block sets and per-character overrides are stored globally. Summaries, the
@@ -1139,7 +1139,7 @@ guessing which field is which.
 | Spec | Recall (SillyTavern) | LumiRecall (Lumiverse) |
 | --- | --- | --- |
 | Keep the newest N visible | `tailPin` | `keepVisibleTail` |
-| Minimum summary length | `minResponseChars` | `minSummaryLength` |
+| Minimum summary length | `minResponseTokens` | `minSummaryTokens` |
 | Have the model name each summary | `generateTitles` | `titleSummaries` |
 | Show and keep the model's reasoning | `showReasoning` | `keepThinking` |
 | Connection profile | `profileId` | `connectionId` |

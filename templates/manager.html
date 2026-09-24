@@ -367,7 +367,7 @@
 
                 <label class="checkbox_label recall-row">
                     <input type="checkbox" data-recall="show-reasoning">
-                    <span>Keep the model's reasoning</span>
+                    <span>Show and keep the model's reasoning</span>
                 </label>
                 <p class="recall-help">
                     Shows what the model is thinking while it writes, on a connection that streams,
@@ -597,8 +597,8 @@
                         <label for="recall-min-response">Minimum summary length</label>
                         <span class="recall-field-unit">
                             <input id="recall-min-response" class="text_pole recall-number" type="number" min="0"
-                                step="50" data-recall="min-response">
-                            <span class="recall-dim">characters</span>
+                                step="10" data-recall="min-response">
+                            <span class="recall-dim">tokens</span>
                         </span>
                     </div>
                     <p class="recall-help">

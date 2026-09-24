@@ -4,6 +4,17 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.7.0
+
+**Minimum summary length is in tokens,** like every other number you set. A value you had
+changed is carried over at about four characters a token; the default is 50.
+
+**Settings are named the same as in LumiRecall.** *Keep the model's reasoning* is now *Show and
+keep the model's reasoning*, which is what it does.
+
+**The docs are rewritten.** The README covers the archive and the summary prompt, and the
+design document and implementation notes are replaced by one `docs/host-notes.md`.
+
 ## 1.6.0
 
 **Regenerate rebuilds on the right summary.** Each summary now records what it was built on.

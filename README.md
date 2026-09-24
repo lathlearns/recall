@@ -168,7 +168,7 @@ prompt.
 | Keep the newest N messages visible | Auto-hide skips this many recent messages. Message 0 is always skipped. |
 | Block sending while a summary generates | Deactivate send buttons while a summary generates. |
 | Have the model name each summary | Ask for a title and use it in the archive name. Removed from the summary before it's stored; never sent to the model. |
-| Keep the model's reasoning | Show reasoning while it writes, on a connection that streams, and store it with the summary. Never sent to the model. |
+| Show and keep the model's reasoning | Show reasoning while it writes, on a connection that streams, and store it with the summary. Never sent to the model. |
 | Connection profile | Summarise through a different connection. Blank = your chat's. |
 | Model / Its context size | Override the profile's model; tell Recall that profile's context window. |
 | Reference material | What to send alongside the chat — see below. |
@@ -178,7 +178,7 @@ prompt.
 | **Kept free for the reply** | Context held back so the answer has room. Keep it at least as large as the next row. |
 | **Most the model may write** | The generation limit sent to the API — thinking included, on most sources. |
 | Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
-| Minimum summary length | In characters. Shorter responses are treated as failures, not saved as stubs. |
+| Minimum summary length | In tokens. Shorter responses are treated as failures, not saved as stubs. |
 | Deep integrity check | Also hash the covered range, catching edits below a summary's anchor. Off by default — it flags on any edit anywhere. |
 
 ### The two limits
