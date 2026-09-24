@@ -3,6 +3,11 @@
 A summary extension for **SillyTavern 1.18.0+**, replacing the built-in Summarize. Its twin,
 [LumiRecall](https://github.com/lathlearns/LumiRecall), does the same for Lumiverse.
 
+> **Before you install:** Recall was written almost entirely by Claude, Anthropic's AI model,
+> for one person's private use. It's shared as-is in case it's useful to someone else, but
+> it's built and tested around one setup, so your experience may vary, and support is
+> best-effort at most.
+
 Recall keeps one running summary of the whole chat in permanent context, resolved through a
 `{{recall}}` macro. The summary prompt is a set of toggleable blocks you can edit, every
 summary you generate is kept in a browsable archive, and nothing generates on a timer —
@@ -147,7 +152,7 @@ them away. Each block shows its size in tokens, and the total for the enabled on
 the system prompt actually costs.
 
 The prompt is **global** — the same one serves every character. A character can take its
-own copy with **Override**. If you edit the global prompt afterwards, the copy is marked out
+own copy with **Override for this character**. If you edit the global prompt afterwards, the copy is marked out
 of sync, with a button to take the global copy again. Group chats always use the global
 prompt.
 
