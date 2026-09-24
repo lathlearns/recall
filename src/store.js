@@ -33,6 +33,7 @@ export const STORE_KEY = 'recall';
  * @property {number|null} editedAt
  * @property {{setName: string, isOverride: boolean}} generatedWith
  * @property {string|null} regeneratedFrom  Id of the summary this is a sibling of.
+ * @property {string|null} [builtOn]    Id of the summary this one revised; null when it started from nothing or a seed. Absent before 1.6.0 — see lineage.js.
  * @property {number[]} sourceIndices   The messages actually in the buffer. Empty on records written before this was captured.
  * @property {boolean} sourceIndicesInferred  True when the read set was supplied by the user rather than recorded at generation.
  * @property {number[]} hiddenIndices   Indices this summary actually flipped to hidden.
@@ -148,6 +149,9 @@ export function createSummaryRecord(fields) {
         editedAt: null,
         generatedWith: { setName: '', isOverride: false },
         regeneratedFrom: null,
+        // What the active summary was when this one was generated, so a redo
+        // rebuilds on the same thing rather than on a guess from creation times.
+        builtOn: null,
         // What the buffer actually contained. Coverage is a *range*; the buffer was
         // "whatever was visible", which is a range minus arbitrary holes wherever an
         // earlier summary or the user had already hidden something. Those two are

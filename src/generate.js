@@ -29,6 +29,7 @@ import { getFallbackSummary } from './legacy.js';
 import { TITLE_INSTRUCTION } from './default-prompt.js';
 import { splitTitle, composeName, titleFromReasoning, cleanTitleText } from './title.js';
 import { buildContextBlocks } from './context-blocks.js';
+import { basisOf } from './lineage.js';
 import {
     getActiveProfile,
     generateViaProfile,
@@ -869,6 +870,7 @@ export async function summarizeNow(steeringNote = '') {
             anchorHash: getStringHash(chat[coversTo]?.mes ?? ''),
             rangeHash: settings.deepIntegrityCheck ? computeRangeHash(0, coversTo) : null,
             generatedWith: { setName, isOverride },
+            builtOn: previous?.id ?? null,
             seededFromLegacy: !!seededFromLegacy,
             // Recorded so a later regenerate replays this exact set rather than
             // re-deriving it from the coverage range, which would sweep in every
@@ -979,9 +981,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
 
     // Regeneration rebuilds on whatever the original built on, not on the
     // currently active summary — otherwise the sibling is not comparable.
-    const basis = original.regeneratedFrom
-        ? getSummaryById(original.regeneratedFrom)
-        : previousSummaryOf(original);
+    const basis = basisOf(original, getSummariesRaw());
 
     // A first summary that was itself seeded from the built-in must be redone
     // against the same seed, or the sibling is not comparable to the original.
@@ -1024,6 +1024,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
             rangeHash: original.rangeHash,
             generatedWith: { setName, isOverride },
             regeneratedFrom: original.id,
+            builtOn: basis?.id ?? null,
             seededFromLegacy: !!original.seededFromLegacy,
             sourceIndices: [...indices],
             sourceIndicesInferred: !!indicesOverride,
@@ -1043,19 +1044,6 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
             activateSendButtons();
         }
     }
-}
-
-/**
- * The summary a given summary was built on top of: the newest one created before
- * it that is not one of its own siblings.
- * @param {import('./store.js').RecallSummary} summary
- */
-function previousSummaryOf(summary) {
-    return getSummariesRaw()
-        .filter(s => s.id !== summary.id
-            && s.regeneratedFrom !== summary.id
-            && s.createdAt < summary.createdAt)
-        .reduce((newest, s) => (!newest || s.createdAt > newest.createdAt ? s : newest), null);
 }
 
 function timestampName() {
