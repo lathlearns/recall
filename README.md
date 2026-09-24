@@ -1,6 +1,7 @@
 # Recall
 
-A summary extension for **SillyTavern 1.18.0+**, replacing the built-in Summarize.
+A summary extension for **SillyTavern 1.18.0+**, replacing the built-in Summarize. Its twin,
+[LumiRecall](https://github.com/lathlearns/LumiRecall), does the same for Lumiverse.
 
 Recall keeps one running summary of the whole chat in permanent context, resolved through a
 `{{recall}}` macro. The summary prompt is a set of toggleable blocks you can edit, every
@@ -23,9 +24,9 @@ Extensions → Install extension → paste this repo's URL. Or clone into
 `data/<user>/extensions/third-party/recall`.
 
 **No dependencies.** Nothing bundled, nothing downloaded at runtime — it uses SillyTavern's
-own modules. The `devDependencies` in `package.json` are for running the tests and are not
-needed to use it. Connection Manager (an ST built-in) is only needed if you want to
-summarise through a different connection than your chat uses.
+own modules. The `devDependencies` in `package.json` are for running the tests. Connection
+Manager (an ST built-in) is only needed if you want to summarise through a different
+connection than your chat uses.
 
 **Chat Completion only.** Text completion backends are untested and unsupported. Two things
 are known not to work: the preset's context length can truncate the buffer behind your
@@ -41,7 +42,8 @@ tick its **Pause** box — Recall never writes to `extra.memory`, so a paused Su
 inert, but one running on its own interval will fill that field itself.
 
 **2. Point your preset at Recall.** Change `[Summary: {{summary}}]` to
-`[Summary: {{recall}}]`. The wrapper stays; only the macro changes.
+`[Summary: {{recall}}]`. The wrapper stays; only the macro changes. With no summary yet the
+block renders as `[Summary: ]`, which is deliberate.
 
 Recall can also answer to `{{summary}}` if you'd rather not edit anything — but only while
 the built-in is disabled, because whoever registers the name last wins and that's decided
@@ -60,25 +62,18 @@ messages as though it covered everything.
 
 **Summarize now** (drawer, manager, or `/recall`) summarises everything visible and revises
 the active summary in place. Covered messages are then hidden, except message 0 and the
-newest few.
+newest few. It won't start while the chat is still generating a reply.
 
 **The nudge** replaces automatic summarization. When the last prompt sent crosses your
 threshold, you get one toast — not one per message — and then silence until a summary
 brings usage back down. When to summarise is a narrative decision; the nudge only says it's
 time to start looking for a stopping point.
 
-**Regenerate** produces a *sibling*, never a replacement. Both are kept, neither becomes
-active on its own, so you can compare and pick. It re-reads the exact messages the original
-read, hidden or not.
-
-**Making a summary active** changes what `{{recall}}` resolves to and nothing else — it
-never moves a message. If chat visibility and the active summary disagree, the manager says
-so and offers a one-click sync. It won't do it on its own; a mismatch is usually deliberate.
-
 **The steering field** at the top of the manager is one-off guidance — *"track all four,
-don't let Maddie drop out"*. It applies to the next action you press and then clears itself.
-`/recall keep all four present` does the same from the chat bar. It's recorded on the
-summary it produced so you can see which note caused what, but it is never replayed.
+don't let Maddie drop out"*. It applies to the next Summarize or Regenerate you press and
+then clears itself. `/recall keep all four present` does the same from the chat bar. It's
+recorded on the summary it produced so you can see which note caused what, but it is never
+replayed.
 
 **Preview request** shows exactly what *Summarize now* would send — both messages, token
 counts, remaining room — without sending it. It's built through the same code as the real
@@ -86,8 +81,8 @@ request, so it can't drift from it.
 
 ### While it's running
 
-A summary can take a minute or more, so the button doesn't just sit there. It counts up,
-elapsed — never a progress bar, because nothing can know how long a pass will take.
+A summary can take a minute or more, so the button counts up — elapsed, never a progress
+bar, because nothing can know how long a pass will take.
 
 On a **Chat Completion connection profile**, you watch the summary being written, and the
 model's reasoning above it while it thinks. The reasoning folds itself away to one line
@@ -95,6 +90,9 @@ model's reasoning above it while it thinks. The reasoning folds itself away to o
 finished summary so you can read it later from the archive. It's never sent to the model —
 the macro resolves the summary text and nothing else — so it costs space in your chat file
 and nothing in context.
+
+When the run ends the pane stays, headed *finished*, *stopped* or *did not finish*, until
+the next run, until you hide it, or until you change chat.
 
 Live output needs Chat Completion specifically, and that's deliberate rather than a gap:
 SillyTavern strips instruct scaffolding from a text completion response *only* when it
@@ -108,13 +106,52 @@ half-written summary isn't a summary.
 
 **Titles.** Recall asks the model to name each summary and puts that name in front of the
 timestamp: *The Long Road North — 2026-09-12 14:31*. The title line is removed before the
-summary is stored, so it never reaches the model and never accumulates, and every name stays
-editable by hand.
+summary is stored, so it never reaches the model and never accumulates. If the model leaves
+it out, Recall takes the title it settled on while thinking, and failing that asks for one
+in a small request of its own. Every name stays editable by hand.
 
-A model that ignores the request just gets a timestamp — Recall only removes that line when it
-actually finds the marker, so a summary is never trimmed on a guess. And if a reasoning model
-decides on a title while thinking but leaves it out of its answer, Recall takes it from the
-reasoning rather than losing it.
+---
+
+## The archive
+
+Every summary is kept. One is **active** — the one `{{recall}}` resolves to. Making another
+active changes what the macro resolves to and nothing else; it never moves a message. If
+chat visibility and the active summary disagree, the manager says so and offers a one-click
+sync. It won't do it on its own; a mismatch is usually deliberate.
+
+**Regenerate** produces a *sibling*, never a replacement. Both are kept, neither becomes
+active on its own, so you can compare and pick. It re-reads the exact messages the original
+read, hidden or not, and rebuilds on the summary the original was built on.
+
+**Deleting** a summary offers to unhide the messages it hid. Recall only ever unhides what it
+hid itself.
+
+**Edits and deletions in the chat** are tracked. A summary whose last message moved is
+corrected silently; one whose last message was edited or deleted is marked **stale**, with
+the choice to re-anchor it to another message or delete it.
+
+**Branching** keeps the archive. If the active summary covers messages the branch doesn't
+have, Recall switches to the newest summary that fits and tells you which.
+
+---
+
+## The summary prompt
+
+The prompt is an ordered list of named blocks — *Summary Prompt* and *Quality Check* by
+default. Each can be switched off, edited, reordered or deleted, and you can add your own.
+New instructions belong above the quality check, so they land inside the instruction rather
+than after the model has been told to check its work and submit.
+
+Edits are a working copy: nothing is saved until you press **Save**, and **Discard** throws
+them away. Each block shows its size in tokens, and the total for the enabled ones is what
+the system prompt actually costs.
+
+The prompt is **global** — the same one serves every character. A character can take its
+own copy with **Override**. If you edit the global prompt afterwards, the copy is marked out
+of sync, with a button to take the global copy again. Group chats always use the global
+prompt.
+
+**Restore defaults** puts the shipped blocks back.
 
 ---
 
@@ -122,21 +159,21 @@ reasoning rather than losing it.
 
 | Setting | What it does |
 | --- | --- |
-| Hide covered messages | Hide the covered range after a successful summary. |
-| Keep newest N visible | Auto-hide skips this many recent messages. Message 0 is always skipped. |
-| Block sending | Deactivate send buttons while a summary generates. |
+| Hide covered messages after summarizing | Hide the covered range after a successful summary. |
+| Keep the newest N messages visible | Auto-hide skips this many recent messages. Message 0 is always skipped. |
+| Block sending while a summary generates | Deactivate send buttons while a summary generates. |
 | Have the model name each summary | Ask for a title and use it in the archive name. Removed from the summary before it's stored; never sent to the model. |
 | Keep the model's reasoning | Show reasoning while it writes, on a connection that streams, and store it with the summary. Never sent to the model. |
-| Nudge threshold | In tokens, against the last prompt sent. 0 tracks 80% of the context limit. |
-| **Kept free for the reply** | Context held back so the answer has room. Keep it at least as large as the next row. |
-| **Most the model may write** | The generation limit sent to the API — thinking included, on most sources. |
-| Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
-| Minimum summary length | Shorter responses are treated as failures, not saved as stubs. |
 | Connection profile | Summarise through a different connection. Blank = your chat's. |
 | Model / Its context size | Override the profile's model; tell Recall that profile's context window. |
 | Reference material | What to send alongside the chat — see below. |
-| Use the built-in's old summary | Stand in `extra.memory` until Recall has one of its own. |
+| Use its old summary until Recall has one | Stand in the built-in's `extra.memory` until Recall has a summary of its own. |
 | Also answer to `{{summary}}` | Only registers while the built-in Summarize is disabled. |
+| Warn me when context is filling up / Threshold | The nudge. In tokens, against the last prompt sent. 0 tracks 80% of the context limit. |
+| **Kept free for the reply** | Context held back so the answer has room. Keep it at least as large as the next row. |
+| **Most the model may write** | The generation limit sent to the API — thinking included, on most sources. |
+| Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
+| Minimum summary length | In characters. Shorter responses are treated as failures, not saved as stubs. |
 | Deep integrity check | Also hash the covered range, catching edits below a summary's anchor. Off by default — it flags on any edit anywhere. |
 
 ### The two limits
@@ -167,7 +204,10 @@ modes are opposites:
   `max`, a 15,000 budget leaves 750 tokens for the summary and everything truncates.
 - **Google**: `auto` thinking behaves like the OpenAI-compatible case.
 
-Recall doesn't touch Reasoning Effort. That's yours.
+Recall doesn't touch Reasoning Effort. That's yours, set on the connection.
+
+Over budget is a refusal, not a silent trim: Recall tells you how many of the oldest visible
+messages to hide to make it fit.
 
 ---
 
@@ -224,6 +264,11 @@ building a buffer the API rejects.
 models for the source you're currently connected to, so there's no dropdown to build. Blank
 uses the profile's own. A typo comes back as the provider's error.
 
+**Sizes are counted for the model that writes the summary.** On a Chat Completion profile
+running a different model from your chat, token counts use that model's tokenizer. A text
+completion profile counts with your chat's tokenizer, which can be off by 10–20% if the
+models differ.
+
 **Your custom stopping strings are stripped from Recall's requests, and only Recall's.**
 They're a global Advanced Formatting setting, so they'd otherwise apply to summaries too —
 and `###` and `---` are exactly what the summary structure is built from. The provider
@@ -244,11 +289,13 @@ stored summary once to carry an old chat over.
 
 `npm install`, then `npx playwright install chromium` once, then `npm test`. The tests cover
 what static checking can't see: CSS that defeats the `hidden` attribute, Handlebars
-templates that expand macros written as prose, and the assembled reference-material buffer.
+templates that expand macros written as prose, the assembled reference-material buffer, and
+the pure logic — title parsing, stream handling, branch realignment, redo lineage.
 
-[docs/recall-design.md](docs/recall-design.md) is the design document.
-[docs/implementation-notes.md](docs/implementation-notes.md) records where the code
-deliberately departs from it, and why. [CHANGELOG.md](CHANGELOG.md) tracks releases —
-semver, tagged `vX.Y.Z`.
+- [docs/feature-reference.md](docs/feature-reference.md) — what Recall does, in full. Shared
+  with LumiRecall and kept identical in both repos; a behaviour change updates both.
+- [docs/host-notes.md](docs/host-notes.md) — where Recall departs from the reference because
+  of SillyTavern, and the SillyTavern behaviour that has bitten it.
+- [CHANGELOG.md](CHANGELOG.md) — releases. Semver, tagged `vX.Y.Z`.
 
 MIT licensed. Use it, fork it, change it.

@@ -10,9 +10,8 @@ version it has ever produced in a per-chat archive.
 **One spec, two hosts.** Recall runs on SillyTavern and LumiRecall on Lumiverse, and they
 are meant to behave identically. This file is the specification for both, and it is kept
 byte-identical in both repositories: a change to either extension's behaviour updates it in
-both. Where a host forces a different answer, that is recorded in the host's own notes —
-`docs/implementation-notes.md` for SillyTavern, `docs/porting-notes.md` for Lumiverse — not
-here. "Recall" below means either. Field names follow section 22.
+both. Where a host forces a different answer, that is recorded in each repository's
+`docs/host-notes.md`, not here. "Recall" below means either. Field names follow section 22.
 
 ---
 
