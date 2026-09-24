@@ -161,6 +161,12 @@
     font-size: calc(var(--mainFontSize) * 0.92);
 }
 
+.recall-live-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+}
+
 .recall-live-title {
     display: flex;
     align-items: baseline;

@@ -387,7 +387,7 @@ if (begins < 2) {
 
 // 8. Every endRun must sit in a finally, so a refusal or a provider error still
 //    releases the button.
-const finallyEnds = (generateSrc.match(/finally \{\s*\n\s*endRun\(\);/g) ?? []).length;
+const finallyEnds = (generateSrc.match(/finally \{\s*\n\s*endRun\([^)]*\);/g) ?? []).length;
 if (finallyEnds !== begins) {
     failures.push(`${begins} runs start but only ${finallyEnds} release the button from a finally block`);
 }

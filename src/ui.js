@@ -38,7 +38,7 @@ import {
     persist,
 } from './store.js';
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
-import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, onRunChange, cancelRun, getLastReasoning } from './generate.js';
+import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, getFinishedRun, dismissFinishedRun, onRunChange, cancelRun, getLastReasoning } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
@@ -122,6 +122,18 @@ const RUN_LABEL = {
 const LIVE_LABEL = {
     summarize: 'Writing the summary…',
     regenerate: 'Writing the redo…',
+};
+
+/** The live pane's heading once a run has ended without saving anything. */
+const FINISHED_LABEL = {
+    stopped: 'Stopped · nothing was saved',
+    failed: 'Did not finish · nothing was saved',
+};
+
+const FINISHED_ICON = {
+    saved: 'fa-check',
+    stopped: 'fa-circle-stop',
+    failed: 'fa-triangle-exclamation',
 };
 
 /**
@@ -282,7 +294,7 @@ function renderRunState() {
     }
 
     renderStopButtons(run);
-    renderLivePane(run);
+    renderLivePane(run ?? getFinishedRun());
 }
 
 /**
@@ -314,7 +326,10 @@ function renderStopButtons(run) {
  * API both produce nothing until they produce everything, and an empty pane
  * labelled "writing" would be claiming to show progress that does not exist.
  *
- * @param {ReturnType<typeof getActiveRun>} run
+ * Also paints a run that has ended — see getFinishedRun — with its outcome in
+ * the heading and a control to hide it.
+ *
+ * @param {ReturnType<typeof getActiveRun>|ReturnType<typeof getFinishedRun>} run
  */
 function renderLivePane(run) {
     const pane = q('[data-recall="live"]');
@@ -332,6 +347,13 @@ function renderLivePane(run) {
     const label = q('[data-recall="live-label"]');
     const size = q('[data-recall="live-size"]');
     const body = q('[data-recall="live-body"]');
+    const icon = q('[data-recall="live-icon"]');
+    const finished = !!run.endedAt;
+
+    q('[data-recall="live-hide"]')?.toggleAttribute('hidden', !finished);
+    if (icon) {
+        icon.className = `fa-solid ${finished ? FINISHED_ICON[run.outcome] : 'fa-pen-nib'}`;
+    }
 
     // The title line comes off here too, so what is watched matches what gets
     // saved. It arrives first and would otherwise sit at the top of the pane for
@@ -341,7 +363,13 @@ function renderLivePane(run) {
         ? splitTitle(run.content)
         : { title: '', content: run.content };
 
-    if (label) {
+    if (label && finished) {
+        // Outcome first when it is not the ordinary one: a half-written summary
+        // under its own title would read as a summary that was saved.
+        label.textContent = run.outcome === 'saved'
+            ? `${title || (run.kind === 'regenerate' ? 'Redo' : 'Summary')} · finished`
+            : FINISHED_LABEL[run.outcome];
+    } else if (label) {
         // Once the model has named it, the name is the most useful thing the
         // heading can say — it is the first evidence of what the summary is
         // actually about, and it arrives long before the summary does.
@@ -411,8 +439,10 @@ function renderThinking(run) {
     if (summary) {
         // Measured to the first content chunk, not to now — otherwise "thought
         // for" would keep climbing through the minute spent writing the summary.
-        const thoughtFor = run.firstContentAt
-            ? formatElapsed(run.firstContentAt - run.startedAt)
+        // A run that ended while still thinking thought until it ended.
+        const thoughtUntil = run.firstContentAt || run.endedAt;
+        const thoughtFor = thoughtUntil
+            ? formatElapsed(thoughtUntil - run.startedAt)
             : null;
 
         thinkCount.refresh(reasoning);
@@ -670,12 +700,19 @@ function wireManager({ onSummarize }) {
     });
 
     on('[data-recall="stop"]', 'click', () => cancelRun());
+    on('[data-recall="live-hide"]', 'click', () => dismissFinishedRun());
+    on('[data-recall="live-hide"]', 'keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            dismissFinishedRun();
+        }
+    });
 
     // Keyboard-reachable: it is a div with role="button", so Enter and Space have
     // to be wired by hand — the browser only does that for real buttons.
     const thinkToggle = q('[data-recall="think-toggle"]');
     const toggleThinking = () => {
-        thinkOpen = !(thinkOpen ?? !getActiveRun()?.content);
+        thinkOpen = !(thinkOpen ?? !(getActiveRun() ?? getFinishedRun())?.content);
         renderRunState();
     };
     thinkToggle?.addEventListener('click', toggleThinking);

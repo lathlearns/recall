@@ -80,6 +80,7 @@ let inFlight = false;
  *   kind: 'summarize'|'regenerate', startedAt: number, streaming: boolean,
  *   cancellable: boolean, firstContentAt: number,
  *   content: string, reasoning: string, controller: AbortController,
+ *   chatId: string|undefined,
  * }|null}
  */
 let activeRun = null;
@@ -183,13 +184,53 @@ function beginRun(kind) {
         content: '',
         reasoning: '',
         controller: new AbortController(),
+        chatId: getCurrentChatId(),
     };
+    finishedRun = null;
     notifyRunChange();
 }
 
-function endRun() {
+/** @param {boolean} saved Whether the run got as far as storing its summary. */
+function endRun(saved) {
+    // Only a streamed run left anything on screen worth keeping. A run that
+    // never streamed showed a spinner, and its result is already in the list.
+    if (activeRun?.streaming && (activeRun.content || activeRun.reasoning)) {
+        finishedRun = {
+            ...activeRun,
+            endedAt: Date.now(),
+            outcome: saved ? 'saved' : activeRun.controller.signal.aborted ? 'stopped' : 'failed',
+        };
+    }
     inFlight = false;
     activeRun = null;
+    notifyRunChange();
+}
+
+/**
+ * The last streamed run, kept on screen after it ends.
+ *
+ * A fast run would otherwise flash past before anyone could read it, and the
+ * thinking in particular only becomes worth reading once the summary it led to
+ * has landed. Kept until the next run starts, until it is hidden, or until the
+ * chat changes — it describes one chat, so another chat does not show it.
+ *
+ * In memory only. The summary and its kept reasoning are already stored; this is
+ * just the view of how they were written.
+ *
+ * @type {(NonNullable<typeof activeRun> & { endedAt: number, outcome: 'saved'|'stopped'|'failed' })|null}
+ */
+let finishedRun = null;
+
+/** @returns {typeof finishedRun} The finished run, if it belongs to the chat now open. */
+export function getFinishedRun() {
+    if (finishedRun && finishedRun.chatId !== getCurrentChatId()) {
+        finishedRun = null;
+    }
+    return finishedRun;
+}
+
+export function dismissFinishedRun() {
+    finishedRun = null;
     notifyRunChange();
 }
 
@@ -854,6 +895,7 @@ export async function summarizeNow(steeringNote = '') {
         deactivateSendButtons();
     }
 
+    let saved = false;
     try {
         const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
 
@@ -881,6 +923,7 @@ export async function summarizeNow(steeringNote = '') {
         });
 
         addSummary(record);
+        saved = true;
 
         if (settings.autoHide) {
             record.hiddenIndices = await hideIndices(hideableIndices(indices));
@@ -889,7 +932,7 @@ export async function summarizeNow(steeringNote = '') {
 
         return record;
     } finally {
-        endRun();
+        endRun(saved);
         if (settings.blocking) {
             activateSendButtons();
         }
@@ -1001,6 +1044,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
         deactivateSendButtons();
     }
 
+    let saved = false;
     try {
         const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
 
@@ -1037,9 +1081,10 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
 
         // Neither the original nor the sibling becomes active automatically.
         addSummary(record, { makeActive: false });
+        saved = true;
         return record;
     } finally {
-        endRun();
+        endRun(saved);
         if (settings.blocking) {
             activateSendButtons();
         }

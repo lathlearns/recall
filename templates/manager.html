@@ -104,18 +104,24 @@
                 not part of the archive — and being in here means it follows the
                 visible tab with them instead of needing its own relocation.
 
-                Shown only while a streamed run is in flight, and never populated
-                from anything but the run in flight. Nothing here is editable and
-                nothing here is saved; the summary lands in the list when it is
-                finished, like it always did.
+                Shown while a streamed run is in flight, and kept afterwards,
+                marked finished, until the next run, a hide, or a chat change —
+                a fast run would otherwise be gone before it could be read.
+                Nothing here is editable and nothing here is saved; the summary
+                lands in the list when it is finished, like it always did.
             -->
             <div class="recall-live" data-recall="live" hidden>
                 <div class="recall-live-head">
                     <span class="recall-live-title">
-                        <i class="fa-solid fa-pen-nib"></i>
+                        <i class="fa-solid fa-pen-nib" data-recall="live-icon"></i>
                         <span data-recall="live-label">Writing the summary…</span>
                     </span>
-                    <span class="recall-dim" data-recall="live-size"></span>
+                    <span class="recall-live-meta">
+                        <span class="recall-dim" data-recall="live-size"></span>
+                        <span class="recall-banner-dismiss" data-recall="live-hide" title="Hide" role="button" tabindex="0" hidden>
+                            <i class="fa-solid fa-xmark"></i>
+                        </span>
+                    </span>
                 </div>
                 <!--
                     The model's reasoning, above the summary because that is the
