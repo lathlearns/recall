@@ -12,6 +12,11 @@ changed is carried over at about four characters a token; the default is 50.
 **Settings are named the same as in LumiRecall.** *Keep the model's reasoning* is now *Show and
 keep the model's reasoning*, which is what it does.
 
+**A message deleted mid-summary can no longer shift what gets hidden.** Hiding goes by
+position, so deleting a message above the last one read while a summary ran would hide messages
+it never saw. Recall now checks that message is still where it was before saving, and saves and
+hides nothing if not, as LumiRecall already did.
+
 **The docs are rewritten.** The README covers the archive and the summary prompt, and the
 design document and implementation notes are replaced by one `docs/host-notes.md`.
 

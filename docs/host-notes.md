@@ -55,12 +55,6 @@ the summary on its timestamp (§7).
 **Text completion profiles count with the chat's tokenizer.** Their tokenizer is the
 backend's own, reachable only while that backend is the main connection (§16).
 
-**No second read before hiding — a known gap.** LumiRecall checks, before hiding, that the
-last message the summary read is still where it was. Recall doesn't yet: a message deleted
-above it while the summary ran would shift what gets hidden, and drift detection can't catch
-it because the summary didn't exist when the delete happened (§11, §13). It is rare — it
-needs an edit or delete during the run — and worth porting.
-
 ---
 
 ## Things that bite

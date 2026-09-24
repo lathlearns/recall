@@ -892,6 +892,7 @@ export async function summarizeNow(steeringNote = '') {
     // recording those as covered would mark never-read messages as summarised —
     // which, once hidden, loses them silently.
     const coversTo = indices[indices.length - 1];
+    const anchorHash = getStringHash(chat[coversTo]?.mes ?? '');
     const snapshot = captureContext();
 
     beginRun('summarize');
@@ -907,13 +908,26 @@ export async function summarizeNow(steeringNote = '') {
             throw new RecallError('The chat changed while the summary was generating, so the result was discarded.', { kind: 'context-changed' });
         }
 
+        // Hiding goes by position, and a run takes a minute or more. A message
+        // deleted above the last one read shifts every position after it, so the
+        // hide would land on messages the summary never saw — and drift detection
+        // cannot catch it, because the summary did not exist when the delete
+        // happened. The last message read must still be where it was, unchanged.
+        if (!chat[coversTo] || getStringHash(chat[coversTo].mes ?? '') !== anchorHash) {
+            throw new RecallError(
+                `The chat changed while the summary was generating — message ${coversTo}, the last one it `
+                + 'read, was edited, deleted or moved. Nothing was saved or hidden; summarize again.',
+                { kind: 'context-changed' },
+            );
+        }
+
         const record = createSummaryRecord({
             name: composeName(title, timestampName()),
             content,
             coversFrom: 0,
             coversTo,
             newFrom: previous ? Math.min(previous.coversTo + 1, coversTo) : 0,
-            anchorHash: getStringHash(chat[coversTo]?.mes ?? ''),
+            anchorHash,
             rangeHash: settings.deepIntegrityCheck ? computeRangeHash(0, coversTo) : null,
             generatedWith: { setName, isOverride },
             builtOn: previous?.id ?? null,

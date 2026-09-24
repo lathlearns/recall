@@ -702,6 +702,13 @@ The refusal points at Regenerate.
 generation starts and compared when it returns. If the user navigated away, the result is
 discarded rather than written into the wrong chat.
 
+**The last message read must still be where it was.** Hiding goes by position, and a run takes a
+minute or more. A message deleted above the last one read in that time shifts every position
+after it, so the hide would land on messages the summary never saw — and drift detection
+(section 11) cannot catch it, because the summary did not exist when the delete happened. So
+before saving, the last message read is checked against the hash taken when the buffer was
+built; if it was edited, deleted or moved, nothing is saved or hidden.
+
 **Cancellation writes nothing.** A summary stopped by the user is reported as a cancellation —
 not as the too-short response it would otherwise be mistaken for — and nothing is saved. A
 half-written summary is not a summary, and one stored as though it were would sit in permanent
