@@ -4,6 +4,13 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## Unreleased
+
+**The default prompt is in UK English and properly structured.** The wording is unchanged, but
+headings are real Markdown headings in a clear hierarchy rather than bold text, and lists and
+wrapped lines are cleaned up. An installed prompt keeps its old copy; *Restore defaults* in the
+manager takes the new one, replacing any edits. `default-prompt.md` has the full text.
+
 ## 1.7.0
 
 **Minimum summary length is in tokens,** like every other number you set. A value you had
