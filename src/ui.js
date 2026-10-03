@@ -2256,12 +2256,11 @@ function renderContextBlocks() {
         return;
     }
 
-    const enabled = getSettings().contextBlocks ?? {};
     const preview = previewContextBlocks();
 
     container.innerHTML = preview.map(block => `
         <label class="checkbox_label recall-row recall-context-row">
-            <input type="checkbox" data-context-block="${escapeHtml(block.key)}" ${enabled[block.key] ? 'checked' : ''}>
+            <input type="checkbox" data-context-block="${escapeHtml(block.key)}" ${block.enabled ? 'checked' : ''}>
             <span class="recall-context-name">${escapeHtml(block.label)}</span>
             <span class="recall-dim recall-context-size" data-context-size="${escapeHtml(block.key)}"></span>
         </label>`).join('');

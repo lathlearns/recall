@@ -232,6 +232,13 @@ Three rules govern them:
   buffer alike. It fills in only for a block the user has never toggled; an explicit choice
   either way wins. Matched on the text, not on the block's identifier, because built-in
   blocks such as the main prompt share one identifier across every preset.
+- **A marked preset brings the people along.** While any block of the chat's preset carries
+  the marker, the character description, personality, scenario and persona default to on as
+  well; example dialogue does not. The same rule as the marker: it fills in only for a field
+  the user has never toggled, and it follows the preset live, so switching to an unmarked
+  preset turns untouched fields back off. Nothing is written when it applies. An install whose
+  settings predate this stored every field as off, which reads as chosen, so it applies there
+  only after a settings reset.
 - **They are quoted, not passed through.** See below.
 
 ### How it is assembled
@@ -1095,7 +1102,7 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Connection profile | none (main) | Summarise through a different connection. Its preset's samplers apply. |
 | Model | blank | Free-text override of the profile's model. |
 | Its context size | 0 | The profile's context window, in tokens. 0 means use the main connection's — wrong whenever they differ. |
-| Reference material toggles | all off, except preset blocks marked `{{// recall}}` | Which card/persona fields and which preset prompt blocks to send. |
+| Reference material toggles | all off, except preset blocks marked `{{// recall}}`, and card and persona fields while any block is marked | Which card/persona fields and which preset prompt blocks to send. |
 | Use the built-in's old summary | on | Stand in an existing external summary until Recall has one, and seed the first pass with it. |
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
 | Warn me when context is filling up | on | Whether to notify at all. |

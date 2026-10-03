@@ -154,15 +154,22 @@ const DEFAULT_SETTINGS = {
 
     /**
      * Which parts of the character card and persona to include in the buffer.
-     * All off by default: they cost tokens from the same budget the chat history
+     * Off by default: they cost tokens from the same budget the chat history
      * competes for.
+     *
+     * Stored as null until the user ticks or unticks one, because "never chosen"
+     * is not the same as off: while the chat's preset carries a `{{// recall}}`
+     * marker anywhere, the four that describe who is in the chat default to on
+     * (see isContextBlockEnabled). An install from before this has false stored
+     * for each, which reads as chosen, so the marker changes nothing there until
+     * the settings are reset.
      */
     contextBlocks: {
-        description: false,
-        personality: false,
-        scenario: false,
-        persona: false,
-        examples: false,
+        description: null,
+        personality: null,
+        scenario: null,
+        persona: null,
+        examples: null,
     },
 
     /**
@@ -279,8 +286,8 @@ export function getSettings() {
     if (!settings.contextBlocks || typeof settings.contextBlocks !== 'object') {
         settings.contextBlocks = structuredClone(DEFAULT_SETTINGS.contextBlocks);
     } else {
-        // A block added in a later version must default to off rather than
-        // undefined, or it reads as enabled nowhere and disabled nowhere.
+        // A block added in a later version, or a value that is neither a choice
+        // nor null, becomes "never chosen" rather than staying undefined.
         for (const [key, value] of Object.entries(DEFAULT_SETTINGS.contextBlocks)) {
             if (typeof settings.contextBlocks[key] !== 'boolean') {
                 settings.contextBlocks[key] = value;

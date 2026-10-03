@@ -249,7 +249,7 @@ messages to hide to make it fit.
 ## Reference material
 
 Optional context sent alongside the chat, so the summariser isn't guessing who these people
-are. Everything here is off by default (bar marked preset blocks, below) and competes for the same tokens as the chat history
+are. Everything here is off by default (bar what a marked preset turns on, below) and competes for the same tokens as the chat history
 — each one enabled means less history per pass. The panel shows what each costs.
 
 **From the character card:** description, personality, scenario, user persona, example
@@ -270,6 +270,13 @@ in the blocks you want your users' summariser to see. It's an ST comment, so it 
 either model. It only fills in for a block nobody has touched; once you tick or untick it,
 your choice is kept. Keep the slashes right after the braces (`{{//`, not `{{ //`), because
 ST's older macro engine only strips comments written that way.
+
+While the chat's preset has the marker on any block, the character description, personality,
+scenario and your persona start ticked too, since a preset written for Recall is meant to be
+summarised with the people it's about. Example dialogue stays off. The same rule applies:
+these follow the preset only until you tick or untick them, and switching to a preset without
+the marker turns the untouched ones back off. Settings from before this read as chosen, so
+use *Reset settings to defaults* to get this behaviour.
 
 These toggles are the only thing that decides what's sent. Whether a prompt is currently
 switched on in your prompt manager doesn't come into it: one you've switched off there still

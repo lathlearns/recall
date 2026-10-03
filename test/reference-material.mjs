@@ -71,7 +71,7 @@ const load = path => import(pathToFileURL(join(root, path)).href);
 const { oai_settings, promptManager } = await load('public/scripts/openai.js');
 const { setMainApi, SUMMARY_TEXT } = await load('public/script.js');
 const { getSettings } = await load('public/scripts/extensions/third-party/recall/src/settings.js');
-const { buildContextBlocks, previewPresetBlocks } =
+const { buildContextBlocks, previewContextBlocks, previewPresetBlocks } =
     await load('public/scripts/extensions/third-party/recall/src/context-blocks.js');
 
 const settings = getSettings();
@@ -243,8 +243,15 @@ const MARKED = [
     { identifier: 'mk3', name: 'Not Quite', content: 'Spacing matters. {{ // recall}}' },
 ];
 
+// The card and persona have their own marker default, tested below; pinned off
+// here so these checks are about preset blocks alone.
+const cardOff = () => Object.assign(settings.contextBlocks,
+    { description: false, personality: false, scenario: false, persona: false, examples: false });
+const cardUnchosen = () => Object.assign(settings.contextBlocks,
+    { description: null, personality: null, scenario: null, persona: null, examples: null });
+
 check('a block carrying the recall marker is sent until the user says otherwise', () => {
-    settings.contextBlocks.description = false;
+    cardOff();
     oai_settings.prompts.push(...MARKED);
     try {
         const preview = previewPresetBlocks().filter(block => block.key.startsWith('mk'));
@@ -258,7 +265,7 @@ check('a block carrying the recall marker is sent until the user says otherwise'
 });
 
 check('unticking a marked block sticks', () => {
-    settings.contextBlocks.description = false;
+    cardOff();
     oai_settings.prompts.push(...MARKED);
     settings.presetBlocks.mk1 = false;
     try {
@@ -266,6 +273,29 @@ check('unticking a marked block sticks', () => {
     } finally {
         oai_settings.prompts.splice(-MARKED.length);
         delete settings.presetBlocks.mk1;
+    }
+});
+
+// A preset marked anywhere was written for Recall, so who is in the chat comes
+// along by default — the card's people and the persona, not the example dialogue.
+// Only while unchosen, and only while the preset is marked.
+check('a marked preset turns the card and persona on until they are chosen', () => {
+    cardUnchosen();
+    try {
+        assert.ok(previewContextBlocks().every(block => !block.enabled), 'an unmarked preset turned card blocks on');
+
+        oai_settings.prompts.push(MARKED[0]);
+        const marked = previewContextBlocks().map(block => [block.key, block.enabled]);
+        assert.deepStrictEqual(marked, [['description', true], ['personality', true], ['scenario', true],
+            ['persona', true], ['examples', false]]);
+        const { included } = buildContextBlocks();
+        assert.ok(included.includes('Character personality') && included.includes('User persona'), included);
+
+        settings.contextBlocks.persona = false;
+        assert.ok(!buildContextBlocks().included.includes('User persona'), 'an untick did not stick');
+    } finally {
+        oai_settings.prompts.splice(-1);
+        cardOff();
     }
 });
 
@@ -282,4 +312,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log('All 16 reference-material assembly checks pass.');
+console.log('All 17 reference-material assembly checks pass.');

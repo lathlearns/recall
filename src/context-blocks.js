@@ -24,7 +24,7 @@ import { chat_metadata, characters, this_chid, substituteParams, name1 } from '.
 import { selected_group, getGroupCharacterCards, getGroupMembers } from '../../../../group-chats.js';
 import { power_user } from '../../../../power-user.js';
 import { getSettings } from './settings.js';
-import { buildPresetBlocks, isPresetBlockEnabled, listPresetBlocks, renderPresetBlock } from './preset-blocks.js';
+import { buildPresetBlocks, isPresetBlockEnabled, listPresetBlocks, presetHasMarker, renderPresetBlock } from './preset-blocks.js';
 
 /**
  * The header that separates reference material from the chat. Without it the
@@ -105,6 +105,30 @@ export const CONTEXT_BLOCKS = [
         read: () => readCard('mesExamples'),
     },
 ];
+
+/**
+ * The blocks a marked preset turns on by default: who is in the chat. Example
+ * dialogue is left out — it is long, and it is style rather than who anyone is,
+ * which the preset's own blocks already cover.
+ */
+const MARKER_DEFAULTS = new Set(['description', 'personality', 'scenario', 'persona']);
+
+/**
+ * Whether a card or persona block goes. A choice the user has made wins; until
+ * then it is off, unless the chat's preset carries the `{{// recall}}` marker
+ * somewhere and the block is one of MARKER_DEFAULTS. A preset written for Recall
+ * is written to be summarised with the people it is about.
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isContextBlockEnabled(key) {
+    const choice = (getSettings().contextBlocks ?? {})[key];
+    if (typeof choice === 'boolean') {
+        return choice;
+    }
+    return MARKER_DEFAULTS.has(key) && !!safely(presetHasMarker);
+}
 
 /**
  * Reads one card field, handling solo and group chats.
@@ -212,12 +236,11 @@ function safely(fn) {
  * @returns {{ text: string, included: string[] }}
  */
 export function buildContextBlocks() {
-    const enabled = getSettings().contextBlocks ?? {};
     const sections = [];
     const included = [];
 
     for (const block of CONTEXT_BLOCKS) {
-        if (!enabled[block.key]) {
+        if (!isContextBlockEnabled(block.key)) {
             continue;
         }
 
@@ -258,7 +281,7 @@ export function buildContextBlocks() {
  * rather than the length of the raw field. (The preamble and fences are shared
  * overhead paid once, whichever blocks are on.)
  *
- * @returns {{ key: string, label: string, text: string }[]}
+ * @returns {{ key: string, label: string, text: string, enabled: boolean }[]}
  */
 export function previewContextBlocks() {
     return CONTEXT_BLOCKS.map(block => {
@@ -267,6 +290,7 @@ export function previewContextBlocks() {
             key: block.key,
             label: block.label,
             text: value ? `### ${block.label}\n${value}` : '',
+            enabled: isContextBlockEnabled(block.key),
         };
     });
 }

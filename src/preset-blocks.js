@@ -145,6 +145,17 @@ export function isPresetBlockEnabled(block) {
 }
 
 /**
+ * Whether the chat's preset carries the marker on any block at all — the sign
+ * that its author set it up for Recall, which is what turns the card and persona
+ * on by default too (see isContextBlockEnabled).
+ *
+ * @returns {boolean}
+ */
+export function presetHasMarker() {
+    return listPresetBlocks().some(block => RECALL_MARKER.test(block.content));
+}
+
+/**
  * The heading a block appears under in the buffer.
  *
  * Named as an instruction *belonging to the chat* rather than by the preset's own
