@@ -9,7 +9,7 @@
  * All styling goes through ST's theme tokens. Nothing here hardcodes a colour.
  */
 
-import { chat, getMaxContextTokens } from '../../../../../script.js';
+import { chat, getMaxContextTokens, getMaxPromptTokens } from '../../../../../script.js';
 import { renderExtensionTemplateAsync, extension_settings } from '../../../../extensions.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../../popup.js';
 
@@ -976,8 +976,9 @@ function describeUsage() {
     if (!usage) {
         return '—';
     }
-    const percent = usage.limit > 0 ? Math.round((usage.usage / usage.limit) * 100) : 0;
-    return `${formatTokens(usage.usage)} / ${formatTokens(usage.limit)} (${percent}%)`;
+    // Against the room the prompt has, not the whole context: that is where ST
+    // starts leaving messages out, so it is the figure worth comparing to.
+    return `${formatTokens(usage.usage)} of ${formatTokens(usage.room)} room`;
 }
 
 // ---------------------------------------------------------------------------
@@ -2439,10 +2440,26 @@ function renderNudgeHint() {
 
     const threshold = getThresholdTokens();
     const limit = getMaxContextTokens();
-    const percent = limit > 0 ? Math.round((threshold / limit) * 100) : 0;
+    const room = getMaxPromptTokens();
+    const reply = limit - room;
     const auto = !(Number(getSettings().nudgeThreshold) > 0);
+    const n = value => value.toLocaleString();
 
-    hint.textContent = `tokens — ${auto ? 'auto: ' : ''}${threshold.toLocaleString()} of ${limit.toLocaleString()} (${percent}%)`;
+    hint.textContent = `tokens — ${auto ? `auto: half your ${n(limit)} context. ` : ''}`
+        + `ST starts leaving out old messages at ${n(room)} (${n(limit)} − your ${n(reply)} Max Response Length).`;
+
+    // The case that went unnoticed: a Max Response Length so large that the room
+    // left for the prompt is below the warning, so the prompt can never reach it.
+    const warning = q('[data-recall="nudge-warning"]');
+    if (warning) {
+        const unreachable = threshold >= room;
+        warning.textContent = unreachable
+            ? `This warning can never fire. ST stops the prompt at ${n(room)} (${n(limit)} context − ${n(reply)} `
+                + 'Max Response Length) and leaves out older messages instead. Set a lower number here, or lower '
+                + 'Max Response Length in your preset.'
+            : '';
+        warning.toggleAttribute('hidden', !unreachable);
+    }
 }
 
 function renderScope() {
@@ -2611,10 +2628,9 @@ function renderBlocksDirty() {
 // Toasts
 // ---------------------------------------------------------------------------
 
-export function toastNudge({ usage, limit, threshold }) {
-    const percent = limit > 0 ? Math.round((usage / limit) * 100) : 0;
+export function toastNudge({ usage, room, threshold }) {
     toastr.info(
-        `Context is at ${formatTokens(usage)} of ${formatTokens(limit)} (${percent}%), past your ${formatTokens(threshold)} mark. A good moment to start looking for a stopping point.`,
+        `Your prompt is at ${formatTokens(usage)} tokens, past your ${formatTokens(threshold)} warning. ST starts leaving out old messages at ${formatTokens(room)}. A good time to find a stopping point and summarise.`,
         'Recall',
         { timeOut: 10000, extendedTimeOut: 5000 },
     );

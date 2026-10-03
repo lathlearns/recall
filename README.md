@@ -203,7 +203,7 @@ the settings, see the last row below.
 | Reference material | What to send alongside the chat — see below. |
 | Use its old summary until Recall has one | Stand in the built-in's `extra.memory` until Recall has a summary of its own. |
 | Also answer to `{{summary}}` | Only registers while the built-in Summarize is disabled. |
-| Warn me when context is filling up / Threshold | The nudge. In tokens, against the last prompt sent. 0 tracks 50% of the context limit. |
+| Warn me when context is filling up / Warn at | The nudge. In tokens, against the same number as **Total Tokens** in the Prompt Manager. 0 is half your context size. ST stops the prompt at your context minus Max Response Length and leaves out old messages past that, so the panel warns if this number can never be reached. |
 | **Kept free for the reply** | Context held back so the answer has room. Keep it at least as large as the next row. |
 | **Most the model may write** | The generation limit sent to the API — thinking included, on most sources. |
 | Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |

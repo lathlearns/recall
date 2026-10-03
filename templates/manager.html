@@ -529,17 +529,23 @@
                 </label>
 
                 <div class="recall-row recall-row-field">
-                    <label for="recall-nudge-threshold">Threshold</label>
+                    <label for="recall-nudge-threshold">Warn at</label>
                     <span class="recall-field-unit">
                         <input id="recall-nudge-threshold" class="text_pole recall-number" type="number" min="0"
                             step="500" data-recall="nudge-threshold">
                         <span class="recall-dim" data-recall="nudge-threshold-hint"></span>
                     </span>
                 </div>
+                <p class="recall-help recall-budget-warning" data-recall="nudge-warning" hidden></p>
                 <p class="recall-help">
-                    In tokens, measured against the last prompt actually sent. Leave at 0 to track 50% of
-                    the current context limit. Fires once per crossing, then stays quiet until a summary
-                    brings usage back down.
+                    Recall checks each prompt ST sends — the same number as <b>Total Tokens</b> at the top
+                    of the Prompt Manager. When it passes this number, you get one warning. 0 sets it to
+                    half your context size.
+                </p>
+                <p class="recall-help">
+                    ST never fills the whole context. It keeps your Max Response Length free for the answer,
+                    and once the prompt reaches what's left, it leaves out your oldest messages without
+                    telling you. Summarise before then.
                 </p>
             </section>
 

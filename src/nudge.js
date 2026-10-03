@@ -10,7 +10,7 @@
  * estimating what the next one might be.
  */
 
-import { getMaxContextTokens } from '../../../../../script.js';
+import { getMaxContextTokens, getMaxPromptTokens } from '../../../../../script.js';
 import { itemizedPrompts } from '../../../../itemized-prompts.js';
 import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { getSettings, AUTO_NUDGE_FRACTION } from './settings.js';
@@ -111,7 +111,13 @@ export async function readPromptUsage(mesId) {
  * generation — the check is skipped rather than falling back to an estimate.
  *
  * @param {number} mesId
- * @returns {Promise<{ usage: number, limit: number, threshold: number, crossed: boolean, fired: boolean }|null>}
+ * `room` is what the prompt may actually grow to: the context limit less the
+ * chat's Max Response Length, which ST holds back for the reply. Past it ST
+ * leaves the oldest messages out rather than overflowing, so it is the number
+ * the user is racing — and with a large enough response length it sits below a
+ * threshold derived from the whole context, which then never fires.
+ *
+ * @returns {Promise<{ usage: number, limit: number, room: number, threshold: number, crossed: boolean, fired: boolean }|null>}
  */
 export async function evaluateNudge(mesId) {
     const settings = getSettings();
@@ -122,22 +128,23 @@ export async function evaluateNudge(mesId) {
     }
 
     const limit = getMaxContextTokens();
+    const room = getMaxPromptTokens();
     const threshold = getThresholdTokens();
     const crossed = usage >= threshold;
 
-    lastUsage = { usage, limit, threshold, crossed, at: Date.now() };
+    lastUsage = { usage, limit, room, threshold, crossed, at: Date.now() };
 
     if (!crossed) {
         armed = true;
-        return { usage, limit, threshold, crossed, fired: false };
+        return { usage, limit, room, threshold, crossed, fired: false };
     }
 
     if (!settings.nudgeEnabled || !armed) {
-        return { usage, limit, threshold, crossed, fired: false };
+        return { usage, limit, room, threshold, crossed, fired: false };
     }
 
     // One toast per crossing, not one per message — otherwise the user gets a
     // toast every turn for the twenty messages spent hunting for a scene break.
     armed = false;
-    return { usage, limit, threshold, crossed, fired: true };
+    return { usage, limit, room, threshold, crossed, fired: true };
 }
