@@ -22,7 +22,7 @@ export const MODULE = 'recall';
  * The fraction of the context limit used as the nudge threshold when the user
  * has not set one explicitly. Stored thresholds of 0 mean "derive it".
  */
-export const AUTO_NUDGE_FRACTION = 0.8;
+export const AUTO_NUDGE_FRACTION = 0.5;
 
 /**
  * @typedef {object} RecallBlock

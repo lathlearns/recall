@@ -429,18 +429,31 @@
             <section class="recall-section">
                 <h4 class="recall-section-title">Reference material</h4>
 
-                <div class="recall-context-blocks" data-recall="context-blocks"></div>
+                <div class="recall-tabs recall-subtabs" role="tablist">
+                    <div class="recall-tab recall-tab-active" data-recall-ref-tab="card" role="tab" tabindex="0"
+                        aria-selected="true">
+                        <span>Character card</span>
+                        <span class="recall-dim recall-subtab-count" data-recall="ref-count-card"></span>
+                    </div>
+                    <div class="recall-tab" data-recall-ref-tab="preset" role="tab" tabindex="0"
+                        aria-selected="false">
+                        <span>Chat preset</span>
+                        <span class="recall-dim recall-subtab-count" data-recall="ref-count-preset"></span>
+                    </div>
+                </div>
 
-                <p class="recall-help">
-                    Sent alongside the chat so the summariser knows who the participants are rather
-                    than inferring it. Marked as background, not as events to summarise. These come out
-                    of the same token budget as the chat history, so each one enabled means less
-                    history fits in a single pass.
-                </p>
+                <div class="recall-ref-pane" data-recall-ref-pane="card" role="tabpanel">
+                    <div class="recall-context-blocks" data-recall="context-blocks"></div>
 
-                <div class="recall-preset-blocks">
-                    <h5 class="recall-subsection-title">From your chat's preset</h5>
+                    <p class="recall-help">
+                        Sent alongside the chat so the summariser knows who the participants are rather
+                        than inferring it. Marked as background, not as events to summarise. These come out
+                        of the same token budget as the chat history, so each one enabled means less
+                        history fits in a single pass.
+                    </p>
+                </div>
 
+                <div class="recall-ref-pane" data-recall-ref-pane="preset" role="tabpanel" hidden>
                     <div class="recall-context-blocks" data-recall="preset-blocks"></div>
 
                     <p class="recall-help" data-recall="preset-blocks-status" hidden></p>
@@ -498,7 +511,7 @@
                     </span>
                 </div>
                 <p class="recall-help">
-                    In tokens, measured against the last prompt actually sent. Leave at 0 to track 80% of
+                    In tokens, measured against the last prompt actually sent. Leave at 0 to track 50% of
                     the current context limit. Fires once per crossing, then stays quiet until a summary
                     brings usage back down.
                 </p>

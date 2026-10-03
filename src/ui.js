@@ -691,6 +691,28 @@ function wireManager({ onSummarize }) {
         });
     }
 
+    // Reference material's own two tabs. A separate attribute from the panel's
+    // tabs, so neither loop above or below ever touches the other's panes.
+    for (const tab of qa('[data-recall-ref-tab]')) {
+        const select = () => {
+            const name = tab.dataset.recallRefTab;
+            for (const other of qa('[data-recall-ref-tab]')) {
+                other.classList.toggle('recall-tab-active', other === tab);
+                other.setAttribute('aria-selected', String(other === tab));
+            }
+            for (const pane of qa('[data-recall-ref-pane]')) {
+                pane.toggleAttribute('hidden', pane.dataset.recallRefPane !== name);
+            }
+        };
+        tab.addEventListener('click', select);
+        tab.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                select();
+            }
+        });
+    }
+
     on('[data-recall="summarize-now"]', 'click', async () => {
         if (onSummarize) {
             const note = takeSteeringNote();
@@ -1707,6 +1729,25 @@ function renderProfile() {
 }
 
 /**
+ * "3 of 5" beside each reference-material tab, so what is ticked on the tab not
+ * showing is still visible. Counted from the rendered checkboxes, so a saved
+ * toggle for a prompt the current preset does not have is not counted.
+ */
+function renderRefCounts() {
+    for (const [key, list] of [['card', 'context-blocks'], ['preset', 'preset-blocks']]) {
+        const count = q(`[data-recall="ref-count-${key}"]`);
+        const container = q(`[data-recall="${list}"]`);
+        if (!count || !container) {
+            continue;
+        }
+
+        const boxes = container.querySelectorAll('input[type="checkbox"]');
+        const ticked = Array.from(boxes).filter(box => box.checked).length;
+        count.textContent = boxes.length ? `${ticked} of ${boxes.length}` : '';
+    }
+}
+
+/**
  * The reference-material toggles, each showing how much it would actually
  * contribute — an enabled block that is empty for this character otherwise looks
  * identical to one that is working.
@@ -1739,8 +1780,11 @@ function renderContextBlocks() {
         input.addEventListener('change', event => {
             getSettings().contextBlocks[input.dataset.contextBlock] = !!event.target.checked;
             saveSettings();
+            renderRefCounts();
         });
     }
+
+    renderRefCounts();
 }
 
 /**
@@ -1792,8 +1836,11 @@ function renderPresetBlocks() {
         input.addEventListener('change', event => {
             getSettings().presetBlocks[input.dataset.presetBlock] = !!event.target.checked;
             saveSettings();
+            renderRefCounts();
         });
     }
+
+    renderRefCounts();
 }
 
 /**

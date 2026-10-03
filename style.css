@@ -927,30 +927,30 @@
     font-size: calc(var(--mainFontSize) * 0.85);
 }
 
-/* The preset's own prompt blocks. Set apart from the card blocks above rather
-   than continuing the same list: they come from a different place, they are
+/* Card blocks and the preset's own prompt blocks, as two tabs. They stay apart
+   rather than continuing one list: they come from a different place, they are
    instruction rather than description, and a jailbreak sitting flush under
-   "User persona" reads as one more field of the character card.
+   "User persona" reads as one more field of the character card. Tabs rather than
+   two stacked lists because a real preset runs to a dozen rows or more, which
+   pushed everything below this section a full screen down.
 
-   Separated by the rule and the heading only — the same way sections divide
-   everywhere else in this panel. An indent was tried and reverted: it buys
-   nothing the heading does not already say, and it costs the alignment of the
-   checkbox column with the list directly above, which reads as a layout bug
-   before it reads as grouping. */
+   The tabs reuse .recall-tab, so they look and size like the panel's own tabs on
+   every width — including the phone minimum height. The count beside each says
+   how many are ticked, so the hidden tab is never a silent one. */
 
-.recall-preset-blocks {
+.recall-subtabs {
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.recall-subtab-count {
+    font-size: calc(var(--mainFontSize) * 0.85);
+    font-variant-numeric: tabular-nums;
+}
+
+.recall-ref-pane {
     display: flex;
     flex-direction: column;
     gap: 0.5em;
-    margin-top: 0.35em;
-    padding-top: 0.6em;
-    border-top: 1px solid var(--SmartThemeBorderColor);
-}
-
-.recall-subsection-title {
-    margin: 0;
-    font-size: var(--mainFontSize);
-    opacity: 0.85;
 }
 
 /* The overcommitted-budget warning. Accented rather than coloured text: it is a

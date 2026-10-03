@@ -179,6 +179,11 @@ Everything here is **off by default** and each item competes for the same token 
 chat history — so the panel shows what each one currently costs in tokens, for this chat, and
 says "empty here" when a field the user enabled has no content for the current character.
 
+The two sources below sit on two tabs, **Character card** and **Chat preset**, so a preset with
+a dozen prompts doesn't push the rest of the panel a screen down. Each tab shows how many of
+its rows are ticked ("3 of 5"), so what's enabled on the tab that isn't showing is never
+hidden from view.
+
 ### What can be included
 
 **From the character card and persona:**
@@ -750,16 +755,16 @@ estimate of what the next one might be. When usage crosses the threshold:
 
 1. **One notification, once per crossing.** Not one per message — otherwise the user gets a
    notification every turn for the twenty messages they spend hunting for a scene break. It
-   reads: *"Context is at 24.1k of 32k (75%), past your 24k mark. A good moment to start
+   reads: *"Context is at 16.4k of 32k (51%), past your 16k mark. A good moment to start
    looking for a stopping point."*
 2. The drawer shows a persistent line saying context is filling up, until it isn't.
 3. On a successful summary, the nudge disarms. It re-arms only after a reading *below* the
    threshold — a dead zone, so it cannot fire again immediately if usage is somehow still high
    right after summarizing.
 
-The threshold is set in tokens. **0 means "derive it"**, at 80% of the context limit, which
+The threshold is set in tokens. **0 means "derive it"**, at 50% of the context limit, which
 keeps the default meaningful across wildly different context sizes. The panel shows the
-resolved number and its percentage live: "tokens — auto: 25,600 of 32,000 (80%)".
+resolved number and its percentage live: "tokens — auto: 16,000 of 32,000 (50%)".
 
 If there is no record of a prompt yet — a fresh chat, or a swipe before any generation — the
 check is skipped rather than falling back to an estimate.
@@ -1032,7 +1037,7 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Use the built-in's old summary | on | Stand in an existing external summary until Recall has one, and seed the first pass with it. |
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
 | Warn me when context is filling up | on | Whether to notify at all. |
-| Threshold | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 80% of the context limit. |
+| Threshold | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 50% of the context limit. |
 | Kept free for the reply (response reserve) | 2,000 | Context held back when sizing the buffer. |
 | Most the model may write (output budget) | 15,000 | The generation limit sent to the API — thinking included, on most providers. |
 | Framing prefix / suffix | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
