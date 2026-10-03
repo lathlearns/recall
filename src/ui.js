@@ -754,7 +754,11 @@ function wireManager({ onSummarize }) {
         draftName = event.target.value;
         renderDirty();
     });
-    on('[data-recall="detail-content"]', 'input', event => {
+    // Bound through jQuery, not addEventListener: ST's expanded editor writes back
+    // with `.trigger('input')`, which runs jQuery handlers only. A native listener
+    // never hears those edits, so the Save bar never appeared for anyone using the
+    // expanded editor — which on a phone is most people.
+    $(q('[data-recall="detail-content"]')).on('input', event => {
         draftContent = event.target.value;
         renderDirty();
     });
@@ -1998,7 +2002,9 @@ function renderBlocks() {
             renderBlocksDirty();
         });
 
-        element.querySelector('[data-block-content]').addEventListener('input', event => {
+        // jQuery for the same reason as the summary editor: the expanded editor's
+        // `.trigger('input')` never reaches a native listener.
+        $(element.querySelector('[data-block-content]')).on('input', event => {
             blocks[index].content = event.target.value;
             renderBlocksDirty();
         });
