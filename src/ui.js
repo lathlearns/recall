@@ -2286,12 +2286,11 @@ function renderPresetBlocks() {
         return;
     }
 
-    const enabled = getSettings().presetBlocks ?? {};
     const preview = previewPresetBlocks();
 
     container.innerHTML = preview.map(block => `
         <label class="checkbox_label recall-row recall-context-row">
-            <input type="checkbox" data-preset-block="${escapeHtml(block.key)}" ${enabled[block.key] ? 'checked' : ''}>
+            <input type="checkbox" data-preset-block="${escapeHtml(block.key)}" ${block.enabled ? 'checked' : ''}>
             <span class="recall-context-name">${escapeHtml(block.label)}</span>
             <span class="recall-dim recall-context-size" data-preset-size="${escapeHtml(block.key)}"></span>
         </label>`).join('');

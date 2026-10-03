@@ -40,7 +40,8 @@ export function substituteParams(text) {
     return String(text)
         .replaceAll('{{char}}', 'Ada')
         .replaceAll('{{summary}}', SUMMARY_TEXT)
-        .replaceAll('{{recall}}', SUMMARY_TEXT);
+        .replaceAll('{{recall}}', SUMMARY_TEXT)
+        .replace(/\\{\\{\\/\\/[\\s\\S]*?\\}\\}/g, '');
 }
 export const saveSettingsDebounced = () => {};
 `);
@@ -232,6 +233,42 @@ check("the preset's own on/off state does not decide what Recall sends", () => {
     }
 });
 
+// A preset author marks the blocks they want summarised with an ST comment. It
+// stands in for a choice the user has not made, and only for that: an untick is
+// kept, and a spelling ST would not strip is not a marker, since it would reach
+// the model.
+const MARKED = [
+    { identifier: 'mk1', name: 'Marked', content: 'Keep the tone. {{// recall}}' },
+    { identifier: 'mk2', name: 'Marked Loudly', content: '{{//RECALL }}Mind the names.' },
+    { identifier: 'mk3', name: 'Not Quite', content: 'Spacing matters. {{ // recall}}' },
+];
+
+check('a block carrying the recall marker is sent until the user says otherwise', () => {
+    settings.contextBlocks.description = false;
+    oai_settings.prompts.push(...MARKED);
+    try {
+        const preview = previewPresetBlocks().filter(block => block.key.startsWith('mk'));
+        assert.deepStrictEqual(preview.map(block => block.enabled), [true, true, false]);
+        const { text, included } = buildContextBlocks();
+        assert.deepStrictEqual(included, ['Marked', 'Marked Loudly']);
+        assert.ok(!text.includes('{{//'), text);
+    } finally {
+        oai_settings.prompts.splice(-MARKED.length);
+    }
+});
+
+check('unticking a marked block sticks', () => {
+    settings.contextBlocks.description = false;
+    oai_settings.prompts.push(...MARKED);
+    settings.presetBlocks.mk1 = false;
+    try {
+        assert.deepStrictEqual(buildContextBlocks().included, ['Marked Loudly']);
+    } finally {
+        oai_settings.prompts.splice(-MARKED.length);
+        delete settings.presetBlocks.mk1;
+    }
+});
+
 check('nothing enabled emits nothing, not an empty fence', () => {
     settings.contextBlocks.description = false;
     settings.presetBlocks.jailbreak = false;
@@ -245,4 +282,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log('All 14 reference-material assembly checks pass.');
+console.log('All 16 reference-material assembly checks pass.');

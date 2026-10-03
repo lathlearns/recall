@@ -174,7 +174,10 @@ const DEFAULT_SETTINGS = {
      * preset: a preset with eight custom prompts has eight togglable blocks, and
      * naming them here would mean shipping a new version whenever someone writes a
      * new prompt. Everything absent is off, so the empty default is "none of them"
-     * and stays correct for presets that do not exist yet.
+     * and stays correct for presets that do not exist yet — except a block whose
+     * text carries the `{{// recall}}` marker, which its preset's author has asked
+     * to be sent. That too only stands in for a choice never made: once the user
+     * ticks or unticks a block, the entry here decides it.
      */
     presetBlocks: {},
 

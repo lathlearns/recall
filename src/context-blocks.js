@@ -24,7 +24,7 @@ import { chat_metadata, characters, this_chid, substituteParams, name1 } from '.
 import { selected_group, getGroupCharacterCards, getGroupMembers } from '../../../../group-chats.js';
 import { power_user } from '../../../../power-user.js';
 import { getSettings } from './settings.js';
-import { buildPresetBlocks, listPresetBlocks, renderPresetBlock } from './preset-blocks.js';
+import { buildPresetBlocks, isPresetBlockEnabled, listPresetBlocks, renderPresetBlock } from './preset-blocks.js';
 
 /**
  * The header that separates reference material from the chat. Without it the
@@ -278,12 +278,13 @@ export function previewContextBlocks() {
  * the active preset defines, so it changes when the user switches preset, and it
  * is empty on an API with no prompt manager at all.
  *
- * @returns {{ key: string, label: string, text: string }[]}
+ * @returns {{ key: string, label: string, text: string, enabled: boolean }[]}
  */
 export function previewPresetBlocks() {
     return (safely(listPresetBlocks) ?? []).map(block => ({
         key: block.key,
         label: block.label,
         text: renderPresetBlock(block),
+        enabled: isPresetBlockEnabled(block),
     }));
 }

@@ -226,6 +226,12 @@ Three rules govern them:
   once in the slot it is supposed to be revising. What is left after stripping is the wrapper,
   `[Summary: ]`, which costs a handful of tokens. The block is still offered rather than
   hidden, because blocks that mix a summary macro into otherwise useful instructions exist.
+- **A preset author can mark a block as worth sending.** A block whose text contains
+  `{{// recall}}` (case-insensitive, spaces allowed after the slashes) starts ticked. The
+  marker is the host's comment syntax, so it resolves to nothing in the chat and in the
+  buffer alike. It fills in only for a block the user has never toggled; an explicit choice
+  either way wins. Matched on the text, not on the block's identifier, because built-in
+  blocks such as the main prompt share one identifier across every preset.
 - **They are quoted, not passed through.** See below.
 
 ### How it is assembled
@@ -1073,7 +1079,7 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Connection profile | none (main) | Summarise through a different connection. Its preset's samplers apply. |
 | Model | blank | Free-text override of the profile's model. |
 | Its context size | 0 | The profile's context window, in tokens. 0 means use the main connection's — wrong whenever they differ. |
-| Reference material toggles | all off | Which card/persona fields and which preset prompt blocks to send. |
+| Reference material toggles | all off, except preset blocks marked `{{// recall}}` | Which card/persona fields and which preset prompt blocks to send. |
 | Use the built-in's old summary | on | Stand in an existing external summary until Recall has one, and seed the first pass with it. |
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
 | Warn me when context is filling up | on | Whether to notify at all. |

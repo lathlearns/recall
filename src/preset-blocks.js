@@ -118,6 +118,33 @@ export function listPresetBlocks() {
 }
 
 /**
+ * A preset author's way of saying "send this block to the summariser".
+ *
+ * `{{// recall}}` is an ST comment, so it resolves to nothing in the chat and in
+ * Recall's own buffer alike; it is only ever read here, from the raw text.
+ * Matched in the content rather than by identifier because the built-in ones —
+ * `main`, `nsfw`, `jailbreak` — are the same in every preset, and a list of
+ * identifiers would tick one preset's Main Prompt in everybody's. The match is
+ * no looser than ST's own: its older macro engine only strips a comment written
+ * `{{//`, and a marker it left in would reach the model.
+ */
+const RECALL_MARKER = /\{\{\/\/\s*recall\s*\}\}/i;
+
+/**
+ * Whether a block goes, by the user's toggle or, failing one, the preset's
+ * marker. A toggle the user has set either way wins; the marker only fills in
+ * for a block they have never touched, which is what the map leaving it absent
+ * means.
+ *
+ * @param {{ key: string, content: string }} block
+ * @returns {boolean}
+ */
+export function isPresetBlockEnabled(block) {
+    const choice = (getSettings().presetBlocks ?? {})[block.key];
+    return typeof choice === 'boolean' ? choice : RECALL_MARKER.test(block.content);
+}
+
+/**
  * The heading a block appears under in the buffer.
  *
  * Named as an instruction *belonging to the chat* rather than by the preset's own
@@ -184,12 +211,11 @@ export function renderPresetBlock(block) {
  * @returns {{ sections: string[], included: string[] }}
  */
 export function buildPresetBlocks() {
-    const enabled = getSettings().presetBlocks ?? {};
     const sections = [];
     const included = [];
 
     for (const block of listPresetBlocks()) {
-        if (!enabled[block.key]) {
+        if (!isPresetBlockEnabled(block)) {
             continue;
         }
 

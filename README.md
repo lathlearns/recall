@@ -247,7 +247,7 @@ messages to hide to make it fit.
 ## Reference material
 
 Optional context sent alongside the chat, so the summariser isn't guessing who these people
-are. Everything here is off by default and competes for the same tokens as the chat history
+are. Everything here is off by default (bar marked preset blocks, below) and competes for the same tokens as the chat history
 — each one enabled means less history per pass. The panel shows what each costs.
 
 **From the character card:** description, personality, scenario, user persona, example
@@ -262,6 +262,12 @@ nothing else here does.
 Your summary block is safe to tick. Recall's macros are stripped from a preset block before
 anything is substituted, so `[Summary: {{summary}}]` contributes its wrapper and not a
 second copy of the summary the request is already carrying for revision.
+
+A block containing `{{// recall}}` starts ticked. That's for preset authors: put the marker
+in the blocks you want your users' summariser to see. It's an ST comment, so it never reaches
+either model. It only fills in for a block nobody has touched; once you tick or untick it,
+your choice is kept. Keep the slashes right after the braces (`{{//`, not `{{ //`), because
+ST's older macro engine only strips comments written that way.
 
 These toggles are the only thing that decides what's sent. Whether a prompt is currently
 switched on in your prompt manager doesn't come into it: one you've switched off there still
