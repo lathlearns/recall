@@ -25,6 +25,7 @@
  */
 .recall-manager [hidden],
 .recall-drawer [hidden],
+.recall-rebuild [hidden],
 .recall-manager[hidden],
 .recall-drawer[hidden] {
     display: none !important;
@@ -55,7 +56,8 @@
  */
 .recall-list,
 .recall-detail,
-.recall-settings {
+.recall-settings,
+.popup.recall-rebuild-popup .popup-content {
     scrollbar-gutter: var(--recall-scroll-stable, stable);
     padding-right: var(--recall-scroll-gutter, 0.6em);
 }
@@ -584,7 +586,10 @@
 .recall-rebuild-group {
     display: flex;
     flex-direction: column;
-    gap: 0.3em;
+    gap: 0.4em;
+    /* A fieldset is min-content wide by default, so a long option pushed its
+       column out over the one beside it. */
+    min-width: 0;
     margin: 0;
     padding: 0.5em 0.75em 0.65em;
     border: 1px solid var(--SmartThemeBorderColor);
@@ -596,14 +601,34 @@
     font-weight: bold;
 }
 
-.recall-rebuild-group .checkbox_label {
-    flex-wrap: wrap;
-    align-items: center;
+/*
+ * Two columns where there is room for them, so the whole form fits on a desktop
+ * screen without scrolling; one under the other on a phone.
+ */
+.recall-rebuild-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22em), 1fr));
+    gap: 0.75em;
 }
 
-.recall-rebuild-group select {
-    margin: 0 0 0.2em 1.6em;
-    width: calc(100% - 1.6em);
+/*
+ * ST's "wider" popup is only 750px, which left both columns too narrow to show
+ * their options in full. 90% of a narrow screen is still the cap.
+ */
+.popup.recall-rebuild-popup {
+    width: min(64em, 90dvw);
+}
+
+.recall-rebuild-group .recall-row-field > label {
+    flex: 0 0 7.5em;
+}
+
+.recall-rebuild-group .recall-banner {
+    margin-top: 0.3em;
+}
+
+.recall-rebuild-group .recall-grow {
+    margin: 0;
 }
 
 .recall-rebuild-group .recall-number {

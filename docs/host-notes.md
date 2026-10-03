@@ -159,6 +159,19 @@ against 151 messages when it had read 56. Summaries record their read set; older
 it prompt the user rather than guessing. For the same reason each summary records what it
 was built on, rather than having it guessed from creation times (§10).
 
+### Every scrolling area needs Recall's scrollbar gutter
+
+Anything new that scrolls, whether a pane of Recall's own or ST's `.popup-content` in a dialog
+Recall opens, goes into the gutter rule at the top of `style.css` (`scrollbar-gutter` plus
+`padding-right: var(--recall-scroll-gutter)`). Do not pick a padding by eye. Firefox on
+Windows draws overlay scrollbars that take no width and float over the content, so the text
+runs up against the bar, or under it once a hover widens it. ST's own popup padding (8px) is
+too tight for that. `src/scrollbars.js` measures which kind of bar the browser draws and sets
+the variable to fit (1.5em for overlay bars, 0.6em for classic ones). When the scroller is
+ST's, add a class to the popup's `dlg` and target its `.popup-content`, as the rebuild dialog
+does with `recall-rebuild-popup`. A new area that is not in that rule is the bug that has
+recurred.
+
 ---
 
 ## Worth re-checking after an ST update

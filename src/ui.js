@@ -717,6 +717,10 @@ async function openRebuildDialog() {
 
     const wrapper = document.createElement('div');
     wrapper.className = 'recall-rebuild';
+    // Dropdowns rather than radio buttons: ST themes checkboxes and selects but
+    // leaves radios to the browser, so a dialog mixing them drew three kinds of
+    // control. Every choice here is one of a few, which is what a select is for,
+    // and it is how the settings pane asks the same kind of question.
     wrapper.innerHTML = `
         <h3>Rebuild summaries</h3>
         <p class="recall-dim">
@@ -724,59 +728,71 @@ async function openRebuildDialog() {
             unhidden until the rebuild finishes; stop at any point and the chat is left as it was.
         </p>
 
-        <fieldset class="recall-rebuild-group">
-            <legend>Start</legend>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-start" value="beginning" checked>
-                <span>From the beginning</span></label>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-start" value="summary" ${startable.length ? '' : 'disabled'}>
-                <span>After a summary you trust</span></label>
-            <select class="text_pole" data-rb="summary" ${startable.length ? '' : 'disabled'}>${options}</select>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-start" value="message">
-                <span>From message</span>
-                <input class="text_pole recall-number" type="number" min="0" max="${last}" value="0" data-rb="message"></label>
-        </fieldset>
+        <div class="recall-rebuild-columns">
+            <fieldset class="recall-rebuild-group">
+                <legend>What to read</legend>
+                <div class="recall-row recall-row-field">
+                    <label for="recall-rb-start">Start</label>
+                    <select id="recall-rb-start" class="text_pole recall-grow" data-rb="start">
+                        <option value="beginning">From the beginning</option>
+                        <option value="summary" ${startable.length ? '' : 'disabled'}>After a summary you trust${startable.length ? '' : ' (none in this chat yet)'}</option>
+                        <option value="message">From a message number</option>
+                    </select>
+                </div>
+                <div class="recall-row recall-row-field" data-rb="summary-row" hidden>
+                    <label for="recall-rb-summary">Summary</label>
+                    <select id="recall-rb-summary" class="text_pole recall-grow" data-rb="summary">${options}</select>
+                </div>
+                <div class="recall-row recall-row-field" data-rb="message-row" hidden>
+                    <label for="recall-rb-message">Message</label>
+                    <input id="recall-rb-message" class="text_pole recall-number" type="number" min="0" max="${last}" value="0" data-rb="message">
+                </div>
+                <div class="recall-row recall-row-field">
+                    <label for="recall-rb-end">End</label>
+                    <select id="recall-rb-end" class="text_pole recall-grow" data-rb="end">
+                        <option value="active" ${active ? '' : 'disabled'}>Where the active summary ends${active ? ` (message ${active.coversTo})` : ' (there is no active summary)'}</option>
+                        <option value="latest">The latest message (${last})</option>
+                    </select>
+                </div>
+                <div class="recall-banner recall-banner-warn" data-rb="foreign" hidden>
+                    <i class="fa-solid fa-eye-slash"></i>
+                    <div class="recall-rebuild-foreign">
+                        <span data-rb="foreign-text"></span>
+                        <label class="checkbox_label"><input type="checkbox" data-rb="include-foreign">
+                            <span>Read them too</span></label>
+                    </div>
+                </div>
+            </fieldset>
 
-        <fieldset class="recall-rebuild-group">
-            <legend>End</legend>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-end" value="active" ${active ? '' : 'disabled'}>
-                <span>Where the active summary ends${active ? ` (message ${active.coversTo})` : ' (there is no active summary)'}</span></label>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-end" value="latest">
-                <span>The latest message (${last})</span></label>
-        </fieldset>
-
-        <fieldset class="recall-rebuild-group">
-            <legend>Batches</legend>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-breaks" value="existing">
-                <span>Follow the break points of your existing summaries</span></label>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-breaks" value="fixed">
-                <span>Every</span>
-                <input class="text_pole recall-number" type="number" min="1" step="5" data-rb="size">
-                <span>messages</span></label>
-            <p class="recall-help">A batch too big for one request is split where it stops fitting, and the rest goes in the next one.</p>
-        </fieldset>
-
-        <div class="recall-banner recall-banner-warn" data-rb="foreign" hidden>
-            <i class="fa-solid fa-eye-slash"></i>
-            <div class="recall-rebuild-foreign">
-                <span data-rb="foreign-text"></span>
-                <label class="checkbox_label"><input type="checkbox" data-rb="include-foreign">
-                    <span>Read them too</span></label>
-            </div>
+            <fieldset class="recall-rebuild-group">
+                <legend>How it runs</legend>
+                <div class="recall-row recall-row-field">
+                    <label for="recall-rb-breaks">Batches</label>
+                    <select id="recall-rb-breaks" class="text_pole recall-grow" data-rb="breaks">
+                        <option value="existing">Follow the break points of your existing summaries</option>
+                        <option value="fixed">A fixed number of messages each</option>
+                    </select>
+                </div>
+                <div class="recall-row recall-row-field" data-rb="size-row" hidden>
+                    <label for="recall-rb-size">Every</label>
+                    <span class="recall-field-unit">
+                        <input id="recall-rb-size" class="text_pole recall-number" type="number" min="1" step="5" data-rb="size">
+                        <label for="recall-rb-size">messages</label>
+                    </span>
+                </div>
+                <p class="recall-help">A batch too big for one request is split where it stops fitting, and the rest goes in the next one.</p>
+                <div class="recall-row recall-row-field">
+                    <label for="recall-rb-old">Old summaries</label>
+                    <select id="recall-rb-old" class="text_pole recall-grow" data-rb="old">
+                        <option value="keep">Keep them in the archive</option>
+                        <option value="replace">Delete the ones it covered, once it finishes</option>
+                    </select>
+                </div>
+                <p class="recall-help">Either way, the new summaries sit together as one group in the archive.</p>
+                <label class="checkbox_label"><input type="checkbox" data-rb="review">
+                    <span>Pause after each batch so I can read, edit or redo it</span></label>
+            </fieldset>
         </div>
-
-        <fieldset class="recall-rebuild-group">
-            <legend>As it goes</legend>
-            <label class="checkbox_label"><input type="checkbox" data-rb="review">
-                <span>Pause after each batch so I can read, edit or redo it</span></label>
-        </fieldset>
-
-        <fieldset class="recall-rebuild-group">
-            <legend>Old summaries</legend>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-old" value="keep">
-                <span>Keep them; show the rebuild as one group in the archive</span></label>
-            <label class="checkbox_label"><input type="radio" name="recall-rb-old" value="replace">
-                <span>Delete the ones it covered, once it finishes</span></label>
-        </fieldset>
 
         <div class="recall-rebuild-plan">
             <p data-rb="plan"></p>
@@ -785,22 +801,21 @@ async function openRebuildDialog() {
         </div>`;
 
     const field = selector => wrapper.querySelector(selector);
-    const radio = (name, value) => {
-        const input = wrapper.querySelector(`input[name="recall-rb-${name}"][value="${value}"]`);
-        if (input && !input.disabled) {
-            input.checked = true;
-        }
+    // A remembered choice can name an option this chat has disabled, so the
+    // fallback is whichever enabled option comes first.
+    const choose = (name, value) => {
+        const select = field(`[data-rb="${name}"]`);
+        const option = [...select.options].find(o => o.value === value && !o.disabled)
+            ?? [...select.options].find(o => !o.disabled);
+        select.value = option.value;
     };
-    const chosen = name => wrapper.querySelector(`input[name="recall-rb-${name}"]:checked`)?.value;
+    const chosen = name => field(`[data-rb="${name}"]`).value;
 
-    radio('end', active ? settings.rebuildEnd : 'latest');
-    if (!chosen('end')) {
-        radio('end', 'latest');
-    }
+    choose('end', settings.rebuildEnd);
     // With no summaries there are no break points to follow, so the choice that
     // will actually apply is the one shown. Not saved unless the rebuild starts.
-    radio('breaks', hasOwnSummaries() ? settings.rebuildBreaks : 'fixed');
-    radio('old', settings.rebuildOldSummaries);
+    choose('breaks', hasOwnSummaries() ? settings.rebuildBreaks : 'fixed');
+    choose('old', settings.rebuildOldSummaries);
     field('[data-rb="size"]').value = String(settings.rebuildBatchSize);
     field('[data-rb="review"]').checked = !!settings.rebuildReview;
     // Not remembered: whether to read someone else's hides depends on the chat.
@@ -809,7 +824,7 @@ async function openRebuildDialog() {
     field('[data-rb="include-foreign"]').checked = !hasOwnSummaries();
 
     // The summary list defaults to the active one, the likeliest place a good
-    // chain ends — but the radio stays on "beginning" until the user picks it.
+    // chain ends — but the start stays on "beginning" until the user picks it.
     if (active && startable.some(s => s.id === active.id)) {
         field('[data-rb="summary"]').value = active.id;
     }
@@ -818,29 +833,33 @@ async function openRebuildDialog() {
         const startKind = chosen('start');
         return {
             start: startKind === 'summary'
-                ? { kind: 'summary', id: field('[data-rb="summary"]').value }
+                ? { kind: 'summary', id: chosen('summary') }
                 : startKind === 'message'
-                    ? { kind: 'message', index: Number(field('[data-rb="message"]').value) }
+                    ? { kind: 'message', index: Number(chosen('message')) }
                     : { kind: 'beginning' },
-            end: chosen('end') ?? 'latest',
-            breaks: chosen('breaks') ?? 'existing',
-            batchSize: clampNumber(field('[data-rb="size"]').value, 1, 100_000, 50),
+            end: chosen('end') || 'latest',
+            breaks: chosen('breaks') || 'existing',
+            batchSize: clampNumber(chosen('size'), 1, 100_000, 50),
             review: field('[data-rb="review"]').checked,
             includeForeign: field('[data-rb="include-foreign"]').checked,
-            oldSummaries: chosen('old') ?? 'keep',
+            oldSummaries: chosen('old') || 'keep',
         };
     };
 
-    // Typing into a field picks its radio, so a number entered is a number used.
-    field('[data-rb="summary"]').addEventListener('change', () => radio('start', 'summary'));
-    field('[data-rb="message"]').addEventListener('input', () => radio('start', 'message'));
-    field('[data-rb="size"]').addEventListener('input', () => radio('breaks', 'fixed'));
+    // Each follow-up field shows only under the choice that uses it.
+    const showFollowUps = () => {
+        field('[data-rb="summary-row"]').toggleAttribute('hidden', chosen('start') !== 'summary');
+        field('[data-rb="message-row"]').toggleAttribute('hidden', chosen('start') !== 'message');
+        field('[data-rb="size-row"]').toggleAttribute('hidden', chosen('breaks') !== 'fixed');
+    };
+    showFollowUps();
 
     let plan = null;
     let generation = 0;
 
     const refresh = async () => {
         const mine = ++generation;
+        showFollowUps();
         const choices = read();
         const planLine = field('[data-rb="plan"]');
         const estimateLine = field('[data-rb="estimate"]');
@@ -912,11 +931,18 @@ async function openRebuildDialog() {
     wrapper.addEventListener('change', () => void refresh());
     void refresh();
 
-    const result = await new Popup(wrapper, POPUP_TYPE.CONFIRM, '', {
+    // Wider than a plain confirm so the two columns sit side by side and the
+    // whole form fits without scrolling; ST drops it to 90% of a narrow screen.
+    const popup = new Popup(wrapper, POPUP_TYPE.CONFIRM, '', {
         okButton: 'Start rebuild',
         cancelButton: 'Cancel',
+        wider: true,
         allowVerticalScrolling: true,
-    }).show();
+    });
+    // The scroller here is ST's, so the class that gives it Recall's scrollbar
+    // gutter goes on the dialog.
+    popup.dlg.classList.add('recall-rebuild-popup');
+    const result = await popup.show();
 
     if (result !== POPUP_RESULT.AFFIRMATIVE) {
         return;
