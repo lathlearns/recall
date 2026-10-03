@@ -608,6 +608,42 @@ active on its own, and the user reads both and picks. The rejected one is delete
 The detail view always states which of these is the case: "56 messages, recorded", "56
 messages, as you specified", or "not recorded — a redo would replay all 151 in range".
 
+### Rebuilding from a point
+
+The one deliberate exception to rule 2's "no range, no start index": recovering a long chat
+whose summary went bad several summaries ago. Doing that by hand means unhiding everything,
+then hiding and summarising one stretch at a time. A rebuild does the same work without
+touching visibility until the end.
+
+- **Choices**, in one dialog, remembered from the last rebuild: where to start (the beginning;
+  after an existing summary, which becomes the basis; or a message number, which builds on
+  nothing — or on the built-in summary, if the fallback is on and one exists), where to end
+  (the active summary's last message, or the newest), how to cut batches (at the existing
+  summaries' break points, or every N messages, default 50), whether to pause after each batch,
+  and whether old summaries are kept or replaced.
+- **Each batch is read by index, like a regenerate.** It reads its stretch of messages plus
+  message 0, the same as any pass would: messages Recall hid are read, messages the user hid by
+  hand are not. Each batch revises the summary written by the batch before it. A batch that
+  will not fit in one request is cut where it stops fitting, and the rest leads the next batch.
+- **Pausing** opens each finished batch in the detail view, editable, with *Keep going* (which
+  saves any edit first, since the next batch builds on it), *Redo* (writes it again on the same
+  basis, replacing it, with the guidance field applied) and *Stop*. A failed batch pauses the
+  same way with *Try again*, whether or not pausing was chosen.
+- **Every batch is an ordinary saved summary**, inactive, tagged with the rebuild it belongs to.
+  The archive folds a rebuild into one row that opens to list its batches. Starting a rebuild
+  after one of its batches continues the same rebuild.
+- **Only a finished rebuild changes anything else.** Its last batch becomes active; every
+  message Recall hid up to its last message is handed to it, so one summary owns the hidden
+  range; and the chat is synced to it. If old summaries are being replaced, the ones whose
+  coverage ended inside the rebuilt range are deleted then — never the one it started after. A
+  rebuild that is stopped keeps its batches and changes nothing else: its summary covers less
+  than the one already active, and switching to it would unhide the middle of a story.
+- **While a rebuild is in progress**, pauses included, Summarize now and Regenerate are refused
+  and sending is blocked during each batch. Switching chats abandons it; its batches stay saved.
+- **The estimate** shown before starting counts the messages, prompt and reference material
+  exactly. The summary carried from batch to batch cannot be known in advance, so it is guessed
+  from the current summary's size, and the dialog says so.
+
 ---
 
 ## 11. Drift detection and re-anchoring

@@ -22,6 +22,11 @@
             </div>
         </div>
         <div class="recall-topbar-actions">
+            <div class="menu_button menu_button_icon" data-recall="rebuild"
+                title="Re-summarise the chat from a point you choose, in batches.">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Rebuild…</span>
+            </div>
             <div class="menu_button menu_button_icon" data-recall="preview"
                 title="Show exactly what would be sent, without sending it.">
                 <i class="fa-solid fa-eye"></i>
@@ -142,6 +147,22 @@
                 </div>
 
                 <div class="recall-live-body" data-recall="live-body"></div>
+            </div>
+
+            <!--
+                A rebuild in progress. Not dismissable: it holds the only controls
+                for the rebuild, and while one is going Summarize now is refused.
+                Painted entirely from rebuild.js's state by renderRebuildBar.
+            -->
+            <div class="recall-banner recall-banner-info" data-recall="rebuild-bar" hidden>
+                <i class="fa-solid fa-layer-group" data-recall="rebuild-icon"></i>
+                <span data-recall="rebuild-text"></span>
+                <div class="recall-banner-actions">
+                    <div class="menu_button recall-action-primary" data-recall="rebuild-continue" hidden>Keep going</div>
+                    <div class="menu_button" data-recall="rebuild-redo" hidden
+                        title="Write this batch again. The guidance field above applies to the redo.">Redo</div>
+                    <div class="menu_button recall-action-destructive" data-recall="rebuild-stop">Stop</div>
+                </div>
             </div>
 
             <div class="recall-banner recall-banner-error" data-recall="error" hidden>

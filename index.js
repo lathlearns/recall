@@ -19,6 +19,7 @@ import { summarizeNow, RecallError } from './src/generate.js';
 import { evaluateNudge, resetNudge, disarmNudge } from './src/nudge.js';
 import { initDrawer, refreshDrawer, toastNudge } from './src/ui.js';
 import { applyScrollbarGutter } from './src/scrollbars.js';
+import { abandonRebuildIfElsewhere } from './src/rebuild.js';
 
 const MODULE_NAME = 'recall';
 
@@ -84,6 +85,7 @@ function checkPrerequisites() {
 function onChatChanged() {
     getSettings();
     getStore();
+    abandonRebuildIfElsewhere();
 
     const { staled } = runDriftDetection(getSettings().deepIntegrityCheck);
 

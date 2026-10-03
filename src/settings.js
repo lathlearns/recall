@@ -193,6 +193,24 @@ const DEFAULT_SETTINGS = {
     /** In tokens. 0 means "derive from the context limit" — see AUTO_NUDGE_FRACTION. */
     nudgeThreshold: 0,
 
+    // --- Rebuild ---
+    // The rebuild dialog's choices, remembered from the last one started.
+
+    /** 'existing' follows the break points your summaries already chose; 'fixed' cuts every rebuildBatchSize. */
+    rebuildBreaks: 'existing',
+
+    /** Messages per batch when cutting at fixed sizes, or when there are no break points to follow. */
+    rebuildBatchSize: 50,
+
+    /** Pause after every batch to read, edit or redo it. */
+    rebuildReview: true,
+
+    /** 'keep' leaves the old summaries in the archive; 'replace' deletes the ones a finished rebuild covered. */
+    rebuildOldSummaries: 'keep',
+
+    /** 'active' ends where the active summary does; 'latest' runs to the newest message. */
+    rebuildEnd: 'active',
+
     // --- Migration from the built-in Summarize ---
 
     /**

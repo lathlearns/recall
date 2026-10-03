@@ -41,6 +41,9 @@ export const STORE_KEY = 'recall';
  * @property {boolean} seededFromLegacy Built on the built-in Summarize's stored summary rather than from scratch.
  * @property {string} steeringNote      One-off guidance sent with this pass. Kept as a record of what produced this result; never replayed.
  * @property {string} reasoning         What the model was thinking while it wrote this. Display only — see below.
+ * @property {string} [rebuildId]       Set on every batch of one rebuild, so the archive can show them as one. See rebuild.js.
+ * @property {number} [rebuildStep]     Which batch of that rebuild this was, counting from 1.
+ * @property {number} [rebuildSteps]    How many batches the rebuild had planned when this one ran.
  */
 
 function emptyStore() {

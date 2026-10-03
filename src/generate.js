@@ -62,6 +62,14 @@ const BUDGET_PADDING = 64;
 /** Set while a Recall generation is in flight, so a second trigger is refused. */
 let inFlight = false;
 
+/** Set for the whole of a rebuild, pauses included. See rebuild.js. */
+let rebuildLocked = false;
+
+/** @param {boolean} locked */
+export function setRebuildLock(locked) {
+    rebuildLocked = !!locked;
+}
+
 /**
  * What is running and since when, or null when nothing is.
  *
@@ -166,13 +174,18 @@ function notifyRunChange() {
     }
 }
 
-/** @param {'summarize'|'regenerate'} kind */
-function beginRun(kind) {
+/**
+ * @param {'summarize'|'regenerate'|'rebuild'} kind
+ * @param {{ step?: number, steps?: number }} [progress] Which batch of a rebuild this is.
+ */
+function beginRun(kind, progress = {}) {
     inFlight = true;
     const profile = getActiveProfile();
 
     activeRun = {
         kind,
+        step: progress.step ?? 0,
+        steps: progress.steps ?? 0,
         startedAt: Date.now(),
         streaming: !!profile && canStreamProfile(profile),
         // Every profile request goes through fetch with this signal, streamed or
@@ -455,9 +468,14 @@ async function enforceBudget(buffer, systemPrompt, indices) {
  * Refuses to start for any reason that would corrupt state or waste a call.
  * @param {{ nothingNew?: boolean }} options
  */
-function checkGuards({ nothingNew = false } = {}) {
+function checkGuards({ nothingNew = false, fromRebuild = false } = {}) {
     if (inFlight) {
         throw new RecallError('A Recall summary is already generating.', { kind: 'busy' });
+    }
+    // A rebuild is many runs with pauses between them. Anything else started in
+    // a pause would land in the middle of its chain and be built on by nothing.
+    if (rebuildLocked && !fromRebuild) {
+        throw new RecallError('A rebuild is in progress. Finish or stop it first.', { kind: 'busy' });
     }
     if (is_send_press) {
         throw new RecallError('Wait for the current message to finish sending.', { kind: 'busy' });
@@ -1106,6 +1124,149 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
         if (settings.blocking) {
             activateSendButtons();
         }
+    }
+}
+
+/**
+ * The tokens one message costs in a buffer, for planning a rebuild without
+ * building every buffer it will send.
+ * @param {number} index
+ * @returns {Promise<number>}
+ */
+export async function countMessageTokens(index) {
+    return chat[index] ? await countTokens(formatMessage(index)) : 0;
+}
+
+/**
+ * The fixed part of every rebuild request: the system prompt and the reference
+ * material, which every batch sends again.
+ * @returns {Promise<{ system: number, reference: number, available: number }>}
+ */
+export async function measureRequestOverhead() {
+    const system = await countTokens(substituteParams(assemblePrompt()));
+    const reference = await countTokens(buildContextBlocks().text ?? '');
+    return {
+        system,
+        reference,
+        available: getPromptBudget() - system - BUDGET_PADDING,
+    };
+}
+
+/**
+ * How many of `indices`, from the front, fit in one request on top of `basis`.
+ *
+ * A rebuild's batches are planned by message count, and messages vary by orders
+ * of magnitude — so instead of refusing a batch that does not fit, as Summarize
+ * now must, it is cut where it stops fitting and the rest goes in the next one.
+ * Nothing is trimmed silently: whatever is cut is still read, one batch later.
+ *
+ * @param {number[]} indices
+ * @param {string} basis
+ * @param {string} [steeringNote] Counted too, so a redo with a note cannot fail the budget check it just passed.
+ * @returns {Promise<number>} At least 1 when anything fits at all, else 0.
+ */
+export async function fitBatch(indices, basis, steeringNote = '') {
+    const systemPrompt = substituteParams(assemblePrompt());
+    const available = getPromptBudget() - await countTokens(systemPrompt) - BUDGET_PADDING;
+    let used = await countTokens(buildBufferFrom(indices, basis, steeringNote));
+
+    let count = indices.length;
+    while (count > 0 && used > available) {
+        count--;
+        used -= await countTokens(formatMessage(indices[count]));
+    }
+
+    return count;
+}
+
+/**
+ * One batch of a rebuild: summarise exactly `indices`, revising `basis`.
+ *
+ * Like a regenerate, and unlike Summarize now, this reads by index and touches no
+ * visibility at all — the rebuild fixes visibility once, at the end. The record
+ * is saved inactive; the rebuild decides what becomes active and when.
+ *
+ * @param {{
+ *   indices: number[],
+ *   basis: import('./store.js').RecallSummary|null,
+ *   seed?: string,
+ *   rebuildId: string,
+ *   step: number,
+ *   steps: number,
+ *   steeringNote?: string,
+ * }} options
+ * @returns {Promise<import('./store.js').RecallSummary>}
+ */
+export async function summarizeBatch({ indices, basis, seed = '', rebuildId, step, steps, steeringNote = '' }) {
+    checkGuards({ fromRebuild: true });
+
+    const settings = getSettings();
+    const { blocks, setName, isOverride } = resolveBlocks();
+
+    if (!blocks.some(block => block.enabled && block.content.trim())) {
+        throw new RecallError('The summary prompt is empty — every block is disabled or blank.', { kind: 'no-prompt' });
+    }
+
+    const present = indices.filter(i => chat[i]);
+    if (!present.length) {
+        throw new RecallError('The messages in this batch are no longer in the chat.', { kind: 'missing' });
+    }
+
+    const systemPrompt = substituteParams(assemblePrompt());
+    const basisContent = basis?.content ?? seed;
+    const buffer = buildBufferFrom(present, basisContent, steeringNote);
+    await enforceBudget(buffer, systemPrompt, present);
+
+    const coversTo = present[present.length - 1];
+    const anchorHash = getStringHash(chat[coversTo]?.mes ?? '');
+    const snapshot = captureContext();
+
+    // Always blocked, whatever the blocking setting says. A rebuild runs for a
+    // long time, and a message sent mid-batch is one more thing to go wrong.
+    beginRun('rebuild', { step, steps });
+    deactivateSendButtons();
+
+    let saved = false;
+    try {
+        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
+
+        if (contextChanged(snapshot)) {
+            throw new RecallError('The chat changed while the batch was generating, so the result was discarded.', { kind: 'context-changed' });
+        }
+        if (!chat[coversTo] || getStringHash(chat[coversTo].mes ?? '') !== anchorHash) {
+            throw new RecallError(
+                `Message ${coversTo}, the last one this batch read, was edited, deleted or moved while it `
+                + 'was generating. Nothing was saved for this batch.',
+                { kind: 'context-changed' },
+            );
+        }
+
+        const firstNew = present.find(i => i !== 0) ?? present[0];
+        const record = createSummaryRecord({
+            name: composeName(title, timestampName()),
+            content,
+            coversFrom: 0,
+            coversTo,
+            newFrom: firstNew,
+            anchorHash,
+            rangeHash: settings.deepIntegrityCheck ? computeRangeHash(0, coversTo) : null,
+            generatedWith: { setName, isOverride },
+            builtOn: basis?.id ?? null,
+            seededFromLegacy: !basis && !!seed,
+            sourceIndices: [...present],
+            steeringNote: String(steeringNote ?? '').trim(),
+            reasoning: keptReasoning(reasoning),
+            rebuildId,
+            rebuildStep: step,
+            rebuildSteps: steps,
+        });
+
+        addSummary(record, { makeActive: false });
+        saved = true;
+        return record;
+    } finally {
+        endRun(saved);
+        activateSendButtons();
     }
 }
 

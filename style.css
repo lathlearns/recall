@@ -548,6 +548,77 @@
     background-color: var(--black30a);
 }
 
+/* A rebuild's batches, folded under one row. The members are indented and ruled
+   on the left, so an open group reads as one thing and not as a dozen summaries
+   that happen to sit together. */
+
+.recall-row-group .recall-row-name i {
+    width: 1em;
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+.recall-row-member {
+    margin-left: 0.9em;
+    border-left-color: var(--SmartThemeBorderColor);
+    border-radius: 0 4px 4px 0;
+}
+
+/* --- Rebuild dialog ------------------------------------------------------- */
+
+.recall-rebuild {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75em;
+    text-align: left;
+}
+
+.recall-rebuild h3 {
+    margin: 0;
+}
+
+.recall-rebuild p {
+    margin: 0;
+}
+
+.recall-rebuild-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    margin: 0;
+    padding: 0.5em 0.75em 0.65em;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+}
+
+.recall-rebuild-group legend {
+    padding: 0 0.3em;
+    font-weight: bold;
+}
+
+.recall-rebuild-group .checkbox_label {
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.recall-rebuild-group select {
+    margin: 0 0 0.2em 1.6em;
+    width: calc(100% - 1.6em);
+}
+
+.recall-rebuild-group .recall-number {
+    width: 6em;
+    margin: 0;
+}
+
+.recall-rebuild-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+    padding-left: 0.75em;
+    border-left: 2px solid var(--SmartThemeQuoteColor);
+}
+
 .recall-row-main {
     display: flex;
     align-items: baseline;

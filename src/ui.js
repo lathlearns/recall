@@ -11,7 +11,7 @@
 
 import { chat, getMaxContextTokens } from '../../../../../script.js';
 import { renderExtensionTemplateAsync, extension_settings } from '../../../../extensions.js';
-import { Popup, POPUP_TYPE } from '../../../../popup.js';
+import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../../popup.js';
 
 import {
     getSettings,
@@ -40,6 +40,17 @@ import {
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
 import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, getFinishedRun, dismissFinishedRun, onRunChange, cancelRun, getLastReasoning } from './generate.js';
 import { getLastUsage, getThresholdTokens } from './nudge.js';
+import {
+    getRebuild,
+    onRebuildChange,
+    startRebuild,
+    continueRebuild,
+    redoRebuildBatch,
+    stopRebuild,
+    planRebuild,
+    estimateRebuild,
+    startableSummaries,
+} from './rebuild.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
     listProfiles,
@@ -103,25 +114,32 @@ let draftBlocks = null;
  */
 const ACTION_SELECTORS = [
     '[data-recall="summarize-now"]',
+    '[data-recall="rebuild"]',
     '[data-recall="regenerate"]',
     '[data-recall="preview"]',
 ];
+
+/** Refused while a rebuild is paused between batches, so painted as such. */
+const REBUILD_BLOCKED = new Set(['summarize-now', 'rebuild', 'regenerate']);
 
 /** Which button does the counting, per kind of run. */
 const RUN_BUTTON = {
     summarize: 'summarize-now',
     regenerate: 'regenerate',
+    rebuild: 'rebuild',
 };
 
 const RUN_LABEL = {
     summarize: 'Summarizing…',
     regenerate: 'Regenerating…',
+    rebuild: 'Rebuilding…',
 };
 
 /** The live pane's heading, once text has started arriving. */
 const LIVE_LABEL = {
     summarize: 'Writing the summary…',
     regenerate: 'Writing the redo…',
+    rebuild: 'Writing the next batch…',
 };
 
 /** The live pane's heading once a run has ended without saving anything. */
@@ -211,6 +229,7 @@ export async function initDrawer({ onSummarize }) {
     // Subscribed once, for the life of the page. The drawer outlives every run and
     // every manager, so it is the right place to own the clock.
     onRunChange(onRunStateChanged);
+    onRebuildChange(onRebuildEvent);
 
     refreshDrawer();
 }
@@ -295,6 +314,7 @@ function renderRunState() {
 
     renderStopButtons(run);
     renderLivePane(run ?? getFinishedRun());
+    renderRebuildBar();
 }
 
 /**
@@ -500,6 +520,7 @@ function paintRunButton(button, run) {
 
     if (!run) {
         button.classList.remove('disabled', 'recall-busy');
+        button.classList.toggle('disabled', !!getRebuild() && REBUILD_BLOCKED.has(button.dataset.recall));
         if (icon) {
             icon.className = button.dataset.recallIdleIcon;
         }
@@ -525,7 +546,10 @@ function paintRunButton(button, run) {
         icon.className = 'fa-solid fa-spinner fa-spin';
     }
     if (label) {
-        label.textContent = `${RUN_LABEL[run.kind] ?? 'Working…'} ${formatElapsed(Date.now() - run.startedAt)}`;
+        const what = run.kind === 'rebuild' && run.steps
+            ? `Batch ${run.step} of ${run.steps}…`
+            : (RUN_LABEL[run.kind] ?? 'Working…');
+        label.textContent = `${what} ${formatElapsed(Date.now() - run.startedAt)}`;
     }
 }
 
@@ -583,6 +607,290 @@ function onRunStateChanged(run) {
 
 /** So the fallback is explained once, not on every summary afterwards. */
 let streamFallbackAnnounced = false;
+
+// ---------------------------------------------------------------------------
+// Rebuild
+// ---------------------------------------------------------------------------
+
+/**
+ * Reacts to the rebuild's own events. Subscribed once, from the drawer, so a
+ * rebuild that pauses or ends while the manager is closed still says so.
+ * @param {{ type: string, message?: string }} event
+ */
+function onRebuildEvent({ type, message }) {
+    const rebuild = getRebuild();
+
+    if (type === 'review' && rebuild) {
+        const record = rebuild.done[rebuild.done.length - 1];
+        const position = `Batch ${rebuild.done.length} of ${rebuild.done.length + rebuild.queue.length}`;
+        if (managerRoot && record) {
+            resetDraft();
+            selectedId = record.id;
+            setView('detail');
+        } else {
+            toastr.info(`${position} is ready to check. Open Recall to keep going.`, 'Recall', { timeOut: 10000 });
+        }
+    }
+
+    if (type === 'failed') {
+        toastr.warning(message, 'Recall · rebuild paused', { timeOut: 12000, extendedTimeOut: 6000 });
+    }
+
+    if (type === 'finished' || type === 'stopped') {
+        (type === 'finished' ? toastr.success : toastr.info)(message, 'Recall', { timeOut: 10000 });
+        if (managerRoot) {
+            selectedId = getActiveSummary()?.id ?? selectedId;
+            showBanner('notice', message);
+        }
+    }
+
+    refreshDrawer();
+    if (managerRoot) {
+        renderAll();
+    }
+}
+
+/** The bar at the top of the archive while a rebuild is in progress. */
+function renderRebuildBar() {
+    const bar = q('[data-recall="rebuild-bar"]');
+    if (!bar) {
+        return;
+    }
+
+    const rebuild = getRebuild();
+    bar.toggleAttribute('hidden', !rebuild);
+    if (!rebuild) {
+        return;
+    }
+
+    const total = rebuild.done.length + rebuild.queue.length;
+    const range = `messages ${rebuild.plan.from}–${rebuild.plan.to}`;
+    const isLast = rebuild.queue.length === 0;
+    let text;
+
+    if (rebuild.status === 'running') {
+        text = rebuild.stopRequested
+            ? `Stopping the rebuild once this batch lands — this connection cannot cancel a request mid-way.`
+            : `Rebuilding ${range} · batch ${rebuild.done.length + 1} of ${total}.`;
+    } else if (rebuild.status === 'review') {
+        text = `Batch ${rebuild.done.length} of ${total} is ready. Read it below and edit it if you need to; `
+            + (isLast ? 'it is the last one.' : 'the next batch builds on what you keep.');
+    } else {
+        text = `Batch ${rebuild.done.length + 1} of ${total} did not finish: ${rebuild.error}`;
+    }
+
+    q('[data-recall="rebuild-text"]').textContent = text;
+    q('[data-recall="rebuild-icon"]').className = `fa-solid ${rebuild.status === 'failed' ? 'fa-triangle-exclamation' : 'fa-layer-group'}`;
+
+    const proceed = q('[data-recall="rebuild-continue"]');
+    proceed.toggleAttribute('hidden', rebuild.status === 'running');
+    proceed.textContent = rebuild.status === 'failed' ? 'Try again' : (isLast ? 'Finish' : 'Keep going');
+
+    q('[data-recall="rebuild-redo"]').toggleAttribute('hidden', rebuild.status !== 'review');
+    q('[data-recall="rebuild-stop"]').classList.toggle('disabled', !!rebuild.stopRequested);
+}
+
+/**
+ * The rebuild dialog. Every choice defaults to the last one started, and the
+ * plan and estimate under it follow the choices as they change, so what the
+ * button will do is visible before it is pressed.
+ */
+async function openRebuildDialog() {
+    if (getRebuild() || getActiveRun()) {
+        return;
+    }
+    if (isDetailDirty() && !(await confirmDiscardDetail())) {
+        return;
+    }
+
+    const settings = getSettings();
+    const active = getActiveSummary();
+    const startable = startableSummaries();
+    const last = Math.max(0, chat.length - 1);
+
+    const options = startable.map(s =>
+        `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || 'Untitled')} — ends at message ${s.coversTo}</option>`).join('');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'recall-rebuild';
+    wrapper.innerHTML = `
+        <h3>Rebuild summaries</h3>
+        <p class="recall-dim">
+            Re-summarises the chat in batches, each one revising the last. Nothing is hidden or
+            unhidden until the rebuild finishes; stop at any point and the chat is left as it was.
+        </p>
+
+        <fieldset class="recall-rebuild-group">
+            <legend>Start</legend>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-start" value="beginning" checked>
+                <span>From the beginning</span></label>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-start" value="summary" ${startable.length ? '' : 'disabled'}>
+                <span>After a summary you trust</span></label>
+            <select class="text_pole" data-rb="summary" ${startable.length ? '' : 'disabled'}>${options}</select>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-start" value="message">
+                <span>From message</span>
+                <input class="text_pole recall-number" type="number" min="0" max="${last}" value="0" data-rb="message"></label>
+        </fieldset>
+
+        <fieldset class="recall-rebuild-group">
+            <legend>End</legend>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-end" value="active" ${active ? '' : 'disabled'}>
+                <span>Where the active summary ends${active ? ` (message ${active.coversTo})` : ''}</span></label>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-end" value="latest">
+                <span>The latest message (${last})</span></label>
+        </fieldset>
+
+        <fieldset class="recall-rebuild-group">
+            <legend>Batches</legend>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-breaks" value="existing">
+                <span>Follow the break points of your existing summaries</span></label>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-breaks" value="fixed">
+                <span>Every</span>
+                <input class="text_pole recall-number" type="number" min="1" step="5" data-rb="size">
+                <span>messages</span></label>
+            <p class="recall-help">A batch too big for one request is split where it stops fitting, and the rest goes in the next one.</p>
+        </fieldset>
+
+        <fieldset class="recall-rebuild-group">
+            <legend>As it goes</legend>
+            <label class="checkbox_label"><input type="checkbox" data-rb="review">
+                <span>Pause after each batch so I can read, edit or redo it</span></label>
+        </fieldset>
+
+        <fieldset class="recall-rebuild-group">
+            <legend>Old summaries</legend>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-old" value="keep">
+                <span>Keep them; show the rebuild as one group in the archive</span></label>
+            <label class="checkbox_label"><input type="radio" name="recall-rb-old" value="replace">
+                <span>Delete the ones it covered, once it finishes</span></label>
+        </fieldset>
+
+        <div class="recall-rebuild-plan">
+            <p data-rb="plan"></p>
+            <p class="recall-dim" data-rb="estimate"></p>
+            <p class="recall-help" data-rb="guess"></p>
+        </div>`;
+
+    const field = selector => wrapper.querySelector(selector);
+    const radio = (name, value) => {
+        const input = wrapper.querySelector(`input[name="recall-rb-${name}"][value="${value}"]`);
+        if (input && !input.disabled) {
+            input.checked = true;
+        }
+    };
+    const chosen = name => wrapper.querySelector(`input[name="recall-rb-${name}"]:checked`)?.value;
+
+    radio('end', active ? settings.rebuildEnd : 'latest');
+    if (!chosen('end')) {
+        radio('end', 'latest');
+    }
+    radio('breaks', settings.rebuildBreaks);
+    radio('old', settings.rebuildOldSummaries);
+    field('[data-rb="size"]').value = String(settings.rebuildBatchSize);
+    field('[data-rb="review"]').checked = !!settings.rebuildReview;
+
+    // The summary list defaults to the active one, the likeliest place a good
+    // chain ends — but the radio stays on "beginning" until the user picks it.
+    if (active && startable.some(s => s.id === active.id)) {
+        field('[data-rb="summary"]').value = active.id;
+    }
+
+    const read = () => {
+        const startKind = chosen('start');
+        return {
+            start: startKind === 'summary'
+                ? { kind: 'summary', id: field('[data-rb="summary"]').value }
+                : startKind === 'message'
+                    ? { kind: 'message', index: Number(field('[data-rb="message"]').value) }
+                    : { kind: 'beginning' },
+            end: chosen('end') ?? 'latest',
+            breaks: chosen('breaks') ?? 'existing',
+            batchSize: clampNumber(field('[data-rb="size"]').value, 1, 100_000, 50),
+            review: field('[data-rb="review"]').checked,
+            oldSummaries: chosen('old') ?? 'keep',
+        };
+    };
+
+    // Typing into a field picks its radio, so a number entered is a number used.
+    field('[data-rb="summary"]').addEventListener('change', () => radio('start', 'summary'));
+    field('[data-rb="message"]').addEventListener('input', () => radio('start', 'message'));
+    field('[data-rb="size"]').addEventListener('input', () => radio('breaks', 'fixed'));
+
+    let plan = null;
+    let generation = 0;
+
+    const refresh = async () => {
+        const mine = ++generation;
+        const choices = read();
+        const planLine = field('[data-rb="plan"]');
+        const estimateLine = field('[data-rb="estimate"]');
+        const guessLine = field('[data-rb="guess"]');
+
+        try {
+            plan = planRebuild(choices);
+        } catch (error) {
+            plan = null;
+            planLine.textContent = error.message;
+            estimateLine.textContent = '';
+            guessLine.textContent = '';
+            return;
+        }
+
+        const parts = [`Messages ${plan.from}–${plan.to} in ${plan.batches.length} batch${plan.batches.length === 1 ? '' : 'es'}`];
+        if (choices.breaks === 'existing' && !plan.usedExisting) {
+            parts.push(`no existing break points in that range, so every ${choices.batchSize} messages instead`);
+        }
+        if (plan.basis) {
+            parts.push(`building on "${plan.basis.name || 'Untitled'}"`);
+        } else if (plan.seed) {
+            parts.push('building on the built-in Summarize\'s summary');
+        } else if (plan.from > 0) {
+            parts.push(`starting from nothing, so messages before ${plan.from} will not be in it`);
+        }
+        planLine.textContent = `${parts.join(' · ')}.`;
+        estimateLine.textContent = 'Counting tokens…';
+        guessLine.textContent = '';
+
+        const estimate = await estimateRebuild(plan);
+        if (mine !== generation) {
+            return;
+        }
+        estimateLine.textContent = `About ${formatTokens(estimate.sent)} tokens sent and ${formatTokens(estimate.written)} written, across ${estimate.batches} request${estimate.batches === 1 ? '' : 's'}.`;
+        guessLine.textContent = estimate.guessedFrom
+            ? `An estimate: the messages and prompt are counted exactly, but the summary each batch carries into the next is guessed from your current summary's size (${formatTokens(estimate.guessedFrom)}). If the rebuilt summaries come out longer or shorter, the real total will differ.`
+            : 'An estimate, and a rough one: there is no current summary to judge how long the rebuilt ones will be, so the summary carried between batches is left out of the total.';
+    };
+
+    wrapper.addEventListener('input', () => void refresh());
+    wrapper.addEventListener('change', () => void refresh());
+    void refresh();
+
+    const result = await new Popup(wrapper, POPUP_TYPE.CONFIRM, '', {
+        okButton: 'Start rebuild',
+        cancelButton: 'Cancel',
+        allowVerticalScrolling: true,
+    }).show();
+
+    if (result !== POPUP_RESULT.AFFIRMATIVE) {
+        return;
+    }
+
+    const choices = read();
+    settings.rebuildEnd = choices.end;
+    settings.rebuildBreaks = choices.breaks;
+    settings.rebuildBatchSize = choices.batchSize;
+    settings.rebuildReview = choices.review;
+    settings.rebuildOldSummaries = choices.oldSummaries;
+    saveSettings();
+
+    hideBanner('error');
+    hideBanner('notice');
+    try {
+        await startRebuild(choices);
+    } catch (error) {
+        reportError(error);
+    }
+}
 
 function describeCoverage(summary) {
     const range = `Messages ${summary.coversFrom}–${summary.coversTo}`;
@@ -762,6 +1070,21 @@ function wireManager({ onSummarize }) {
         }
     });
 
+    on('[data-recall="rebuild"]', 'click', openRebuildDialog);
+    on('[data-recall="rebuild-continue"]', 'click', async () => {
+        // Keep going means "this is the one": an unsaved edit is what the next
+        // batch should build on, so it is saved rather than asked about.
+        if (isDetailDirty()) {
+            saveDetail();
+        }
+        await continueRebuild();
+    });
+    on('[data-recall="rebuild-redo"]', 'click', async () => {
+        resetDraft();
+        await redoRebuildBatch(takeSteeringNote());
+    });
+    on('[data-recall="rebuild-stop"]', 'click', () => stopRebuild());
+
     on('[data-recall="preview"]', 'click', showPreview);
     on('[data-recall="view-legacy"]', 'click', showLegacySummary);
     on('[data-recall="view-reasoning"]', 'click', showLastReasoning);
@@ -932,6 +1255,14 @@ function renderFallbackBanner() {
 
 // --- Master list ------------------------------------------------------------
 
+/**
+ * Rebuild groups opened or closed by hand. Two sets rather than one, because a
+ * group holding the selected summary opens on its own, and a user who closed it
+ * anyway should get what they asked for. Live only as long as the page.
+ */
+const openRebuildGroups = new Set();
+const closedRebuildGroups = new Set();
+
 function renderList() {
     const list = q('[data-recall="list"]');
     const empty = q('[data-recall="empty"]');
@@ -955,7 +1286,7 @@ function renderList() {
 
     empty.setAttribute('hidden', 'hidden');
 
-    list.innerHTML = summaries.map(summary => {
+    const row = summary => {
         const badges = [];
         if (summary.id === activeId) {
             badges.push('<span class="recall-badge recall-badge-active">Active</span>');
@@ -967,8 +1298,9 @@ function renderList() {
             badges.push('<span class="recall-badge recall-badge-warn">Stale</span>');
         }
 
+        const member = summary.rebuildId ? ' recall-row-member' : '';
         return `
-            <div class="recall-row-item ${summary.id === selectedId ? 'recall-row-selected' : ''}" data-recall-id="${escapeHtml(summary.id)}">
+            <div class="recall-row-item${member} ${summary.id === selectedId ? 'recall-row-selected' : ''}" data-recall-id="${escapeHtml(summary.id)}">
                 <div class="recall-row-main">
                     <span class="recall-row-name">${escapeHtml(summary.name || 'Untitled')}</span>
                     <span class="recall-row-badges">${badges.join('')}</span>
@@ -979,7 +1311,82 @@ function renderList() {
                     · <span data-summary-size="${escapeHtml(summary.id)}"></span>
                 </div>
             </div>`;
-    }).join('');
+    };
+
+    // A rebuild's batches fold into one row, placed where its newest batch
+    // would be, and open to list them newest first like everything else. The
+    // group holding the selected or active summary opens by itself — a row you
+    // are looking at should never be folded away behind a click.
+    const groups = new Map();
+    for (const summary of summaries) {
+        if (summary.rebuildId) {
+            if (!groups.has(summary.rebuildId)) {
+                groups.set(summary.rebuildId, []);
+            }
+            groups.get(summary.rebuildId).push(summary);
+        }
+    }
+
+    const html = [];
+    const placed = new Set();
+    for (const summary of summaries) {
+        if (!summary.rebuildId) {
+            html.push(row(summary));
+            continue;
+        }
+        if (placed.has(summary.rebuildId)) {
+            continue;
+        }
+        placed.add(summary.rebuildId);
+
+        const members = groups.get(summary.rebuildId);
+        const id = summary.rebuildId;
+        const holdsSelected = members.some(m => m.id === selectedId || m.id === activeId);
+        const open = openRebuildGroups.has(id) || (holdsSelected && !closedRebuildGroups.has(id));
+        const from = Math.min(...members.map(m => m.newFrom));
+        const to = Math.max(...members.map(m => m.coversTo));
+        const badges = [`<span class="recall-badge">${members.length} batch${members.length === 1 ? '' : 'es'}</span>`];
+        if (members.some(m => m.id === activeId)) {
+            badges.unshift('<span class="recall-badge recall-badge-active">Active</span>');
+        }
+
+        html.push(`
+            <div class="recall-row-item recall-row-group" data-recall-group="${escapeHtml(id)}" role="button" tabindex="0" aria-expanded="${open}">
+                <div class="recall-row-main">
+                    <span class="recall-row-name">
+                        <i class="fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
+                        Rebuild
+                    </span>
+                    <span class="recall-row-badges">${badges.join('')}</span>
+                </div>
+                <div class="recall-row-sub recall-dim">
+                    Messages ${from}–${to} · ${formatTimestamp(Math.max(...members.map(m => m.createdAt)))}
+                </div>
+            </div>`);
+
+        if (open) {
+            html.push(...members.map(row));
+        }
+    }
+
+    list.innerHTML = html.join('');
+
+    for (const group of qa('[data-recall-group]')) {
+        const toggle = () => {
+            const id = group.dataset.recallGroup;
+            const open = group.getAttribute('aria-expanded') === 'true';
+            (open ? closedRebuildGroups : openRebuildGroups).add(id);
+            (open ? openRebuildGroups : closedRebuildGroups).delete(id);
+            renderList();
+        };
+        group.addEventListener('click', toggle);
+        group.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggle();
+            }
+        });
+    }
 
     // A summary sits in permanent context, so its size is the standing cost of
     // keeping it — the most useful number about it after its text.
@@ -1080,6 +1487,9 @@ function renderDetail() {
     }
     if (summary.seededFromLegacy) {
         badges.push('<span class="recall-badge">Continued the built-in summary</span>');
+    }
+    if (summary.rebuildId && summary.rebuildStep) {
+        badges.push(`<span class="recall-badge">Rebuild batch ${summary.rebuildStep}${summary.rebuildSteps ? ` of ${summary.rebuildSteps}` : ''}</span>`);
     }
     q('[data-recall="detail-badges"]').innerHTML = badges.join('');
 

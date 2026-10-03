@@ -128,6 +128,29 @@ sync. It won't do it on its own; a mismatch is usually deliberate.
 active on its own, so you can compare and pick. It re-reads the exact messages the original
 read, hidden or not, and rebuilds on the summary the original was built on.
 
+**Rebuild…** re-summarises a long chat from a point you choose, for when a summary went bad
+somewhere and everything after it built on the mistake. It works through the chat in batches,
+each revising the one before, and you choose:
+
+- **Start**: from the beginning, after a summary you trust, or from a message number. A
+  message number with nothing before it summarised starts from scratch, unless the built-in
+  Summarize left a summary to continue.
+- **End**: where the active summary ends, or the latest message.
+- **Batches**: the break points your existing summaries already chose, or every N messages
+  (50 by default). A batch too big for one request is split rather than refused.
+- **Pause after each batch** to read it, edit it, redo it (the guidance field applies), or
+  stop. Off, it runs straight through and pauses only if a batch fails.
+- **Old summaries**: kept, with the rebuild shown as one folded row in the archive, or deleted
+  once the rebuild finishes.
+
+Nothing is hidden or unhidden along the way. When the rebuild finishes, its last batch becomes
+active and the chat is synced to it; stop partway and the finished batches are kept but
+nothing else changes — start a new rebuild after the last of them to carry on. The dialog
+estimates the tokens it will send: the messages and prompt are counted exactly, but the
+summary carried between batches is guessed from your current summary's size, so the real
+figure can differ. Lorebook entries are never part of a summary request, so they don't
+affect it.
+
 **Deleting** a summary offers to unhide the messages it hid. Recall only ever unhides what it
 hid itself.
 
