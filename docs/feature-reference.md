@@ -799,15 +799,16 @@ because the user may not be looking at the screen when it happens.
 This replaces automatic summarization entirely.
 
 Recall reads the size of **the last prompt actually sent** — not an estimate of what the next
-one might be. On ST that is the same figure as *Total Tokens* at the top of the Prompt Manager,
-and the panel says so, because it is the number users already watch.
+one might be. The panel names where the host shows that same figure (on SillyTavern, *Total
+Tokens* at the top of the Prompt Manager), because it is the number users already watch.
 
-**The prompt never gets the whole context.** The host holds the chat's Max Response Length back
+**The prompt never gets the whole context.** The host holds the chat's response length back
 for the reply, and once the prompt reaches what is left — the **room** — it leaves the oldest
 messages out without saying so. The room, not the context limit, is what the user is racing,
 and everything the nudge shows is measured against it: the settings hint names it and how it
 was worked out, the drawer reads "64.2k of 108k room", and the notification says where messages
-start being left out. With a large enough Max Response Length the room falls below the
+start being left out. Each uses the host's own name for the response-length setting, so the
+user can find it. With a large enough response length the room falls below the
 threshold, and the nudge can then never fire; the panel shows a warning saying exactly that,
 with both remedies, whenever the threshold is at or above the room.
 
@@ -815,8 +816,8 @@ When usage crosses the threshold:
 
 1. **One notification, once per crossing.** Not one per message — otherwise the user gets a
    notification every turn for the twenty messages they spend hunting for a scene break. It
-   reads: *"Your prompt is at 64.2k tokens, past your 64k warning. ST starts leaving out old
-   messages at 108k. A good time to find a stopping point and summarise."*
+   reads, on SillyTavern: *"Your prompt is at 64.2k tokens, past your 64k warning. ST starts
+   leaving out old messages at 108k. A good time to find a stopping point and summarise."*
 2. The drawer shows a persistent line saying context is filling up, until it isn't.
 3. On a successful summary, the nudge disarms. It re-arms only after a reading *below* the
    threshold — a dead zone, so it cannot fire again immediately if usage is somehow still high
@@ -824,7 +825,7 @@ When usage crosses the threshold:
 
 The threshold is set in tokens. **0 means "derive it"**, at 50% of the context limit, which
 keeps the default meaningful across wildly different context sizes. The panel shows the
-resolved number and the room live: "tokens — auto: half your 128,000 context. ST starts leaving
+resolved number and the room live, on SillyTavern: "tokens — auto: half your 128,000 context. ST starts leaving
 out old messages at 108,000 (128,000 − your 20,000 Max Response Length)."
 
 If there is no record of a prompt yet — a fresh chat, or a swipe before any generation — the
@@ -1098,7 +1099,7 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Use the built-in's old summary | on | Stand in an existing external summary until Recall has one, and seed the first pass with it. |
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
 | Warn me when context is filling up | on | Whether to notify at all. |
-| Warn at | 0 (auto) | In tokens, measured against the last prompt sent (Total Tokens). 0 derives 50% of the context limit. Warns when it is at or above the room the prompt has. |
+| Warn at | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 50% of the context limit. Warns when it is at or above the room the prompt has. |
 | Kept free for the reply (response reserve) | 2,000 | Context held back when sizing the buffer. |
 | Most the model may write (output budget) | 15,000 | The generation limit sent to the API — thinking included, on most providers. |
 | Framing prefix / suffix | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
