@@ -13,6 +13,9 @@ Three, and work only ever moves one way: `wip-do-not-install` → `test` → `ma
 - **Commit on `wip-do-not-install`.** Never commit directly to `test` or `main`.
 - **`test` takes `wip-do-not-install` whole**, as a fast-forward, only when asked. If `test`
   has something wip lacks, stop and ask rather than merging.
+- **Every push to `test` also goes to the test repo's `main`**:
+  `git push testrepo test:main` (remote `testrepo`, https://github.com/lathlearns/recall-test).
+  It exists for testers whose ST cannot switch branches; it should always match `test`.
 - **`main` takes `test`** only with explicit approval, and gets the version bump and
   `CHANGELOG.md` entry as part of that release.
 - **Pushing** any branch happens only when asked.
