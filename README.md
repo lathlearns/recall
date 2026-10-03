@@ -143,8 +143,13 @@ each revising the one before, and you choose:
   many and offers to read them too. That's ticked by default on a chat with no Recall
   summaries yet. Reading them doesn't unhide them. ST's own help, welcome and `/comment`
   messages are never read; narrator lines are.
-- **Pause after each batch** to read it, edit it, redo it (the guidance field applies), or
-  stop. Off, it runs straight through and pauses only if a batch fails.
+- **Pause after each batch** to read it, edit it, redo it, or stop. Off, it runs straight
+  through and pauses only if a batch fails.
+- **Guidance for every batch** goes in the dialog, and is sent with each batch of that rebuild.
+  For **one batch**, type in the manager's guidance field during a pause, then press *Keep
+  going* (it goes with the next batch) or *Redo* (it goes with the rewrite). Both are sent when
+  both are set. Anything already in the manager's field when you open the dialog is moved into
+  the dialog's.
 - **Old summaries**: kept, with the rebuild shown as one folded row in the archive, or deleted
   once the rebuild finishes.
 

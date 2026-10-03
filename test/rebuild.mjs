@@ -253,6 +253,27 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     check('stop: lock released', gen.control.locked, false);
 }
 
+// 8b. Guidance: the dialog's holds for every batch; one typed in a pause is for
+// the next batch only; both go together, labelled.
+{
+    reset();
+    await rebuild.startRebuild({ ...base, start: { kind: 'beginning' }, review: true, note: 'track the pier' });
+    check('note: first batch gets the whole-rebuild note', gen.calls[0].steeringNote, 'track the pier');
+
+    await rebuild.redoRebuildBatch('shorter');
+    check('note: a redo sends both', gen.calls[1].steeringNote,
+        'For the whole rebuild: track the pier\n\nFor this batch: shorter');
+
+    await rebuild.continueRebuild('name the boat');
+    check('note: keep going sends its own with the whole one', gen.calls[2].steeringNote,
+        'For the whole rebuild: track the pier\n\nFor this batch: name the boat');
+
+    await rebuild.continueRebuild();
+    check('note: a batch note does not carry over', gen.calls[3]?.steeringNote ?? 'track the pier', 'track the pier');
+
+    await rebuild.stopRebuild();
+}
+
 // 9. A failed batch waits to be retried, and retrying carries on.
 {
     reset();

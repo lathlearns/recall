@@ -642,6 +642,17 @@
     gap: 0.35em;
 }
 
+/* Full width under both columns: a sentence of guidance needs the room. */
+.recall-rebuild-note {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+}
+
+.recall-rebuild-note .text_pole {
+    margin: 0;
+}
+
 .recall-rebuild-plan {
     display: flex;
     flex-direction: column;

@@ -646,8 +646,16 @@ touching visibility until the end.
   will not fit in one request is cut where it stops fitting, and the rest leads the next batch.
 - **Pausing** opens each finished batch in the detail view, editable, with *Keep going* (which
   saves any edit first, since the next batch builds on it), *Redo* (writes it again on the same
-  basis, replacing it, with the guidance field applied) and *Stop*. A failed batch pauses the
-  same way with *Try again*, whether or not pausing was chosen.
+  basis, replacing it) and *Stop*. A failed batch pauses the same way with *Try again*, whether
+  or not pausing was chosen.
+- **Guidance comes at two levels**, because a rebuild is one job and also an iterative one.
+  The dialog has its own field, sent with **every batch** of that rebuild and not remembered
+  afterwards; whatever is in the manager's guidance field when the dialog opens is moved into
+  it, so it is seen, and does not linger to steer the next ordinary pass. During a pause the
+  manager's field is for **the next batch only**: *Keep going* sends it with the next batch,
+  *Redo* with the rewrite, each consuming it. *Try again* with the field empty retries with the
+  note the failed batch had. When both levels are set, both are sent, labelled "For the whole
+  rebuild" and "For this batch", and a batch records the combined text as its note.
 - **Every batch is an ordinary saved summary**, inactive, tagged with the rebuild it belongs to.
   The archive folds a rebuild into one row that opens to list its batches. Starting a rebuild
   after one of its batches continues the same rebuild.

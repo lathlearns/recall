@@ -53,6 +53,7 @@ import { uuid } from './util.js';
  * @property {boolean} review       Pause after every batch for the user to read it.
  * @property {boolean} [includeForeign] Also read messages hidden by something other than Recall.
  * @property {'keep'|'replace'} oldSummaries
+ * @property {string} [note]       Guidance sent with every batch. Not remembered between rebuilds.
  *
  * @typedef {object} RebuildPlan
  * @property {number} from          First message rebuilt.
@@ -399,6 +400,22 @@ export async function startRebuild(options) {
     await runQueue();
 }
 
+/**
+ * The guidance the next batch is sent with. Two kinds, because a rebuild is one
+ * job and also an iterative one: `options.note`, from the dialog, holds for every
+ * batch, and `pendingNote`, typed during a pause, is for the next batch only.
+ * Both go when both are set, labelled so neither reads as overriding the other.
+ * @returns {string}
+ */
+function batchNote() {
+    const whole = String(state.options.note ?? '').trim();
+    const once = String(state.pendingNote ?? '').trim();
+    if (whole && once) {
+        return `For the whole rebuild: ${whole}\n\nFor this batch: ${once}`;
+    }
+    return whole || once;
+}
+
 /** The summary the next batch revises: the last one this rebuild wrote, else the plan's. */
 function currentBasis() {
     return state.done[state.done.length - 1] ?? state.plan.basis;
@@ -421,7 +438,7 @@ async function runQueue() {
 
         try {
             // Cut where it stops fitting; the rest goes first in the next batch.
-            const fits = await fitBatch(withZero, basis?.content ?? seed, state.pendingNote ?? '');
+            const fits = await fitBatch(withZero, basis?.content ?? seed, batchNote());
             const minimum = state.plan.includesZero ? 2 : 1;
             if (fits < Math.min(minimum, withZero.length)) {
                 throw new RecallError(
@@ -443,7 +460,7 @@ async function runQueue() {
                 rebuildId: state.id,
                 step,
                 steps: state.done.length + state.queue.length,
-                steeringNote: state.pendingNote ?? '',
+                steeringNote: batchNote(),
             });
 
             state.pendingNote = '';
@@ -481,10 +498,21 @@ async function runQueue() {
     }
 }
 
-/** Keep going after a review, or try a failed batch again. */
-export async function continueRebuild() {
+/**
+ * Keep going after a review, or try a failed batch again.
+ *
+ * A note given here is for the next batch only. With none, a retry keeps the
+ * note the failed batch was given — it is the same batch, asked again — and
+ * moving on after a review has none, since the last one was used.
+ * @param {string} [steeringNote]
+ */
+export async function continueRebuild(steeringNote = '') {
     if (!state || state.status === 'running') {
         return;
+    }
+    const note = String(steeringNote ?? '').trim();
+    if (note) {
+        state.pendingNote = note;
     }
     if (!state.queue.length) {
         return endRebuild(true);

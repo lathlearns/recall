@@ -807,6 +807,16 @@ async function openRebuildDialog() {
             </fieldset>
         </div>
 
+        <div class="recall-rebuild-note">
+            <label for="recall-rb-note">Guidance for every batch</label>
+            <input id="recall-rb-note" class="text_pole" type="text" data-rb="note"
+                placeholder="Optional — sent with each batch of this rebuild, not remembered">
+            <p class="recall-help">
+                For one batch only, type in the guidance field at the top of the manager before
+                pressing Keep going or Redo. Both are sent when both are set.
+            </p>
+        </div>
+
         <div class="recall-rebuild-plan">
             <p data-rb="plan"></p>
             <p class="recall-dim" data-rb="estimate"></p>
@@ -835,6 +845,10 @@ async function openRebuildDialog() {
     // With no Recall summary yet, every hide is someone else's, and leaving them
     // all out would rebuild almost nothing.
     field('[data-rb="include-foreign"]').checked = !hasOwnSummaries();
+    // Guidance typed in the manager before opening this was almost certainly
+    // meant for the rebuild, so it is carried in where it can be seen and edited,
+    // rather than left behind to steer the next Summarize now by surprise.
+    field('[data-rb="note"]').value = peekSteeringNote();
 
     // The summary list defaults to the active one, the likeliest place a good
     // chain ends — but the start stays on "beginning" until the user picks it.
@@ -856,6 +870,7 @@ async function openRebuildDialog() {
             review: field('[data-rb="review"]').checked,
             includeForeign: field('[data-rb="include-foreign"]').checked,
             oldSummaries: chosen('old') || 'keep',
+            note: String(field('[data-rb="note"]').value ?? '').trim(),
         };
     };
 
@@ -940,8 +955,14 @@ async function openRebuildDialog() {
         }
     };
 
-    wrapper.addEventListener('input', () => void refresh());
-    wrapper.addEventListener('change', () => void refresh());
+    // The guidance changes nothing about the plan, so typing it does not replan.
+    const replan = event => {
+        if (event.target?.dataset?.rb !== 'note') {
+            void refresh();
+        }
+    };
+    wrapper.addEventListener('input', replan);
+    wrapper.addEventListener('change', replan);
     void refresh();
 
     // Wider than a plain confirm so the two columns sit side by side and the
@@ -968,6 +989,8 @@ async function openRebuildDialog() {
     settings.rebuildReview = choices.review;
     settings.rebuildOldSummaries = choices.oldSummaries;
     saveSettings();
+    // Its text, if any, went into the dialog's field and from there into the rebuild.
+    takeSteeringNote();
 
     hideBanner('error');
     hideBanner('notice');
@@ -1164,7 +1187,9 @@ function wireManager({ onSummarize }) {
         if (isDetailDirty()) {
             saveDetail();
         }
-        await continueRebuild();
+        // Guidance typed during the pause is for the next batch. Left in the field
+        // when there is no next batch, rather than consumed and thrown away.
+        await continueRebuild(getRebuild()?.queue.length ? takeSteeringNote() : '');
     });
     on('[data-recall="rebuild-redo"]', 'click', async () => {
         resetDraft();
