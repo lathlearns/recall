@@ -642,6 +642,22 @@
     gap: 0.35em;
 }
 
+/* ST's close button is a 24px icon hung 6px off the dialog's corner. On a phone
+   the dialog fills the screen, so that puts a small target partly past the edge.
+   On Recall's own windows it is bigger and sits inside the corner, clear of the
+   tab row below it. */
+.popup.recall-popup .popup-button-close {
+    top: 4px;
+    right: 4px;
+    width: 32px;
+    height: 32px;
+    font-size: 26px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* Full width under both columns: a sentence of guidance needs the room. */
 .recall-rebuild-note {
     display: flex;

@@ -106,6 +106,23 @@ function popupOptions(extra = {}) {
     };
 }
 
+/**
+ * One of Recall's own windows: the manager and the read-only views it opens.
+ *
+ * Tagged so style.css can enlarge ST's close button on them. ST draws it as a
+ * 24px icon hanging off the dialog's corner, which on a phone, where the dialog
+ * fills the screen, is a small target partly past the edge.
+ *
+ * @param {HTMLElement} content
+ * @param {object} [extra] Popup options on top of popupOptions().
+ * @returns {Popup}
+ */
+function displayPopup(content, extra = {}) {
+    const popup = new Popup(content, POPUP_TYPE.DISPLAY, '', popupOptions(extra));
+    popup.dlg.classList.add('recall-popup');
+    return popup;
+}
+
 /** @type {JQuery<HTMLElement>|null} */
 let drawerRoot = null;
 
@@ -1036,14 +1053,14 @@ export async function openManager({ onSummarize } = {}) {
     wireManager({ onSummarize });
     renderAll();
 
-    managerPopup = new Popup(managerRoot, POPUP_TYPE.DISPLAY, '', popupOptions({
+    managerPopup = displayPopup(managerRoot, {
         onClosing: guardUnsaved,
         onClose: () => {
             managerPopup = null;
             managerRoot = null;
             resetDraft();
         },
-    }));
+    });
 
     await managerPopup.show();
 }
@@ -1338,7 +1355,7 @@ async function showLastReasoning() {
 
     wrapper.querySelector('#recall_reasoning_view').value = text;
 
-    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', popupOptions()).show();
+    await displayPopup(wrapper).show();
 }
 
 function hideBanner(kind) {
@@ -1957,7 +1974,7 @@ async function showLegacySummary() {
 
     wrapper.querySelector('#recall_legacy_view').value = text;
 
-    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', popupOptions()).show();
+    await displayPopup(wrapper).show();
 }
 
 /**
@@ -2023,7 +2040,7 @@ async function showPreview() {
     wrapper.querySelector('#recall_preview_system').value = preview.systemPrompt;
     wrapper.querySelector('#recall_preview_buffer').value = preview.buffer;
 
-    await new Popup(wrapper, POPUP_TYPE.DISPLAY, '', popupOptions()).show();
+    await displayPopup(wrapper).show();
 }
 
 function reportError(error) {
