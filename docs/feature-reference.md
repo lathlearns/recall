@@ -698,7 +698,7 @@ edits and deletions almost always land above the anchor where they cannot move i
 Two separate numbers, because one cannot do both jobs. They sit adjacent in the settings
 because neither is comprehensible without the other.
 
-**Kept free for the reply** (the response reserve, default ~2,000). Context room held back when
+**Kept free for the reply** (the response reserve, default ~5,000). Context room held back when
 sizing the buffer; the chat history gets everything else. This is what Recall *expects* a
 summary to need. Set it too high and Recall starts refusing chats it could have handled.
 
@@ -1037,7 +1037,7 @@ A thin status strip in the extensions panel, available without opening anything:
 
 - the active summary's name (or "None", or "Built-in summary (stand-in)")
 - its coverage range, with a stale marker if applicable
-- current context usage as `24.1k / 32k (75%)`
+- current context usage against the room the prompt has, as `24.1k of 28k room` (§14)
 - the nudge line when context is high
 - **Summarize now** and **Open manager** buttons, plus **Stop** while a cancellable summary is
   running. Summarize counts up in place while it works; Open manager stays live throughout, so
@@ -1107,7 +1107,7 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
 | Warn me when context is filling up | on | Whether to notify at all. |
 | Warn at | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 50% of the context limit. Warns when it is at or above the room the prompt has. |
-| Kept free for the reply (response reserve) | 2,000 | Context held back when sizing the buffer. |
+| Kept free for the reply (response reserve) | 5,000 | Context held back when sizing the buffer. |
 | Most the model may write (output budget) | 15,000 | The generation limit sent to the API — thinking included, on most providers. |
 | Framing prefix / suffix | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
 | Minimum summary length | 50 tokens | Shorter responses are treated as failures rather than saved as stubs. |

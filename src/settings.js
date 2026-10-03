@@ -74,7 +74,7 @@ const DEFAULT_SETTINGS = {
      * Context room held back when budgeting the buffer. Passed to
      * getMaxPromptTokens(). This is NOT the generation limit — see outputBudget.
      */
-    responseReserve: 2000,
+    responseReserve: 5000,
 
     /**
      * The generation limit sent to the API, via generateRawData({ responseLength }).
