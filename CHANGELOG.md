@@ -4,6 +4,13 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.7.2
+
+**Edits made in the expanded editor can be saved.** Typing in the full-screen editor (the
+expand icon beside the summary text or a prompt block) never showed the *Unsaved changes* bar,
+so there was no Save button, and the edit was not kept. This hit phones hardest, where the
+expanded editor is the natural place to type.
+
 ## 1.7.1
 
 **The default prompt is in UK English and properly structured.** The wording is unchanged, but
