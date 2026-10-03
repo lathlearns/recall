@@ -109,19 +109,41 @@ function popupOptions(extra = {}) {
 /**
  * One of Recall's own windows: the manager and the read-only views it opens.
  *
- * Tagged so style.css can enlarge ST's close button on them. ST draws it as a
- * 24px icon hanging off the dialog's corner, which on a phone, where the dialog
- * fills the screen, is a small target partly past the edge.
+ * ST's close button is an icon hung off the dialog's corner. On a phone the
+ * dialog fills the screen, which puts it partly past the edge, and on Firefox
+ * for Android it is not visible at all. So on narrow screens Recall's windows
+ * carry their own, in the layout rather than on the frame: the manager's sits in
+ * its tab row, and any other window gets one in a row at its top. style.css
+ * shows it, and hides ST's, below the phone breakpoint; on a desktop ST's stays.
+ *
+ * Closing through it goes through complete(), so the manager's guard against
+ * losing unsaved edits applies exactly as it does to ST's button.
  *
  * @param {HTMLElement} content
  * @param {object} [extra] Popup options on top of popupOptions().
  * @returns {Popup}
  */
 function displayPopup(content, extra = {}) {
+    if (!content.querySelector('[data-recall="close"]')) {
+        content.insertAdjacentHTML('afterbegin', `<div class="recall-popup-head">${CLOSE_BUTTON}</div>`);
+    }
+
     const popup = new Popup(content, POPUP_TYPE.DISPLAY, '', popupOptions(extra));
     popup.dlg.classList.add('recall-popup');
+
+    for (const button of content.querySelectorAll('[data-recall="close"]')) {
+        button.addEventListener('click', () => void popup.completeCancelled());
+        button.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                void popup.completeCancelled();
+            }
+        });
+    }
     return popup;
 }
+
+const CLOSE_BUTTON = '<div class="recall-close fa-solid fa-xmark" data-recall="close" role="button" tabindex="0" title="Close"></div>';
 
 /** @type {JQuery<HTMLElement>|null} */
 let drawerRoot = null;

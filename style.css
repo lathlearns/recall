@@ -377,6 +377,13 @@
     user-select: none;
 }
 
+/* Recall's own close button: shown only below the phone breakpoint, where it
+   replaces ST's (see displayPopup). */
+.recall-close,
+.recall-popup-head {
+    display: none;
+}
+
 .recall-tab:hover {
     color: var(--SmartThemeBodyColor);
 }
@@ -1232,6 +1239,28 @@
 
     .recall-tabs {
         gap: 0;
+    }
+
+    .recall-close {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 2.4em;
+        min-height: calc(var(--mainFontSize) * 2.4);
+        font-size: 1.25em;
+        cursor: pointer;
+        color: var(--SmartThemeBodyColor);
+    }
+
+    .recall-popup-head {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    /* ST shows its own by setting display inline, so only !important hides it. */
+    .popup.recall-popup .popup-button-close {
+        display: none !important;
     }
 
     .recall-tab {
