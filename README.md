@@ -8,6 +8,11 @@ A summary extension for **SillyTavern 1.18.0+**, replacing the built-in Summariz
 > it's built and tested around one setup, so your experience may vary, and support is
 > best-effort at most.
 
+> **It doesn't automate the memory process.** You decide when to summarise, what the summary
+> should keep, and what stays visible; Recall does the work once you have. Automating those
+> decisions saves effort but gives up some nuance, and Recall makes that trade the other way.
+> If you'd rather it happened on its own, other extensions do that.
+
 Recall keeps one running summary of the whole chat in permanent context, resolved through a
 `{{recall}}` macro. The summary prompt is a set of toggleable blocks you can edit, every
 summary you generate is kept in a browsable archive, and nothing generates on a timer —
@@ -179,6 +184,10 @@ The prompt is an ordered list of named blocks — *Summary Prompt* and *Quality 
 default. Each can be switched off, edited, reordered or deleted, and you can add your own.
 New instructions belong above the quality check, so they land inside the instruction rather
 than after the model has been told to check its work and submit.
+
+The default prompt is [Ancient Access](https://ancientaccess.weebly.com/)'s summarisation
+prompt. A light tie-in with her preset is planned: once it carries Recall's markers, Recall
+will recognise it and turn on the settings it's meant to be used with.
 
 Edits are a working copy: nothing is saved until you press **Save**, and **Discard** throws
 them away. Each block shows its size in tokens, and the total for the enabled ones is what
