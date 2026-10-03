@@ -68,7 +68,19 @@ import { paintTokens, createStreamingCount } from './tokens.js';
 import { splitTitle } from './title.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
 
-const EXTENSION_PATH = 'third-party/recall';
+/**
+ * Where ST finds the templates, relative to its extensions folder: the folder
+ * Recall was actually installed into, read from this file's own URL.
+ *
+ * Not a constant, because the folder is named after whatever it was installed
+ * from — the repo name for an install by URL (`recall-test` for the test repo),
+ * `recall-main` for an unzipped download — and with the wrong name every template
+ * fails to load and the extension has no interface at all.
+ */
+const EXTENSION_PATH = (() => {
+    const path = decodeURIComponent(new URL('..', import.meta.url).pathname);
+    return path.split('/scripts/extensions/')[1]?.replace(/\/$/, '') || 'third-party/recall';
+})();
 
 /**
  * Options shared by every popup Recall opens.
