@@ -184,7 +184,8 @@ own copy with **Override for this character**. If you edit the global prompt aft
 of sync, with a button to take the global copy again. Group chats always use the global
 prompt.
 
-**Restore defaults** puts the shipped blocks back.
+**Restore default prompt** puts the shipped blocks back. It touches only the prompt; to reset
+the settings, see the last row below.
 
 ---
 
@@ -208,6 +209,7 @@ prompt.
 | Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
 | Minimum summary length | In tokens. Shorter responses are treated as failures, not saved as stubs. |
 | Deep integrity check | Also hash the covered range, catching edits below a summary's anchor. Off by default — it flags on any edit anywhere. |
+| Reset settings to defaults | Puts every setting here back as shipped. The summary prompt, character copies and summaries are kept. |
 
 ### The two limits
 

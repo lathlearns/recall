@@ -486,6 +486,29 @@ export function restoreDefaultBlocks() {
     saveSettings();
 }
 
+/**
+ * What resetting the settings leaves alone: the prompt library and every
+ * character's copy of it. Those are writing, not settings — the prompt has its
+ * own restore, and a character's copy can only be dropped one character at a time,
+ * from that character — so a reset that took them would destroy work no other
+ * button could have reached.
+ */
+const KEPT_ON_RESET = new Set(['schemaVersion', 'library', 'characters']);
+
+/**
+ * Puts every setting back to how Recall ships, bar what KEPT_ON_RESET names.
+ * Summaries live in the chats, not here, so they are untouched by construction.
+ */
+export function resetSettings() {
+    const settings = getSettings();
+    for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+        if (!KEPT_ON_RESET.has(key)) {
+            settings[key] = structuredClone(value);
+        }
+    }
+    saveSettings();
+}
+
 /** @returns {RecallBlock} A blank block, ready to be inserted and edited. */
 export function makeEmptyBlock() {
     return {

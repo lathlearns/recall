@@ -158,7 +158,7 @@ function populate() {
     storedThink.textContent = thinking;
 
     q('[data-recall="toggle-override"]').textContent = 'Stop using a character-specific prompt';
-    q('[data-recall="restore-defaults"]').textContent = 'Restore defaults';
+    q('[data-recall="restore-defaults"]').textContent = 'Restore default prompt';
     q('[data-recall="blocks"]').innerHTML = `
         <div class="recall-block"><div class="recall-block-head">
             <label class="checkbox_label recall-block-enable"><input type="checkbox" checked></label>

@@ -23,6 +23,7 @@ import {
     endOverride,
     resyncOverride,
     restoreDefaultBlocks,
+    resetSettings,
     makeEmptyBlock,
     isOverriding,
     getAvatarKey,
@@ -2065,6 +2066,19 @@ function wireSettings() {
         restoreDefaultBlocks();
         draftBlocks = null;
         renderSettings();
+    });
+
+    on('[data-recall="reset-settings"]', 'click', async () => {
+        const confirmed = await Popup.show.confirm(
+            'Reset Recall\'s settings?',
+            'Every setting goes back to its default. The summary prompt, character copies and summaries are kept.',
+        );
+        if (!confirmed) {
+            return;
+        }
+        resetSettings();
+        renderAll();
+        refreshDrawer();
     });
 
     on('[data-recall="blocks-save"]', 'click', () => {

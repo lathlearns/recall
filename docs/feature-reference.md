@@ -364,7 +364,9 @@ paragraph.
 - Editing blocks puts them in a **working copy**: the set is untouched until Save is pressed,
   with a modified marker and Save/Discard. Closing the manager with unsaved block edits or an
   unsaved summary edit asks for confirmation first.
-- **Restore defaults** puts the shipped blocks back, behind a confirm.
+- **Restore default prompt** puts the shipped blocks back, behind a confirm. It touches the
+  prompt only — the settings have their own reset (§19), and the button is named so neither
+  reads as the other.
 - The panel shows a token count per block, and a total for the enabled blocks joined exactly
   the way generation joins them — so the total is the real system-prompt cost, not the sum of
   the parts.
@@ -1089,6 +1091,11 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Framing prefix / suffix | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
 | Minimum summary length | 50 tokens | Shorter responses are treated as failures rather than saved as stubs. |
 | Deep integrity check | off | Also hash the covered range, catching edits below a summary's anchor. Noisy — flags on any edit anywhere. |
+
+**Reset settings to defaults** (end of Advanced, behind a confirm) puts every setting in this
+table back as shipped. It keeps the block sets and every per-character override: those are
+writing, not settings, the prompt has its own restore, and an override can otherwise only be
+dropped from its own character. Summaries live in the chats and are untouched.
 
 Prompt blocks, block sets and per-character overrides are stored globally. Summaries, the
 active pointer and hide records are stored per chat.

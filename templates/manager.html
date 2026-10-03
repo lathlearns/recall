@@ -566,7 +566,7 @@
                         <i class="fa-solid fa-plus"></i>
                         <span>Add block</span>
                     </div>
-                    <div class="menu_button" data-recall="restore-defaults">Restore defaults</div>
+                    <div class="menu_button" data-recall="restore-defaults">Restore default prompt</div>
                     <span class="recall-dim recall-blocks-total">
                         Enabled blocks: <span data-recall="blocks-total"></span>
                     </span>
@@ -651,6 +651,15 @@
                     <p class="recall-help">
                         Also hashes the whole covered range, catching edits below a summary's anchor. Off by
                         default: it flags on any edit anywhere in history, which is noisy in normal use.
+                    </p>
+
+                    <div class="recall-row">
+                        <div class="menu_button" data-recall="reset-settings">Reset settings to defaults</div>
+                    </div>
+                    <p class="recall-help">
+                        Every setting on this tab goes back to how Recall ships, including the reference
+                        material ticks and where summarization runs. The summary prompt, any character's own
+                        copy of it, and your summaries are left alone.
                     </p>
                 </div>
             </section>
