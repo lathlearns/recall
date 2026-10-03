@@ -611,6 +611,12 @@
     margin: 0;
 }
 
+.recall-rebuild-foreign {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+}
+
 .recall-rebuild-plan {
     display: flex;
     flex-direction: column;

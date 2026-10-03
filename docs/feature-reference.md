@@ -622,8 +622,12 @@ touching visibility until the end.
   summaries' break points, or every N messages, default 50), whether to pause after each batch,
   and whether old summaries are kept or replaced.
 - **Each batch is read by index, like a regenerate.** It reads its stretch of messages plus
-  message 0, the same as any pass would: messages Recall hid are read, messages the user hid by
-  hand are not. Each batch revises the summary written by the batch before it. A batch that
+  message 0, the same as any pass would: messages Recall hid are read, messages hidden by
+  anything else are not — unless the user ticks *Read them too*. The dialog shows that choice
+  only when the range holds such messages, says how many, and ticks it by default when the chat
+  has no Recall summary yet (the migration case, where every hide is someone else's). Reading
+  them never unhides them. The host's own interface messages — help, welcome, comments — are
+  never read; narrator lines, which are story text, are. Each batch revises the summary written by the batch before it. A batch that
   will not fit in one request is cut where it stops fitting, and the rest leads the next batch.
 - **Pausing** opens each finished batch in the detail view, editable, with *Keep going* (which
   saves any edit first, since the next batch builds on it), *Redo* (writes it again on the same

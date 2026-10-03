@@ -138,6 +138,11 @@ each revising the one before, and you choose:
 - **End**: where the active summary ends, or the latest message.
 - **Batches**: the break points your existing summaries already chose, or every N messages
   (50 by default). A batch too big for one request is split rather than refused.
+- **Messages hidden by something other than Recall** (by hand, or from using the built-in
+  Summarize) are skipped like in any other pass. If the range has any, the dialog says how
+  many and offers to read them too. That's ticked by default on a chat with no Recall
+  summaries yet. Reading them doesn't unhide them. ST's own help, welcome and `/comment`
+  messages are never read; narrator lines are.
 - **Pause after each batch** to read it, edit it, redo it (the guidance field applies), or
   stop. Off, it runs straight through and pauses only if a batch fails.
 - **Old summaries**: kept, with the rebuild shown as one folded row in the archive, or deleted

@@ -50,6 +50,7 @@ import {
     planRebuild,
     estimateRebuild,
     startableSummaries,
+    hasOwnSummaries,
 } from './rebuild.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
@@ -751,6 +752,15 @@ async function openRebuildDialog() {
             <p class="recall-help">A batch too big for one request is split where it stops fitting, and the rest goes in the next one.</p>
         </fieldset>
 
+        <div class="recall-banner recall-banner-warn" data-rb="foreign" hidden>
+            <i class="fa-solid fa-eye-slash"></i>
+            <div class="recall-rebuild-foreign">
+                <span data-rb="foreign-text"></span>
+                <label class="checkbox_label"><input type="checkbox" data-rb="include-foreign">
+                    <span>Read them too</span></label>
+            </div>
+        </div>
+
         <fieldset class="recall-rebuild-group">
             <legend>As it goes</legend>
             <label class="checkbox_label"><input type="checkbox" data-rb="review">
@@ -788,6 +798,10 @@ async function openRebuildDialog() {
     radio('old', settings.rebuildOldSummaries);
     field('[data-rb="size"]').value = String(settings.rebuildBatchSize);
     field('[data-rb="review"]').checked = !!settings.rebuildReview;
+    // Not remembered: whether to read someone else's hides depends on the chat.
+    // With no Recall summary yet, every hide is someone else's, and leaving them
+    // all out would rebuild almost nothing.
+    field('[data-rb="include-foreign"]').checked = !hasOwnSummaries();
 
     // The summary list defaults to the active one, the likeliest place a good
     // chain ends — but the radio stays on "beginning" until the user picks it.
@@ -807,6 +821,7 @@ async function openRebuildDialog() {
             breaks: chosen('breaks') ?? 'existing',
             batchSize: clampNumber(field('[data-rb="size"]').value, 1, 100_000, 50),
             review: field('[data-rb="review"]').checked,
+            includeForeign: field('[data-rb="include-foreign"]').checked,
             oldSummaries: chosen('old') ?? 'keep',
         };
     };
@@ -836,7 +851,26 @@ async function openRebuildDialog() {
             return;
         }
 
+        const foreignBox = field('[data-rb="foreign"]');
+        foreignBox.toggleAttribute('hidden', !plan.foreign);
+        field('[data-rb="foreign-text"]').textContent =
+            `${plan.foreign} message${plan.foreign === 1 ? ' in this range was' : 's in this range were'} hidden by something other than Recall — `
+            + 'usually by hand, or while using the built-in Summarize. Recall skips messages you hid on purpose, '
+            + 'so unless you include them, the rebuild will not read them. Including them does not unhide '
+            + 'anything; they stay hidden, and are simply read.';
+
+        if (plan.empty) {
+            planLine.textContent = `Every message from ${plan.from} to ${plan.to} is hidden, so there is nothing to read`
+                + (plan.foreign ? ' — tick "Read them too" above to include them.' : '.');
+            estimateLine.textContent = '';
+            guessLine.textContent = '';
+            return;
+        }
+
         const parts = [`Messages ${plan.from}–${plan.to} in ${plan.batches.length} batch${plan.batches.length === 1 ? '' : 'es'}`];
+        if (plan.skipped) {
+            parts.push(`${plan.skipped} more had nothing readable in ${plan.skipped === 1 ? 'it' : 'them'} and ${plan.skipped === 1 ? 'is' : 'are'} skipped`);
+        }
         if (choices.breaks === 'existing' && !plan.usedExisting) {
             parts.push(`no existing break points in that range, so every ${choices.batchSize} messages instead`);
         }
@@ -855,10 +889,14 @@ async function openRebuildDialog() {
         if (mine !== generation) {
             return;
         }
-        estimateLine.textContent = `About ${formatTokens(estimate.sent)} tokens sent and ${formatTokens(estimate.written)} written, across ${estimate.batches} request${estimate.batches === 1 ? '' : 's'}.`;
-        guessLine.textContent = estimate.guessedFrom
-            ? `An estimate: the messages and prompt are counted exactly, but the summary each batch carries into the next is guessed from your current summary's size (${formatTokens(estimate.guessedFrom)}). If the rebuilt summaries come out longer or shorter, the real total will differ.`
-            : 'An estimate, and a rough one: there is no current summary to judge how long the rebuilt ones will be, so the summary carried between batches is left out of the total.';
+        const requests = `${estimate.batches} request${estimate.batches === 1 ? '' : 's'}`;
+        if (estimate.guessedFrom) {
+            estimateLine.textContent = `About ${formatTokens(estimate.sent)} tokens sent and ${formatTokens(estimate.written)} written, across ${requests}.`;
+            guessLine.textContent = `An estimate: the messages and prompt are counted exactly, but the summary each batch carries into the next is guessed from your current summary's size (${formatTokens(estimate.guessedFrom)}). If the rebuilt summaries come out longer or shorter, the real total will differ.`;
+        } else {
+            estimateLine.textContent = `At least ${formatTokens(estimate.sent)} tokens sent, across ${requests}.`;
+            guessLine.textContent = 'A floor, not an estimate: there is no Recall summary here to judge how long the rebuilt ones will be, so neither what gets written nor the summary carried from batch to batch is counted. The real total will be higher.';
+        }
     };
 
     wrapper.addEventListener('input', () => void refresh());

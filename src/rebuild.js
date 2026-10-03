@@ -51,6 +51,7 @@ import { uuid } from './util.js';
  * @property {'existing'|'fixed'} breaks
  * @property {number} batchSize
  * @property {boolean} review       Pause after every batch for the user to read it.
+ * @property {boolean} [includeForeign] Also read messages hidden by something other than Recall.
  * @property {'keep'|'replace'} oldSummaries
  *
  * @typedef {object} RebuildPlan
@@ -61,6 +62,10 @@ import { uuid } from './util.js';
  * @property {string} seed          The built-in's summary, when it stands in for a basis.
  * @property {boolean} usedExisting Whether the breaks came from existing summaries.
  * @property {boolean} includesZero Whether message 0 is read with every batch.
+ * @property {number} foreign       Messages in range hidden by something other than Recall.
+ * @property {boolean} includeForeign Whether those are being read.
+ * @property {number} skipped       Batches dropped because nothing in them was readable.
+ * @property {boolean} empty        Nothing at all to read; the rebuild cannot start.
  */
 
 /**
@@ -135,13 +140,51 @@ function recallOwnedHides() {
 }
 
 /**
- * Whether a message would be read. Hidden by Recall counts as readable — that is
- * the whole point — but a message the user hid by hand stays out, as it would
- * from any other pass.
+ * ST's own message types (`system_message_types`, ST 1.18), less `narrator`.
+ *
+ * Everything here is interface rather than story: help and welcome text, a
+ * `/comment` note, the Assistant screen. Narrator lines from `/sys` are left off
+ * deliberately — they are story text, written into the chat like any other
+ * message. The presence of a type cannot stand in for this list: ordinary
+ * messages carry one too on some screens (`assistant_message`).
  */
-function isReadable(index, owned) {
+const HOST_SYSTEM_TYPES = new Set([
+    'help', 'welcome', 'empty', 'generic', 'comment', 'slash_commands', 'formatting',
+    'hotkeys', 'macros', 'welcome_prompt', 'assistant_note', 'assistant_message',
+]);
+
+/**
+ * A message ST put in the chat for its own purposes, rather than one of the
+ * chat's that someone hid. Never read, whatever is chosen.
+ */
+function isHostSystemMessage(message) {
+    return HOST_SYSTEM_TYPES.has(message?.extra?.type);
+}
+
+/**
+ * Whether a message would be read. Hidden by Recall counts as readable — that is
+ * the whole point. Hidden by anything else is read only when the user said so:
+ * by default it stays out, as it would from any other pass.
+ */
+function isReadable(index, owned, includeForeign) {
     const message = chat[index];
-    return !!message && (message.is_system !== true || owned.has(index));
+    if (!message) {
+        return false;
+    }
+    if (message.is_system !== true || owned.has(index)) {
+        return true;
+    }
+    return includeForeign && !isHostSystemMessage(message);
+}
+
+/**
+ * Whether the chat has any Recall summary. Without one, every hidden message was
+ * hidden by something else — usually by hand while using the built-in Summarize —
+ * so reading them is the sensible default rather than the exception.
+ * @returns {boolean}
+ */
+export function hasOwnSummaries() {
+    return getSummariesRaw().length > 0;
 }
 
 /**
@@ -233,33 +276,47 @@ export function planRebuild(options) {
     }
 
     const owned = recallOwnedHides();
+    const includeForeign = !!options.includeForeign;
+
+    // Counted whatever is chosen, so the dialog can say how many there are
+    // before the user decides.
+    let foreign = 0;
+    for (let i = Math.max(0, from); i <= to; i++) {
+        const message = chat[i];
+        if (message?.is_system === true && !owned.has(i) && !isHostSystemMessage(message)) {
+            foreign++;
+        }
+    }
+
     const batches = [];
+    let skipped = 0;
     for (const [lo, hi] of ranges) {
         const batch = [];
         for (let i = Math.max(1, lo); i <= hi; i++) {
-            if (isReadable(i, owned)) {
+            if (isReadable(i, owned, includeForeign)) {
                 batch.push(i);
             }
         }
-        // A stretch the user hid entirely has nothing to read. Skipping it is
-        // what any other pass would do; it just needs no request of its own.
+        // A stretch with nothing readable needs no request of its own. Counted,
+        // so the plan can say so rather than quietly showing fewer batches.
         if (batch.length) {
             batches.push(batch);
+        } else {
+            skipped++;
         }
     }
 
     // Every pass reads message 0, since it is never hidden; a rebuild matches,
     // so the scenario reaches every batch the way it reached every summary.
-    const includesZero = isReadable(0, owned);
+    const includesZero = isReadable(0, owned, includeForeign);
 
-    if (!batches.length && !(from === 0 && includesZero)) {
-        throw new RecallError(`Every message from ${from} to ${to} is hidden by hand, so there is nothing to read.`, { kind: 'empty' });
-    }
-    if (!batches.length) {
+    // Not thrown: the dialog still needs the foreign count to offer the way out.
+    const empty = !batches.length && !(from === 0 && includesZero);
+    if (!batches.length && !empty) {
         batches.push([]);
     }
 
-    return { from, to, batches, basis, seed, usedExisting, includesZero };
+    return { from, to, batches, basis, seed, usedExisting, includesZero, foreign, includeForeign, skipped, empty };
 }
 
 /**
@@ -317,6 +374,9 @@ export async function startRebuild(options) {
     }
 
     const plan = planRebuild(options);
+    if (plan.empty) {
+        throw new RecallError(`Every message from ${plan.from} to ${plan.to} is hidden, so there is nothing to read.`, { kind: 'empty' });
+    }
 
     // Carrying on from a batch of an earlier rebuild continues that rebuild, so
     // the archive keeps showing it as one.

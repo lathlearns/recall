@@ -275,6 +275,55 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     check('one rebuild group, not two', ids.size, 1);
 }
 
+// 11. Hides that are not Recall's: counted, skipped by default, read on request,
+//     and ST's own interface messages never read either way.
+{
+    reset();
+    chat[6].is_system = false; // so 5 is the only foreign hide among 1–9 ... plus the ones below
+    chat[12].extra = { type: 'comment' };              // a /comment note, hidden
+    chat[12].is_system = true;
+    store.getSummariesRaw()[1].hiddenIndices = store.getSummariesRaw()[1].hiddenIndices.filter(i => i !== 12 && i !== 13);
+    chat[13].extra = { type: 'narrator' };             // a /sys narrator line someone hid
+    const off = rebuild.planRebuild({ ...base, start: { kind: 'beginning' } });
+    check('foreign: counted, comment excluded', off.foreign, 2);
+    check('foreign: skipped by default', off.batches.flat().includes(5) || off.batches.flat().includes(13), false);
+
+    const on = rebuild.planRebuild({ ...base, start: { kind: 'beginning' }, includeForeign: true });
+    check('foreign: read when asked', [5, 13].every(i => on.batches.flat().includes(i)), true);
+    check('foreign: an ST comment is never read', on.batches.flat().includes(12), false);
+}
+
+// 12. A chat with no Recall summaries, everything hidden by hand: the old
+//     built-in Summarize case. Empty batches are counted, not silently dropped.
+{
+    reset();
+    chat_metadata.recall.summaries.length = 0;
+    chat_metadata.recall.activeSummaryId = null;
+    for (let i = 1; i < 20; i++) chat[i].is_system = true;
+    for (let i = 20; i < 30; i++) chat[i].is_system = false;
+
+    const off = rebuild.planRebuild({ ...base, start: { kind: 'beginning' }, breaks: 'fixed', batchSize: 10, end: 'latest' });
+    check('no summaries: two batches skipped', off.skipped, 2);
+    check('no summaries: one left', off.batches.length, 1);
+    check('no summaries: hides offered', off.foreign, 19);
+    check('no summaries: the dialog defaults to reading them', rebuild.hasOwnSummaries(), false);
+
+    const on = rebuild.planRebuild({ ...base, start: { kind: 'beginning' }, breaks: 'fixed', batchSize: 10, end: 'latest', includeForeign: true });
+    check('no summaries: all three when read', on.batches.length, 3);
+    check('no summaries: nothing skipped', on.skipped, 0);
+
+    for (let i = 20; i < 30; i++) chat[i].is_system = true;
+    const none = rebuild.planRebuild({ ...base, start: { kind: 'message', index: 5 }, end: 'latest' });
+    check('all hidden: empty, not thrown', none.empty, true);
+    let refused = false;
+    try {
+        await rebuild.startRebuild({ ...base, start: { kind: 'message', index: 5 }, end: 'latest' });
+    } catch {
+        refused = true;
+    }
+    check('all hidden: starting is refused', refused, true);
+}
+
 rmSync(root, { recursive: true, force: true });
 
 if (failures.length) {
