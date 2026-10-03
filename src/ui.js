@@ -709,8 +709,11 @@ async function openRebuildDialog() {
     const startable = startableSummaries();
     const last = Math.max(0, chat.length - 1);
 
-    const options = startable.map(s =>
-        `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || 'Untitled')} — ends at message ${s.coversTo}</option>`).join('');
+    // An empty select reads as broken, so with nothing to pick it says why.
+    const options = startable.length
+        ? startable.map(s =>
+            `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || 'Untitled')} — ends at message ${s.coversTo}</option>`).join('')
+        : '<option value="">No Recall summaries in this chat yet</option>';
 
     const wrapper = document.createElement('div');
     wrapper.className = 'recall-rebuild';
@@ -736,7 +739,7 @@ async function openRebuildDialog() {
         <fieldset class="recall-rebuild-group">
             <legend>End</legend>
             <label class="checkbox_label"><input type="radio" name="recall-rb-end" value="active" ${active ? '' : 'disabled'}>
-                <span>Where the active summary ends${active ? ` (message ${active.coversTo})` : ''}</span></label>
+                <span>Where the active summary ends${active ? ` (message ${active.coversTo})` : ' (there is no active summary)'}</span></label>
             <label class="checkbox_label"><input type="radio" name="recall-rb-end" value="latest">
                 <span>The latest message (${last})</span></label>
         </fieldset>
@@ -794,7 +797,9 @@ async function openRebuildDialog() {
     if (!chosen('end')) {
         radio('end', 'latest');
     }
-    radio('breaks', settings.rebuildBreaks);
+    // With no summaries there are no break points to follow, so the choice that
+    // will actually apply is the one shown. Not saved unless the rebuild starts.
+    radio('breaks', hasOwnSummaries() ? settings.rebuildBreaks : 'fixed');
     radio('old', settings.rebuildOldSummaries);
     field('[data-rb="size"]').value = String(settings.rebuildBatchSize);
     field('[data-rb="review"]').checked = !!settings.rebuildReview;
@@ -880,6 +885,10 @@ async function openRebuildDialog() {
             parts.push('building on the built-in Summarize\'s summary');
         } else if (plan.from > 0) {
             parts.push(`starting from nothing, so messages before ${plan.from} will not be in it`);
+        } else if (isLegacyFallbackActive()) {
+            // The banner behind this dialog says the first summary will revise the
+            // built-in's. That is true of Summarize now, not of this, so say so.
+            parts.push('the built-in Summarize\'s summary is not used: starting at message 0 reads everything it covered, and building on it would count those messages twice');
         }
         planLine.textContent = `${parts.join(' · ')}.`;
         estimateLine.textContent = 'Counting tokens…';
