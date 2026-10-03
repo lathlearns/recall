@@ -4,6 +4,17 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.8.0
+
+**The context nudge warns at half the context limit, not 80%.** With 128k of context it now
+speaks up around 64k, early enough to finish a scene and summarise before things get tight. This
+applies only if you left the threshold at 0; a number you set yourself is kept. It is half of the limit ST
+reports, which can sit a little under your preset's context size; the panel shows the exact figure.
+
+**Reference material is on two tabs,** *Character card* and *Chat preset*, so a long preset no
+longer pushes the rest of the settings a screen down. Each tab shows how many of its rows are
+ticked, so you can see what is switched on even on the tab that is not open.
+
 ## 1.7.2
 
 **Edits made in the expanded editor can be saved.** Typing in the full-screen editor (the
