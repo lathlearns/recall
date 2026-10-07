@@ -633,12 +633,19 @@ touching visibility until the end.
 - **Choices**, in one dialog, remembered from the last rebuild: where to start (the beginning;
   after an existing summary, which becomes the basis; or a message number, which builds on
   nothing — or on the built-in summary, if the fallback is on and one exists), where to end
-  (the active summary's last message, or the newest), how to cut batches (at the existing
-  summaries' break points, every N messages, default 50, or by hand, one at a time), whether to
-  pause after each batch, and whether old summaries are kept or replaced.
-- **Cutting by hand** plans only the first batch: the dialog asks where it ends, suggesting one
-  batch size (N) past the start, and recalculates that suggestion when the start changes until
-  the user types an end of their own. Pausing is always on and its box is ticked and fixed; the
+  (the active summary's last message, the newest, or a message number), how to cut batches (at
+  the existing summaries' break points, every N messages, default 50, or by hand, one at a
+  time), whether to pause after each batch, and whether old summaries are kept or replaced.
+  Message numbers are not remembered: they depend on the chat.
+- **Ending at a message number** stops the batches there, whichever way they are cut: from 23
+  to 173 every 50 is 23–72, 73–122, 123–172 and 173. The end field starts at the newest
+  message. A number past the newest means the newest. If the end is before the active
+  summary's, finishing is like stopping: the batches are kept and nothing else changes, since
+  the last one covers less than the active summary and making it active would unhide the
+  messages in between. The dialog says so before it starts.
+- **Cutting by hand** plans only the first batch: the dialog asks where it ends, with no number
+  filled in, since where a stretch of story ends is the user's call; it will not start without
+  one. Pausing is always on and its box is ticked and fixed; the
   user's own setting is kept for the other choices. Each pause offers two ends, both filled in:
   where **the next batch** ends (suggested as the same number of messages as the one just
   read), used by *Keep going*, and where **a redo** of this batch ends (where it ended), used by
@@ -679,7 +686,8 @@ touching visibility until the end.
   range; and the chat is synced to it. If old summaries are being replaced, the ones whose
   coverage ended inside the rebuilt range are deleted then — never the one it started after. A
   rebuild that is stopped keeps its batches and changes nothing else: its summary covers less
-  than the one already active, and switching to it would unhide the middle of a story.
+  than the one already active, and switching to it would unhide the middle of a story. So does
+  a finished one that was told to end before the active summary does.
 - **While a rebuild is in progress**, pauses included, Summarize now and Regenerate are refused
   and sending is blocked during each batch. Switching chats abandons it; its batches stay saved.
 - **The estimate** shown before starting counts the messages, prompt and reference material

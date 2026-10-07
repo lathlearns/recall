@@ -943,7 +943,12 @@ async function openRebuildDialog() {
                     <select id="recall-rb-end" class="text_pole recall-grow" data-rb="end">
                         <option value="active" ${active ? '' : 'disabled'}>Where the active summary ends${active ? ` (message ${active.coversTo})` : ' (there is no active summary)'}</option>
                         <option value="latest">The latest message (${last})</option>
+                        <option value="message">At a message number</option>
                     </select>
+                </div>
+                <div class="recall-row recall-row-field" data-rb="end-message-row" hidden>
+                    <label for="recall-rb-end-message">Message</label>
+                    <input id="recall-rb-end-message" class="text_pole recall-number" type="number" min="0" max="${last}" value="${last}" data-rb="end-message">
                 </div>
                 <div class="recall-banner recall-banner-warn" data-rb="foreign" hidden>
                     <i class="fa-solid fa-eye-slash"></i>
@@ -1030,9 +1035,6 @@ async function openRebuildDialog() {
     // chosen. What the user had it set to is kept aside, for the other choices.
     let reviewChoice = !!settings.rebuildReview;
     field('[data-rb="review"]').checked = reviewChoice;
-    // Not remembered: where the first batch ends depends on the chat. Until it is
-    // typed in, it follows the start, one batch size along.
-    let firstTouched = false;
     // Not remembered: whether to read someone else's hides depends on the chat.
     // With no Recall summary yet, every hide is someone else's, and leaving them
     // all out would rebuild almost nothing.
@@ -1050,7 +1052,6 @@ async function openRebuildDialog() {
 
     const read = () => {
         const startKind = chosen('start');
-        const first = String(chosen('first') ?? '').trim();
         return {
             start: startKind === 'summary'
                 ? { kind: 'summary', id: chosen('summary') }
@@ -1058,9 +1059,11 @@ async function openRebuildDialog() {
                     ? { kind: 'message', index: Number(chosen('message')) }
                     : { kind: 'beginning' },
             end: chosen('end') || 'latest',
+            // Both left as typed, blank included: the plan says what is missing.
+            endIndex: String(chosen('end-message') ?? '').trim(),
             breaks: chosen('breaks') || 'existing',
             batchSize: clampNumber(chosen('size'), 1, 100_000, 50),
-            firstEnd: firstTouched && first !== '' ? Number(first) : undefined,
+            firstEnd: String(chosen('first') ?? '').trim(),
             review: field('[data-rb="review"]').checked,
             includeForeign: field('[data-rb="include-foreign"]').checked,
             oldSummaries: chosen('old') || 'keep',
@@ -1072,6 +1075,7 @@ async function openRebuildDialog() {
     const showFollowUps = () => {
         field('[data-rb="summary-row"]').toggleAttribute('hidden', chosen('start') !== 'summary');
         field('[data-rb="message-row"]').toggleAttribute('hidden', chosen('start') !== 'message');
+        field('[data-rb="end-message-row"]').toggleAttribute('hidden', chosen('end') !== 'message');
         field('[data-rb="size-row"]').toggleAttribute('hidden', chosen('breaks') !== 'fixed');
         field('[data-rb="first-row"]').toggleAttribute('hidden', chosen('breaks') !== 'manual');
 
@@ -1132,9 +1136,6 @@ async function openRebuildDialog() {
             const first = field('[data-rb="first"]');
             first.min = String(plan.from);
             first.max = String(plan.to);
-            if (!firstTouched) {
-                first.value = String(plan.firstEnd);
-            }
         }
 
         const parts = [plan.manual
@@ -1157,6 +1158,11 @@ async function openRebuildDialog() {
             // The banner behind this dialog says the first summary will revise the
             // built-in's. That is true of Summarize now, not of this, so say so.
             parts.push('the built-in Summarize\'s summary is not used: starting at message 0 reads everything it covered, and building on it would count those messages twice');
+        }
+        if (plan.activeReaches) {
+            parts.push(`it ends before the active summary does (message ${plan.activeReaches}), so when it finishes `
+                + 'its batches are kept in the archive and nothing else changes: the active summary stays, '
+                + 'nothing is hidden or unhidden, and no old summaries are deleted');
         }
         planLine.textContent = `${parts.join(' · ')}.`;
         estimateLine.textContent = 'Counting tokens…';
@@ -1186,9 +1192,6 @@ async function openRebuildDialog() {
 
     // The guidance changes nothing about the plan, so typing it does not replan.
     const replan = event => {
-        if (event.target?.dataset?.rb === 'first') {
-            firstTouched = true;
-        }
         if (event.target?.dataset?.rb !== 'note') {
             void refresh();
         }

@@ -47,10 +47,11 @@ import { uuid } from './util.js';
  *
  * @typedef {object} RebuildOptions
  * @property {RebuildStart} start
- * @property {'active'|'latest'} end
+ * @property {'active'|'latest'|'message'} end
+ * @property {number} [endIndex]    The last message read, when `end` is 'message'. Required then.
  * @property {'existing'|'fixed'|'manual'} breaks  'manual': the user chooses where each batch ends, one at a time.
  * @property {number} batchSize
- * @property {number} [firstEnd]    Where the first batch ends, when cutting by hand. Defaults to batchSize messages.
+ * @property {number} [firstEnd]    Where the first batch ends, when cutting by hand. Required then: there is no default.
  * @property {boolean} review       Pause after every batch for the user to read it. Always, when cutting by hand.
  * @property {boolean} [includeForeign] Also read messages hidden by something other than Recall.
  * @property {'keep'|'replace'} oldSummaries
@@ -65,6 +66,8 @@ import { uuid } from './util.js';
  * @property {boolean} usedExisting Whether the breaks came from existing summaries.
  * @property {boolean} manual       Cut by hand: `batches` holds only the first, and the rest are chosen in the pauses.
  * @property {number} firstEnd      Where the first batch ends, when cut by hand.
+ * @property {number} activeReaches  Where the active summary ends, when the rebuild ends before it; else 0.
+ *                                  Finishing such a rebuild then changes nothing outside its batches.
  * @property {boolean} includesZero Whether message 0 is read with every batch.
  * @property {number} foreign       Messages in range hidden by something other than Recall.
  * @property {boolean} includeForeign Whether those are being read.
@@ -270,7 +273,19 @@ export function planRebuild(options) {
     }
 
     const active = getActiveSummary();
-    const to = options.end === 'active' && active ? Math.min(active.coversTo, last) : last;
+    let to = options.end === 'active' && active ? Math.min(active.coversTo, last) : last;
+    if (options.end === 'message') {
+        const wanted = Math.floor(Number(options.endIndex));
+        if (String(options.endIndex ?? '').trim() === '' || !Number.isFinite(wanted)) {
+            throw new RecallError('Choose the message the rebuild ends at.', { kind: 'empty' });
+        }
+        to = Math.min(last, wanted);
+    }
+
+    // A rebuild that ends short of the active summary cannot replace it on
+    // finishing: its last batch covers less, and making that active would unhide
+    // the messages between — the same reason a stopped rebuild changes nothing.
+    const activeReaches = options.end === 'message' && active && to < active.coversTo ? active.coversTo : 0;
 
     if (from > to) {
         throw new RecallError(`There is nothing to rebuild: it would start at message ${from} and end at ${to}.`, { kind: 'empty' });
@@ -286,8 +301,13 @@ export function planRebuild(options) {
     if (manual) {
         // Only the first is planned. Each one after it is chosen once the one
         // before it has been read, so there is nothing further to plan.
-        const wanted = options.firstEnd == null ? from + size - 1 : Math.floor(Number(options.firstEnd));
-        if (!Number.isFinite(wanted) || wanted < from) {
+        // No default: where a stretch of story ends is the user's call, and a
+        // number filled in for them reads as one already made.
+        const wanted = Math.floor(Number(options.firstEnd));
+        if (String(options.firstEnd ?? '').trim() === '' || !Number.isFinite(wanted)) {
+            throw new RecallError('Choose where the first batch ends.', { kind: 'empty' });
+        }
+        if (wanted < from) {
             throw new RecallError(`The first batch starts at message ${from}, so it has to end there or later.`, { kind: 'empty' });
         }
         firstEnd = Math.min(to, wanted);
@@ -350,7 +370,7 @@ export function planRebuild(options) {
     }
 
     return {
-        from, to, batches, basis, seed, usedExisting, manual, firstEnd,
+        from, to, batches, basis, seed, usedExisting, manual, firstEnd, activeReaches,
         includesZero, foreign, includeForeign, skipped, empty,
     };
 }
@@ -743,7 +763,8 @@ export async function stopRebuild() {
  * them becomes active, every Recall-hidden message it covers is handed to it,
  * and the chat is synced to it. A stopped one changes nothing — the summary it
  * got to covers less than the one already active, and making it active would
- * unhide a stretch of chat in the middle of a story.
+ * unhide a stretch of chat in the middle of a story. So does a finished one that
+ * was told to end before the active summary does, for the same reason.
  *
  * @param {boolean} complete
  */
@@ -756,7 +777,12 @@ async function endRebuild(complete) {
     const final = done[done.length - 1] ?? null;
     let message;
 
-    if (complete && final) {
+    if (complete && final && plan.activeReaches) {
+        await persist({ immediate: true });
+        message = `Rebuilt messages ${plan.from}–${final.coversTo} in ${done.length} batch${done.length === 1 ? '' : 'es'}. `
+            + `They are kept in the archive, and nothing else changed: the active summary reaches message ${plan.activeReaches}, `
+            + 'and making a shorter one active would unhide the messages in between. To carry on, start a rebuild after the last of them.';
+    } else if (complete && final) {
         // One summary owns a hidden range. Everything Recall hid up to where the
         // new chain ends belongs to its last link now, so a later delete or sync
         // of the old summaries cannot pull messages back into view.

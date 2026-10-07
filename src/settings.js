@@ -212,10 +212,7 @@ const DEFAULT_SETTINGS = {
      */
     rebuildBreaks: 'existing',
 
-    /**
-     * Messages per batch when cutting at fixed sizes, or when there are no break points to follow.
-     * Cutting by hand, it is how far along the first batch's end is suggested.
-     */
+    /** Messages per batch when cutting at fixed sizes, or when there are no break points to follow. */
     rebuildBatchSize: 50,
 
     /** Pause after every batch to read, edit or redo it. */
@@ -224,7 +221,10 @@ const DEFAULT_SETTINGS = {
     /** 'keep' leaves the old summaries in the archive; 'replace' deletes the ones a finished rebuild covered. */
     rebuildOldSummaries: 'keep',
 
-    /** 'active' ends where the active summary does; 'latest' runs to the newest message. */
+    /**
+     * 'active' ends where the active summary does; 'latest' runs to the newest message; 'message'
+     * ends at a number typed in the dialog, which is not remembered.
+     */
     rebuildEnd: 'active',
 
     // --- Migration from the built-in Summarize ---

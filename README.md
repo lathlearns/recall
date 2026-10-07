@@ -140,7 +140,10 @@ each revising the one before, and you choose:
 - **Start**: from the beginning, after a summary you trust, or from a message number. A
   message number with nothing before it summarised starts from scratch, unless the built-in
   Summarize left a summary to continue.
-- **End**: where the active summary ends, or the latest message.
+- **End**: where the active summary ends, the latest message, or a message number. If you
+  end before the active summary does, finishing keeps the new batches but leaves the active
+  summary and what's hidden alone. Making a shorter summary active would unhide the messages
+  in between.
 - **Batches**: the break points your existing summaries already chose, every N messages
   (50 by default), or **one at a time, by hand**: you say where the first batch ends, and
   after reading each one you choose where the next ends. You can also redo a batch with a

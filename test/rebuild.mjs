@@ -353,7 +353,6 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     const manual = { ...base, start: { kind: 'beginning' }, breaks: 'manual', end: 'latest' };
     const plan = rebuild.planRebuild({ ...manual, firstEnd: 8 });
     check('manual: only the first batch is planned', plan.batches.map(b => [b[0], b[b.length - 1]]), [[1, 8]]);
-    check('manual: the first ends one batch size in by default', rebuild.planRebuild({ ...manual, batchSize: 10 }).firstEnd, 9);
     check('manual: an end past the last message is the last message', rebuild.planRebuild({ ...manual, firstEnd: 99 }).firstEnd, 29);
 
     const refusal = options => {
@@ -364,6 +363,8 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
             return error.kind;
         }
     };
+    check('manual: the first end has no default', refusal(manual), 'empty');
+    check('manual: nor does a blank one', refusal({ ...manual, firstEnd: '' }), 'empty');
     check('manual: an end before the start is refused', refusal({ ...manual, start: { kind: 'summary', id: first.id }, firstEnd: 5 }), 'empty');
     check('manual: a first batch of hidden messages is refused', refusal({ ...manual, start: { kind: 'message', index: 5 }, firstEnd: 5 }), 'empty');
 
@@ -410,6 +411,42 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     check('manual: keeping going at the end finishes', rebuild.getRebuild(), null);
     check('manual: the last batch is active', store.getActiveSummary()?.coversTo, 29);
     check('manual: one batch per pass', gen.calls.length, 5);
+}
+
+// 14. Ending at a message number: the batches stop there, whichever way they are
+//     cut; ending before the active summary does finishes without touching it.
+{
+    reset();
+    const at = { ...base, start: { kind: 'message', index: 3 }, end: 'message', endIndex: 25 };
+    const fixed = rebuild.planRebuild({ ...at, breaks: 'fixed', batchSize: 10 });
+    check('end at: fixed batches stop there', fixed.batches.map(b => [b[0], b[b.length - 1]]), [[3, 12], [13, 22], [23, 25]]);
+    const existing = rebuild.planRebuild(at);
+    check('end at: existing breaks stop there', existing.batches.map(b => [b[0], b[b.length - 1]]), [[3, 9], [10, 19], [20, 25]]);
+    check('end at: past the last message is the last message', rebuild.planRebuild({ ...at, endIndex: 99 }).to, 29);
+
+    let kind = '';
+    try {
+        rebuild.planRebuild({ ...at, endIndex: '' });
+    } catch (error) {
+        kind = error.kind;
+    }
+    check('end at: a blank end is refused', kind, 'empty');
+
+    check('end at: short of the active summary is flagged', existing.activeReaches, 27);
+    check('end at: reaching it is not', rebuild.planRebuild({ ...at, endIndex: 27 }).activeReaches, 0);
+
+    const made = store.getActiveSummary();
+    const hiddenBefore = chat.map(m => m.is_system);
+    await rebuild.startRebuild({ ...at, oldSummaries: 'replace' });
+    check('end at, short: finished', rebuild.getRebuild(), null);
+    check('end at, short: batches kept', store.getSummariesRaw().filter(s => s.rebuildId).length, 3);
+    check('end at, short: active unchanged', store.getActiveSummary()?.id, made.id);
+    check('end at, short: visibility unchanged', chat.map(m => m.is_system), hiddenBefore);
+    check('end at, short: nothing replaced', store.getSummariesRaw().filter(s => !s.rebuildId).length, 3);
+
+    reset();
+    await rebuild.startRebuild({ ...at, endIndex: 29, breaks: 'fixed', batchSize: 10 });
+    check('end at, past the active one: the last batch is active', store.getActiveSummary()?.coversTo, 29);
 }
 
 rmSync(root, { recursive: true, force: true });
