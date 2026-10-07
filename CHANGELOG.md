@@ -4,6 +4,75 @@ Semantic versioning: the patch digit is a fix, the minor digit adds or changes a
 and the major digit would break a chat's stored data or your preset. `manifest.json`
 carries the version ST reads; `package.json` matches it.
 
+## 1.9.0
+
+**Rebuild re-summarises a chat from a point you choose.** It's for a long chat whose summary
+went wrong somewhere, with everything after it built on the mistake. *Rebuild…* in the manager
+works through the chat in batches, each revising the one before, and you choose:
+
+- **Where to start:** the beginning, after a summary you trust, or a message number.
+- **Where to end:** where the active summary ends, the latest message, or a message number.
+- **How to cut batches:** at the break points your existing summaries already chose, every N
+  messages (50 by default), or one at a time, choosing where each batch ends after reading the
+  one before. A batch too big for one request is split rather than refused.
+- **Whether to pause** after each batch to read it, edit it, redo it or stop. When you cut
+  batches by hand, a redo can end somewhere else, so a batch that went too far can be redone
+  shorter.
+- **Guidance:** in the dialog for every batch, and in the manager's guidance field during a
+  pause for the next batch only. Both are sent when both are set.
+- **Old summaries:** kept, with the rebuild folded into one row in the archive, or deleted once
+  it finishes.
+
+Nothing is hidden or unhidden along the way. When the rebuild finishes, its last batch becomes
+active and the chat is synced to it. Stop partway and the finished batches are kept, but nothing
+else changes; start a new rebuild after the last of them to carry on. A rebuild set to end
+before the active summary does finishes the same way, since making a shorter summary active
+would unhide the messages in between, and the dialog warns you about this before you start.
+
+The dialog estimates the tokens before you start, and when you cut batches by hand, each pause
+shows how big the next batch would be as you type where it ends. Message numbers are
+SillyTavern's own, counting from 0, and the dialog says so wherever it asks for one.
+
+**A rebuild can read messages hidden by something other than Recall.** A chat summarised with
+the built-in Summarize has its older messages hidden by hand, and Recall normally skips those.
+The rebuild dialog says how many the range holds and offers to read them too, ticked by default
+when the chat has no Recall summaries yet. They are read, never unhidden. SillyTavern's own
+help, welcome and `/comment` messages are never read; narrator lines are.
+
+**Preset authors can mark blocks for Recall.** A preset prompt block containing
+`{{// recall}}`, an ST comment that neither model ever sees, starts ticked under *Reference
+material › Chat preset*. While any block of the chat's preset is marked, the character
+description, personality, scenario and your persona start ticked too; example dialogue doesn't.
+Both only fill in for rows you have never ticked or unticked yourself, and they follow the
+preset, so switching to an unmarked one turns them back off. Settings saved before this update
+count as your own choice, so use *Reset settings to defaults* (below) to get these defaults.
+
+**The context nudge measures against the room your prompt actually has.** SillyTavern holds
+your Max Response Length back for the reply, and once the prompt reaches what's left, it starts
+leaving out old messages without saying so. The nudge now reads the same number as *Total
+Tokens* in the Prompt Manager, shows usage as "64.2k of 108k room", and its warning says where
+messages start being left out. The settings panel warns you if your threshold is set so high
+that it can never be reached.
+
+**More room is kept free for the summary's reply by default:** 5,000 tokens instead of 2,000.
+This applies to new installs; an existing setting is kept unless you reset settings.
+
+**Settings can be reset to defaults,** from the end of *Advanced*, behind a confirm. It keeps
+your summary prompt, per-character copies and summaries. The prompt's own button is now called
+*Restore default prompt*, so the two aren't mistaken for each other.
+
+**Recall works whatever folder it is installed in.** Installed from the test repo or from an
+unzipped download, the folder has a different name, and Recall's windows didn't load at all.
+It now finds its files wherever it is.
+
+**Recall's windows are easier to close on phones.** The close button is bigger and sits inside
+the corner, and on phones it's part of the window's own layout. On Firefox for Android,
+SillyTavern's corner button wasn't visible at all.
+
+**The README** says plainly that Recall doesn't automate the memory process (you decide when
+to summarise, what the summary keeps and what stays visible), and credits Ancient Access for the
+default prompt.
+
 ## 1.8.0
 
 **The context nudge warns at half the context limit, not 80%.** With 128k of context it now
