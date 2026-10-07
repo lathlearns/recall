@@ -158,6 +158,25 @@
             <div class="recall-banner recall-banner-info" data-recall="rebuild-bar" hidden>
                 <i class="fa-solid fa-layer-group" data-recall="rebuild-icon"></i>
                 <span data-recall="rebuild-text"></span>
+                <!--
+                    Only for a rebuild cut by hand, in a pause: where the next
+                    batch ends, and where a redo of this one would. Each says how
+                    big that would be as it is typed.
+                -->
+                <div class="recall-rebuild-ends" data-recall="rebuild-ends" hidden>
+                    <div class="recall-row recall-row-field" data-recall="rebuild-next-row">
+                        <label for="recall-rebuild-next-end">Next batch ends at message</label>
+                        <input id="recall-rebuild-next-end" class="text_pole recall-number" type="number" min="0"
+                            data-recall="rebuild-next-end">
+                        <span class="recall-help" data-recall="rebuild-next-size"></span>
+                    </div>
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-rebuild-redo-end">A redo ends at message</label>
+                        <input id="recall-rebuild-redo-end" class="text_pole recall-number" type="number" min="0"
+                            data-recall="rebuild-redo-end">
+                        <span class="recall-help" data-recall="rebuild-redo-size"></span>
+                    </div>
+                </div>
                 <div class="recall-banner-actions">
                     <div class="menu_button recall-action-primary" data-recall="rebuild-continue" hidden
                         title="Write the next batch. The guidance field above applies to that batch only.">Keep going</div>

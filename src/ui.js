@@ -52,6 +52,9 @@ import {
     estimateRebuild,
     startableSummaries,
     hasOwnSummaries,
+    manualPosition,
+    manualEndProblem,
+    measureManualBatch,
 } from './rebuild.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
@@ -599,8 +602,9 @@ function paintRunButton(button, run) {
         icon.className = 'fa-solid fa-spinner fa-spin';
     }
     if (label) {
-        const what = run.kind === 'rebuild' && run.steps
-            ? `Batch ${run.step} of ${run.steps}…`
+        // A rebuild cut by hand cannot know how many batches it will have.
+        const what = run.kind === 'rebuild' && run.step
+            ? (run.steps ? `Batch ${run.step} of ${run.steps}…` : `Batch ${run.step}…`)
             : (RUN_LABEL[run.kind] ?? 'Working…');
         label.textContent = `${what} ${formatElapsed(Date.now() - run.startedAt)}`;
     }
@@ -675,7 +679,9 @@ function onRebuildEvent({ type, message }) {
 
     if (type === 'review' && rebuild) {
         const record = rebuild.done[rebuild.done.length - 1];
-        const position = `Batch ${rebuild.done.length} of ${rebuild.done.length + rebuild.queue.length}`;
+        const position = rebuild.plan.manual
+            ? `Batch ${rebuild.done.length}`
+            : `Batch ${rebuild.done.length} of ${rebuild.done.length + rebuild.queue.length}`;
         if (managerRoot && record) {
             resetDraft();
             selectedId = record.id;
@@ -718,10 +724,30 @@ function renderRebuildBar() {
 
     const total = rebuild.done.length + rebuild.queue.length;
     const range = `messages ${rebuild.plan.from}–${rebuild.plan.to}`;
-    const isLast = rebuild.queue.length === 0;
+    const manual = manualPosition();
+    const isLast = manual ? !manual.next : rebuild.queue.length === 0;
     let text;
 
-    if (rebuild.status === 'running') {
+    if (manual) {
+        // No "of N": the batches after this one have not been chosen yet.
+        const left = manual.next
+            ? ` ${manual.next.left} message${manual.next.left === 1 ? '' : 's'} left, up to ${manual.to}.`
+            : '';
+        if (rebuild.status === 'running') {
+            text = rebuild.stopRequested
+                ? `Stopping the rebuild once this batch lands — this connection cannot cancel a request mid-way.`
+                : `Rebuilding ${range} · batch ${rebuild.done.length + 1}.`;
+        } else if (rebuild.status === 'review') {
+            const cut = rebuild.cutShort
+                ? ` It stopped at message ${rebuild.cutShort.reached}: the rest, up to ${rebuild.cutShort.wanted}, did not fit in one request.`
+                : '';
+            text = `Batch ${rebuild.done.length} (messages ${manual.current.from}–${manual.current.to}) is ready.${cut} `
+                + 'Read it below and edit it if you need to; '
+                + (isLast ? 'it is the last one.' : `the next batch builds on what you keep.${left}`);
+        } else {
+            text = `Batch ${rebuild.done.length + 1} did not finish: ${rebuild.error}`;
+        }
+    } else if (rebuild.status === 'running') {
         text = rebuild.stopRequested
             ? `Stopping the rebuild once this batch lands — this connection cannot cancel a request mid-way.`
             : `Rebuilding ${range} · batch ${rebuild.done.length + 1} of ${total}.`;
@@ -741,6 +767,119 @@ function renderRebuildBar() {
 
     q('[data-recall="rebuild-redo"]').toggleAttribute('hidden', rebuild.status !== 'review');
     q('[data-recall="rebuild-stop"]').classList.toggle('disabled', !!rebuild.stopRequested);
+
+    renderRebuildEnds(rebuild, manual);
+}
+
+/** Which pause the end fields were last filled for, so a repaint never overwrites what is being typed. */
+let rebuildEndsFilledFor = '';
+
+/**
+ * The two ends a pause of a rebuild cut by hand offers. Filled once per pause —
+ * the next with the suggested end, a redo with where this batch ended — and
+ * after that left to the user.
+ */
+function renderRebuildEnds(rebuild, manual) {
+    const box = q('[data-recall="rebuild-ends"]');
+    if (!box) {
+        return;
+    }
+    const show = !!manual && rebuild.status === 'review' && !!manual.current;
+    const next = q('[data-recall="rebuild-next-end"]');
+    const redo = q('[data-recall="rebuild-redo-end"]');
+    box.toggleAttribute('hidden', !show);
+    if (!show) {
+        rebuildEndsFilledFor = '';
+        q('[data-recall="rebuild-redo"]').classList.remove('disabled');
+        q('[data-recall="rebuild-continue"]').classList.remove('disabled');
+        return;
+    }
+
+    q('[data-recall="rebuild-next-row"]').toggleAttribute('hidden', !manual.next);
+
+    const key = `${rebuild.id}:${rebuild.done.length}:${rebuild.done[rebuild.done.length - 1]?.id}`;
+    if (key === rebuildEndsFilledFor) {
+        // A repaint keeps whatever is typed, and the buttons keep agreeing with it.
+        q('[data-recall="rebuild-continue"]').classList.toggle('disabled', !!manual.next && !!manualEndProblem('next', next.value));
+        q('[data-recall="rebuild-redo"]').classList.toggle('disabled', !!manualEndProblem('redo', redo.value));
+        return;
+    }
+    rebuildEndsFilledFor = key;
+
+    if (manual.next) {
+        next.min = String(manual.next.from);
+        next.max = String(manual.to);
+        next.value = String(manual.next.suggested);
+    }
+    redo.min = String(manual.current.from);
+    redo.max = String(manual.to);
+    redo.value = String(manual.current.to);
+
+    if (manual.next) {
+        void measureRebuildEnd('next');
+    } else {
+        q('[data-recall="rebuild-continue"]').classList.remove('disabled');
+    }
+    void measureRebuildEnd('redo');
+}
+
+/** Latest measurement asked for, per field, so a slow one cannot paint over a newer one. */
+const rebuildEndMeasures = { next: 0, redo: 0 };
+
+/**
+ * Says how big a batch ending where typed would be, beside the field, and
+ * disables the button it belongs to when that end cannot be used.
+ * @param {'next'|'redo'} which
+ */
+async function measureRebuildEnd(which) {
+    const mine = ++rebuildEndMeasures[which];
+    const input = q(`[data-recall="rebuild-${which}-end"]`);
+    const line = q(`[data-recall="rebuild-${which}-size"]`);
+    const button = q(`[data-recall="rebuild-${which === 'next' ? 'continue' : 'redo'}"]`);
+    if (!input || !line || !manualPosition()) {
+        return;
+    }
+
+    const problem = manualEndProblem(which, input.value);
+    button?.classList.toggle('disabled', !!problem);
+    if (problem) {
+        line.textContent = problem;
+        return;
+    }
+
+    let size;
+    try {
+        size = await measureManualBatch(which, input.value);
+    } catch (error) {
+        console.error('[Recall] Measuring a rebuild batch failed', error);
+        return;
+    }
+    if (mine !== rebuildEndMeasures[which] || !size || size.problem) {
+        return;
+    }
+    const messages = `${size.messages} message${size.messages === 1 ? '' : 's'}, about ${formatTokens(size.tokens)} tokens`;
+    line.textContent = size.stopsAt == null
+        ? `${messages}.`
+        : `${messages} — too many for one request, so it would stop at message ${size.stopsAt}.`;
+}
+
+/**
+ * The end typed for a rebuild cut by hand, or undefined when the rebuild is not
+ * one. Undefined for a redo left where the batch ended, so the redo reads
+ * exactly the same messages again.
+ * @param {'next'|'redo'} which
+ * @returns {number|undefined}
+ */
+function chosenRebuildEnd(which) {
+    const manual = manualPosition();
+    if (!manual) {
+        return undefined;
+    }
+    const value = Number(q(`[data-recall="rebuild-${which}-end"]`)?.value);
+    if (which === 'redo' && value === manual.current?.to) {
+        return undefined;
+    }
+    return value;
 }
 
 /**
@@ -823,6 +962,7 @@ async function openRebuildDialog() {
                     <select id="recall-rb-breaks" class="text_pole recall-grow" data-rb="breaks">
                         <option value="existing">Follow the break points of your existing summaries</option>
                         <option value="fixed">A fixed number of messages each</option>
+                        <option value="manual">I'll choose where each one ends, one at a time</option>
                     </select>
                 </div>
                 <div class="recall-row recall-row-field" data-rb="size-row" hidden>
@@ -832,7 +972,14 @@ async function openRebuildDialog() {
                         <label for="recall-rb-size">messages</label>
                     </span>
                 </div>
-                <p class="recall-help">A batch too big for one request is split where it stops fitting, and the rest goes in the next one.</p>
+                <div class="recall-row recall-row-field" data-rb="first-row" hidden>
+                    <label for="recall-rb-first">First ends at</label>
+                    <span class="recall-field-unit">
+                        <label for="recall-rb-first">message</label>
+                        <input id="recall-rb-first" class="text_pole recall-number" type="number" min="0" data-rb="first">
+                    </span>
+                </div>
+                <p class="recall-help" data-rb="split-help"></p>
                 <div class="recall-row recall-row-field">
                     <label for="recall-rb-old">Old summaries</label>
                     <select id="recall-rb-old" class="text_pole recall-grow" data-rb="old">
@@ -876,10 +1023,16 @@ async function openRebuildDialog() {
     choose('end', settings.rebuildEnd);
     // With no summaries there are no break points to follow, so the choice that
     // will actually apply is the one shown. Not saved unless the rebuild starts.
-    choose('breaks', hasOwnSummaries() ? settings.rebuildBreaks : 'fixed');
+    choose('breaks', settings.rebuildBreaks === 'existing' && !hasOwnSummaries() ? 'fixed' : settings.rebuildBreaks);
     choose('old', settings.rebuildOldSummaries);
     field('[data-rb="size"]').value = String(settings.rebuildBatchSize);
-    field('[data-rb="review"]').checked = !!settings.rebuildReview;
+    // Cutting by hand always pauses, so the box is ticked and fixed while that is
+    // chosen. What the user had it set to is kept aside, for the other choices.
+    let reviewChoice = !!settings.rebuildReview;
+    field('[data-rb="review"]').checked = reviewChoice;
+    // Not remembered: where the first batch ends depends on the chat. Until it is
+    // typed in, it follows the start, one batch size along.
+    let firstTouched = false;
     // Not remembered: whether to read someone else's hides depends on the chat.
     // With no Recall summary yet, every hide is someone else's, and leaving them
     // all out would rebuild almost nothing.
@@ -897,6 +1050,7 @@ async function openRebuildDialog() {
 
     const read = () => {
         const startKind = chosen('start');
+        const first = String(chosen('first') ?? '').trim();
         return {
             start: startKind === 'summary'
                 ? { kind: 'summary', id: chosen('summary') }
@@ -906,6 +1060,7 @@ async function openRebuildDialog() {
             end: chosen('end') || 'latest',
             breaks: chosen('breaks') || 'existing',
             batchSize: clampNumber(chosen('size'), 1, 100_000, 50),
+            firstEnd: firstTouched && first !== '' ? Number(first) : undefined,
             review: field('[data-rb="review"]').checked,
             includeForeign: field('[data-rb="include-foreign"]').checked,
             oldSummaries: chosen('old') || 'keep',
@@ -918,6 +1073,21 @@ async function openRebuildDialog() {
         field('[data-rb="summary-row"]').toggleAttribute('hidden', chosen('start') !== 'summary');
         field('[data-rb="message-row"]').toggleAttribute('hidden', chosen('start') !== 'message');
         field('[data-rb="size-row"]').toggleAttribute('hidden', chosen('breaks') !== 'fixed');
+        field('[data-rb="first-row"]').toggleAttribute('hidden', chosen('breaks') !== 'manual');
+
+        const manual = chosen('breaks') === 'manual';
+        const review = field('[data-rb="review"]');
+        if (manual && !review.disabled) {
+            reviewChoice = review.checked;
+            review.checked = true;
+            review.disabled = true;
+        } else if (!manual && review.disabled) {
+            review.checked = reviewChoice;
+            review.disabled = false;
+        }
+        field('[data-rb="split-help"]').textContent = manual
+            ? 'A batch too big for one request stops where it stops fitting, and the next one starts from there.'
+            : 'A batch too big for one request is split where it stops fitting, and the rest goes in the next one.';
     };
     showFollowUps();
 
@@ -958,8 +1128,20 @@ async function openRebuildDialog() {
             return;
         }
 
-        const parts = [`Messages ${plan.from}–${plan.to} in ${plan.batches.length} batch${plan.batches.length === 1 ? '' : 'es'}`];
-        if (plan.skipped) {
+        if (plan.manual) {
+            const first = field('[data-rb="first"]');
+            first.min = String(plan.from);
+            first.max = String(plan.to);
+            if (!firstTouched) {
+                first.value = String(plan.firstEnd);
+            }
+        }
+
+        const parts = [plan.manual
+            ? `Messages ${plan.from}–${plan.to}, one batch at a time: the first reads ${plan.from}–${plan.firstEnd}, `
+                + 'and after reading each one you choose where the next ends'
+            : `Messages ${plan.from}–${plan.to} in ${plan.batches.length} batch${plan.batches.length === 1 ? '' : 'es'}`];
+        if (plan.skipped && !plan.manual) {
             parts.push(`${plan.skipped} more had nothing readable in ${plan.skipped === 1 ? 'it' : 'them'} and ${plan.skipped === 1 ? 'is' : 'are'} skipped`);
         }
         if (choices.breaks === 'existing' && !plan.usedExisting) {
@@ -985,7 +1167,15 @@ async function openRebuildDialog() {
             return;
         }
         const requests = `${estimate.batches} request${estimate.batches === 1 ? '' : 's'}`;
-        if (estimate.guessedFrom) {
+        if (plan.manual) {
+            // The rest depend on ends not chosen yet, so only the first is counted;
+            // each pause says how big the next would be as its end is typed.
+            estimateLine.textContent = estimate.guessedFrom
+                ? `The first batch: about ${formatTokens(estimate.sent)} tokens sent and ${formatTokens(estimate.written)} written.`
+                : `The first batch: at least ${formatTokens(estimate.sent)} tokens sent.`;
+            guessLine.textContent = 'Only the first batch can be counted, since where the others end is up to you. '
+                + 'Each pause shows the size of the next one as you choose where it ends.';
+        } else if (estimate.guessedFrom) {
             estimateLine.textContent = `About ${formatTokens(estimate.sent)} tokens sent and ${formatTokens(estimate.written)} written, across ${requests}.`;
             guessLine.textContent = `An estimate: the messages and prompt are counted exactly, but the summary each batch carries into the next is guessed from your current summary's size (${formatTokens(estimate.guessedFrom)}). If the rebuilt summaries come out longer or shorter, the real total will differ.`;
         } else {
@@ -996,6 +1186,9 @@ async function openRebuildDialog() {
 
     // The guidance changes nothing about the plan, so typing it does not replan.
     const replan = event => {
+        if (event.target?.dataset?.rb === 'first') {
+            firstTouched = true;
+        }
         if (event.target?.dataset?.rb !== 'note') {
             void refresh();
         }
@@ -1025,7 +1218,8 @@ async function openRebuildDialog() {
     settings.rebuildEnd = choices.end;
     settings.rebuildBreaks = choices.breaks;
     settings.rebuildBatchSize = choices.batchSize;
-    settings.rebuildReview = choices.review;
+    // Cutting by hand ticks the box itself; what is remembered is the user's own setting.
+    settings.rebuildReview = choices.breaks === 'manual' ? reviewChoice : choices.review;
     settings.rebuildOldSummaries = choices.oldSummaries;
     saveSettings();
     // Its text, if any, went into the dialog's field and from there into the rebuild.
@@ -1220,7 +1414,10 @@ function wireManager({ onSummarize }) {
     });
 
     on('[data-recall="rebuild"]', 'click', openRebuildDialog);
-    on('[data-recall="rebuild-continue"]', 'click', async () => {
+    on('[data-recall="rebuild-continue"]', 'click', async event => {
+        if (event.currentTarget.classList.contains('disabled')) {
+            return;
+        }
         // Keep going means "this is the one": an unsaved edit is what the next
         // batch should build on, so it is saved rather than asked about.
         if (isDetailDirty()) {
@@ -1228,12 +1425,28 @@ function wireManager({ onSummarize }) {
         }
         // Guidance typed during the pause is for the next batch. Left in the field
         // when there is no next batch, rather than consumed and thrown away.
-        await continueRebuild(getRebuild()?.queue.length ? takeSteeringNote() : '');
+        const rebuild = getRebuild();
+        const manual = manualPosition();
+        const hasNext = manual && rebuild?.status === 'review' ? !!manual.next : !!rebuild?.queue.length;
+        try {
+            await continueRebuild(hasNext ? takeSteeringNote() : '', hasNext ? chosenRebuildEnd('next') : undefined);
+        } catch (error) {
+            reportError(error);
+        }
     });
-    on('[data-recall="rebuild-redo"]', 'click', async () => {
+    on('[data-recall="rebuild-redo"]', 'click', async event => {
+        if (event.currentTarget.classList.contains('disabled')) {
+            return;
+        }
         resetDraft();
-        await redoRebuildBatch(takeSteeringNote());
+        try {
+            await redoRebuildBatch(takeSteeringNote(), chosenRebuildEnd('redo'));
+        } catch (error) {
+            reportError(error);
+        }
     });
+    on('[data-recall="rebuild-next-end"]', 'input', () => void measureRebuildEnd('next'));
+    on('[data-recall="rebuild-redo-end"]', 'input', () => void measureRebuildEnd('redo'));
     on('[data-recall="rebuild-stop"]', 'click', () => stopRebuild());
 
     on('[data-recall="preview"]', 'click', showPreview);

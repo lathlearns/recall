@@ -206,10 +206,16 @@ const DEFAULT_SETTINGS = {
     // --- Rebuild ---
     // The rebuild dialog's choices, remembered from the last one started.
 
-    /** 'existing' follows the break points your summaries already chose; 'fixed' cuts every rebuildBatchSize. */
+    /**
+     * 'existing' follows the break points your summaries already chose; 'fixed' cuts every
+     * rebuildBatchSize; 'manual' has the user choose where each batch ends, in the pause before it.
+     */
     rebuildBreaks: 'existing',
 
-    /** Messages per batch when cutting at fixed sizes, or when there are no break points to follow. */
+    /**
+     * Messages per batch when cutting at fixed sizes, or when there are no break points to follow.
+     * Cutting by hand, it is how far along the first batch's end is suggested.
+     */
     rebuildBatchSize: 50,
 
     /** Pause after every batch to read, edit or redo it. */

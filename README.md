@@ -141,8 +141,11 @@ each revising the one before, and you choose:
   message number with nothing before it summarised starts from scratch, unless the built-in
   Summarize left a summary to continue.
 - **End**: where the active summary ends, or the latest message.
-- **Batches**: the break points your existing summaries already chose, or every N messages
-  (50 by default). A batch too big for one request is split rather than refused.
+- **Batches**: the break points your existing summaries already chose, every N messages
+  (50 by default), or **one at a time, by hand**: you say where the first batch ends, and
+  after reading each one you choose where the next ends. You can also redo a batch with a
+  different end. As you type an end, it shows how big that batch would be. A batch too big
+  for one request is split rather than refused.
 - **Messages hidden by something other than Recall** (by hand, or from using the built-in
   Summarize) are skipped like in any other pass. If the range has any, the dialog says how
   many and offers to read them too. That's ticked by default on a chat with no Recall

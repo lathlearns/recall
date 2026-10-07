@@ -345,6 +345,73 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     check('all hidden: starting is refused', refused, true);
 }
 
+// 13. Cut by hand: only the first batch is planned, each pause chooses where the
+//     next one ends, a redo can end elsewhere, one that does not fit stops early
+//     and says so, and running out of messages finishes like any other rebuild.
+{
+    const [first] = reset();
+    const manual = { ...base, start: { kind: 'beginning' }, breaks: 'manual', end: 'latest' };
+    const plan = rebuild.planRebuild({ ...manual, firstEnd: 8 });
+    check('manual: only the first batch is planned', plan.batches.map(b => [b[0], b[b.length - 1]]), [[1, 8]]);
+    check('manual: the first ends one batch size in by default', rebuild.planRebuild({ ...manual, batchSize: 10 }).firstEnd, 9);
+    check('manual: an end past the last message is the last message', rebuild.planRebuild({ ...manual, firstEnd: 99 }).firstEnd, 29);
+
+    const refusal = options => {
+        try {
+            rebuild.planRebuild(options);
+            return '';
+        } catch (error) {
+            return error.kind;
+        }
+    };
+    check('manual: an end before the start is refused', refusal({ ...manual, start: { kind: 'summary', id: first.id }, firstEnd: 5 }), 'empty');
+    check('manual: a first batch of hidden messages is refused', refusal({ ...manual, start: { kind: 'message', index: 5 }, firstEnd: 5 }), 'empty');
+
+    await rebuild.startRebuild({ ...manual, firstEnd: 8 });
+    check('manual: pauses even with pausing off', rebuild.getRebuild()?.status, 'review');
+    check('manual: the number of batches is not claimed', gen.calls[0].steps, undefined);
+    check('manual: where it stands', rebuild.manualPosition(), {
+        current: { from: 0, to: 8 },
+        next: { from: 9, suggested: 17, left: 21 },
+        to: 29,
+    });
+    check('manual: an end before the next start', rebuild.manualEndProblem('next', 8), 'It starts at message 9, so it has to end there or later.');
+    check('manual: an end past the rebuild', rebuild.manualEndProblem('next', 40), 'The rebuild ends at message 29.');
+    check('manual: no end', rebuild.manualEndProblem('next', ''), 'Give a message number.');
+
+    check('manual: measured', await rebuild.measureManualBatch('next', 14), { problem: '', messages: 6, tokens: 60, stopsAt: null });
+    gen.control.fits = 4; // message 0 plus three
+    check('manual: measured, too big', (await rebuild.measureManualBatch('next', 14)).stopsAt, 11);
+    gen.control.fits = Infinity;
+
+    await rebuild.continueRebuild('', 14);
+    check('manual: the next batch ends where chosen', gen.calls[1].indices, [0, 9, 10, 11, 12, 13, 14]);
+    check('manual: and builds on the last', gen.calls[1].basisContent, 'summary through 8');
+
+    await rebuild.redoRebuildBatch('', 12);
+    check('manual: a redo can end earlier', gen.calls[2].indices, [0, 9, 10, 11, 12]);
+    check('manual: on the same basis', gen.calls[2].basisContent, 'summary through 8');
+    check('manual: replacing the first attempt', store.getSummariesRaw().filter(s => s.rebuildId).length, 2);
+    check('manual: the next starts after the redo', rebuild.manualPosition().next.from, 13);
+
+    gen.control.fits = 4;
+    await rebuild.continueRebuild('', 25);
+    check('manual: too big stops early', gen.calls[3].indices, [0, 13, 14, 15]);
+    check('manual: and says where', rebuild.getRebuild().cutShort, { wanted: 25, reached: 15 });
+    check('manual: the rest is not queued', rebuild.getRebuild().queue.length, 0);
+    check('manual: the next starts after it', rebuild.manualPosition().next.from, 16);
+    gen.control.fits = Infinity;
+
+    await rebuild.continueRebuild('', 29);
+    check('manual: the last batch', gen.calls[4].indices[gen.calls[4].indices.length - 1], 29);
+    check('manual: nothing left after it', rebuild.manualPosition().next, null);
+
+    await rebuild.continueRebuild();
+    check('manual: keeping going at the end finishes', rebuild.getRebuild(), null);
+    check('manual: the last batch is active', store.getActiveSummary()?.coversTo, 29);
+    check('manual: one batch per pass', gen.calls.length, 5);
+}
+
 rmSync(root, { recursive: true, force: true });
 
 if (failures.length) {

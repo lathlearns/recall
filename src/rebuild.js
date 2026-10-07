@@ -48,9 +48,10 @@ import { uuid } from './util.js';
  * @typedef {object} RebuildOptions
  * @property {RebuildStart} start
  * @property {'active'|'latest'} end
- * @property {'existing'|'fixed'} breaks
+ * @property {'existing'|'fixed'|'manual'} breaks  'manual': the user chooses where each batch ends, one at a time.
  * @property {number} batchSize
- * @property {boolean} review       Pause after every batch for the user to read it.
+ * @property {number} [firstEnd]    Where the first batch ends, when cutting by hand. Defaults to batchSize messages.
+ * @property {boolean} review       Pause after every batch for the user to read it. Always, when cutting by hand.
  * @property {boolean} [includeForeign] Also read messages hidden by something other than Recall.
  * @property {'keep'|'replace'} oldSummaries
  * @property {string} [note]       Guidance sent with every batch. Not remembered between rebuilds.
@@ -62,6 +63,8 @@ import { uuid } from './util.js';
  * @property {import('./store.js').RecallSummary|null} basis  What the first batch revises.
  * @property {string} seed          The built-in's summary, when it stands in for a basis.
  * @property {boolean} usedExisting Whether the breaks came from existing summaries.
+ * @property {boolean} manual       Cut by hand: `batches` holds only the first, and the rest are chosen in the pauses.
+ * @property {number} firstEnd      Where the first batch ends, when cut by hand.
  * @property {boolean} includesZero Whether message 0 is read with every batch.
  * @property {number} foreign       Messages in range hidden by something other than Recall.
  * @property {boolean} includeForeign Whether those are being read.
@@ -79,8 +82,11 @@ import { uuid } from './util.js';
  *   id: string, chatId: string, options: RebuildOptions, plan: RebuildPlan,
  *   queue: number[][], done: import('./store.js').RecallSummary[],
  *   status: 'running'|'review'|'failed', error: string, stopRequested: boolean,
- *   pendingNote?: string,
+ *   pendingNote?: string, cutShort: { wanted: number, reached: number }|null,
  * }|null}
+ *
+ * `cutShort` is set when a batch cut by hand did not fit in one request and so
+ * stopped before where the user ended it — they chose that end, so they are told.
  */
 let state = null;
 
@@ -178,6 +184,17 @@ function isReadable(index, owned, includeForeign) {
     return includeForeign && !isHostSystemMessage(message);
 }
 
+/** The messages from `lo` to `hi` that would be read, message 0 aside. */
+function readableBetween(lo, hi, owned, includeForeign) {
+    const indices = [];
+    for (let i = Math.max(1, lo); i <= hi; i++) {
+        if (isReadable(i, owned, includeForeign)) {
+            indices.push(i);
+        }
+    }
+    return indices;
+}
+
 /**
  * Whether the chat has any Recall summary. Without one, every hidden message was
  * hidden by something else — usually by hand while using the built-in Summarize —
@@ -259,18 +276,29 @@ export function planRebuild(options) {
         throw new RecallError(`There is nothing to rebuild: it would start at message ${from} and end at ${to}.`, { kind: 'empty' });
     }
 
+    const manual = options.breaks === 'manual';
     const breaks = options.breaks === 'existing' ? existingBreaks(from, to) : [];
     const usedExisting = options.breaks === 'existing' && breaks.length > 0;
+    const size = Math.max(1, Math.floor(Number(options.batchSize) || 50));
+    let firstEnd = to;
 
     const ranges = [];
-    if (usedExisting) {
+    if (manual) {
+        // Only the first is planned. Each one after it is chosen once the one
+        // before it has been read, so there is nothing further to plan.
+        const wanted = options.firstEnd == null ? from + size - 1 : Math.floor(Number(options.firstEnd));
+        if (!Number.isFinite(wanted) || wanted < from) {
+            throw new RecallError(`The first batch starts at message ${from}, so it has to end there or later.`, { kind: 'empty' });
+        }
+        firstEnd = Math.min(to, wanted);
+        ranges.push([from, firstEnd]);
+    } else if (usedExisting) {
         let lo = from;
         for (const cut of [...breaks, to]) {
             ranges.push([lo, cut]);
             lo = cut + 1;
         }
     } else {
-        const size = Math.max(1, Math.floor(Number(options.batchSize) || 50));
         for (let lo = from; lo <= to; lo += size) {
             ranges.push([lo, Math.min(to, lo + size - 1)]);
         }
@@ -292,12 +320,7 @@ export function planRebuild(options) {
     const batches = [];
     let skipped = 0;
     for (const [lo, hi] of ranges) {
-        const batch = [];
-        for (let i = Math.max(1, lo); i <= hi; i++) {
-            if (isReadable(i, owned, includeForeign)) {
-                batch.push(i);
-            }
-        }
+        const batch = readableBetween(lo, hi, owned, includeForeign);
         // A stretch with nothing readable needs no request of its own. Counted,
         // so the plan can say so rather than quietly showing fewer batches.
         if (batch.length) {
@@ -311,13 +334,25 @@ export function planRebuild(options) {
     // so the scenario reaches every batch the way it reached every summary.
     const includesZero = isReadable(0, owned, includeForeign);
 
+    // A first batch with nothing in it is the user's end being too early, not the
+    // whole range being unreadable — so it is said that way, while something later is.
+    if (manual && !batches.length && readableBetween(firstEnd + 1, to, owned, includeForeign).length) {
+        throw new RecallError(
+            `Every message from ${from} to ${firstEnd} is hidden, so the first batch would have nothing to read. End it later.`,
+            { kind: 'empty' },
+        );
+    }
+
     // Not thrown: the dialog still needs the foreign count to offer the way out.
     const empty = !batches.length && !(from === 0 && includesZero);
     if (!batches.length && !empty) {
         batches.push([]);
     }
 
-    return { from, to, batches, basis, seed, usedExisting, includesZero, foreign, includeForeign, skipped, empty };
+    return {
+        from, to, batches, basis, seed, usedExisting, manual, firstEnd,
+        includesZero, foreign, includeForeign, skipped, empty,
+    };
 }
 
 /**
@@ -393,6 +428,7 @@ export async function startRebuild(options) {
         status: 'running',
         error: '',
         stopRequested: false,
+        cutShort: null,
     };
     setRebuildLock(true);
     notify('change');
@@ -421,6 +457,114 @@ function currentBasis() {
     return state.done[state.done.length - 1] ?? state.plan.basis;
 }
 
+// --- Cutting by hand ----------------------------------------------------------
+//
+// Each batch's end is chosen in the pause before it, so a batch's stretch is
+// known from what was read rather than from a plan: one starts right after the
+// last message the batch before it read.
+
+/** The stretch the k-th finished batch covered: from where it started to the last message it read. */
+function doneRange(k) {
+    const lastRead = record => Math.max(...record.sourceIndices);
+    return {
+        from: k > 0 ? lastRead(state.done[k - 1]) + 1 : state.plan.from,
+        to: lastRead(state.done[k]),
+    };
+}
+
+function readableFrom(lo, hi) {
+    return readableBetween(lo, Math.min(hi, state.plan.to), recallOwnedHides(), state.plan.includeForeign);
+}
+
+/**
+ * Where a rebuild cut by hand stands, for its pause to offer: the batch just
+ * written, which a redo can end elsewhere, and the next one, with an end to
+ * suggest — the same size as the last. `next` is null once nothing readable is
+ * left, which makes the batch under review the last.
+ *
+ * @returns {{
+ *   current: { from: number, to: number }|null,
+ *   next: { from: number, suggested: number, left: number }|null,
+ *   to: number,
+ * }|null} Null unless a rebuild cut by hand is in progress.
+ */
+export function manualPosition() {
+    if (!state?.plan.manual) {
+        return null;
+    }
+    const current = state.done.length ? doneRange(state.done.length - 1) : null;
+    const from = current ? current.to + 1 : state.plan.from;
+    const left = readableFrom(from, state.plan.to).length;
+    const size = current ? current.to - current.from + 1 : state.plan.firstEnd - state.plan.from + 1;
+    return {
+        current,
+        next: left ? { from, suggested: Math.min(state.plan.to, from + size - 1), left } : null,
+        to: state.plan.to,
+    };
+}
+
+/**
+ * What is wrong with ending the next batch, or a redo of this one, at `end` —
+ * or '' when nothing is.
+ * @param {'next'|'redo'} which
+ * @param {number|string} end
+ * @returns {string}
+ */
+export function manualEndProblem(which, end) {
+    const position = manualPosition();
+    const from = which === 'redo' ? position?.current?.from : position?.next?.from;
+    if (from == null) {
+        return 'There is no batch to end.';
+    }
+    const value = Math.floor(Number(end));
+    if (String(end ?? '').trim() === '' || !Number.isFinite(value)) {
+        return 'Give a message number.';
+    }
+    if (value < from) {
+        return `It starts at message ${from}, so it has to end there or later.`;
+    }
+    if (value > position.to) {
+        return `The rebuild ends at message ${position.to}.`;
+    }
+    if (!readableFrom(from, value).length) {
+        return `Every message from ${from} to ${value} is hidden, so there would be nothing to read.`;
+    }
+    return '';
+}
+
+/**
+ * The size of the next batch, or of a redo of this one, if it ended at `end`:
+ * how many messages it would read, about how many tokens those are, and where
+ * it would stop if they will not all fit in one request.
+ *
+ * @param {'next'|'redo'} which
+ * @param {number|string} end
+ * @returns {Promise<{ problem: string, messages?: number, tokens?: number, stopsAt?: number|null }>}
+ */
+export async function measureManualBatch(which, end) {
+    const problem = manualEndProblem(which, end);
+    if (problem) {
+        return { problem };
+    }
+    const position = manualPosition();
+    const redo = which === 'redo';
+    const indices = readableFrom(redo ? position.current.from : position.next.from, Math.floor(Number(end)));
+    const basis = redo ? (state.done[state.done.length - 2] ?? state.plan.basis) : currentBasis();
+    const seed = basis ? '' : state.plan.seed;
+    const withZero = state.plan.includesZero ? [0, ...indices] : indices;
+
+    const counts = await Promise.all(indices.map(countMessageTokens));
+    const fits = await fitBatch(withZero, basis?.content ?? seed, batchNote());
+    const keep = state.plan.includesZero ? fits - 1 : fits;
+
+    return {
+        problem: '',
+        messages: indices.length,
+        tokens: counts.reduce((a, b) => a + b, 0),
+        stopsAt: keep < indices.length ? (indices[keep - 1] ?? null) : null,
+    };
+}
+
 async function runQueue() {
     while (state && state.queue.length) {
         if (state.stopRequested) {
@@ -429,6 +573,7 @@ async function runQueue() {
 
         state.status = 'running';
         state.error = '';
+        state.cutShort = null;
         notify('change');
 
         const basis = currentBasis();
@@ -448,7 +593,12 @@ async function runQueue() {
                 );
             }
             const keep = state.plan.includesZero ? fits - 1 : fits;
-            if (keep < batch.length) {
+            if (keep < batch.length && state.plan.manual) {
+                // The rest is not queued: the next batch starts after what was
+                // read anyway, and where it ends is the user's to choose again.
+                state.queue.splice(0, 1, batch.slice(0, keep));
+                state.cutShort = { wanted: batch[batch.length - 1], reached: batch[keep - 1] };
+            } else if (keep < batch.length) {
                 state.queue.splice(0, 1, batch.slice(0, keep), batch.slice(keep));
             }
 
@@ -459,7 +609,8 @@ async function runQueue() {
                 seed,
                 rebuildId: state.id,
                 step,
-                steps: state.done.length + state.queue.length,
+                // Unknown when cut by hand: the user has not chosen the rest yet.
+                steps: state.plan.manual ? undefined : state.done.length + state.queue.length,
                 steeringNote: batchNote(),
             });
 
@@ -486,7 +637,7 @@ async function runQueue() {
             return endRebuild(false);
         }
 
-        if (state.options.review) {
+        if (state.options.review || state.plan.manual) {
             state.status = 'review';
             notify('review');
             return;
@@ -504,11 +655,27 @@ async function runQueue() {
  * A note given here is for the next batch only. With none, a retry keeps the
  * note the failed batch was given — it is the same batch, asked again — and
  * moving on after a review has none, since the last one was used.
+ *
+ * Cut by hand, `end` is where the next batch ends; without one it ends where
+ * manualPosition suggests. With nothing readable left, keeping going finishes.
  * @param {string} [steeringNote]
+ * @param {number} [end]
  */
-export async function continueRebuild(steeringNote = '') {
+export async function continueRebuild(steeringNote = '', end) {
     if (!state || state.status === 'running') {
         return;
+    }
+    if (state.plan.manual && state.status === 'review') {
+        const next = manualPosition().next;
+        if (!next) {
+            return endRebuild(true);
+        }
+        const until = end ?? next.suggested;
+        const problem = manualEndProblem('next', until);
+        if (problem) {
+            throw new RecallError(problem, { kind: 'empty' });
+        }
+        state.queue.push(readableFrom(next.from, Math.floor(Number(until))));
     }
     const note = String(steeringNote ?? '').trim();
     if (note) {
@@ -524,18 +691,28 @@ export async function continueRebuild(steeringNote = '') {
  * Throws away the batch just reviewed and writes it again, on the same basis.
  * Replaced rather than kept as a sibling: the user has read it and said no, and
  * a rebuild's group is meant to hold one chain, not every attempt at it.
+ *
+ * Cut by hand, `end` can move where it ends — "that went too far" is the
+ * likeliest reason to redo one. Without it, the same messages are read again.
  * @param {string} [steeringNote]
+ * @param {number} [end]
  */
-export async function redoRebuildBatch(steeringNote = '') {
-    if (!state || state.status !== 'review') {
-        return;
-    }
-    const last = state.done.pop();
-    if (!last) {
+export async function redoRebuildBatch(steeringNote = '', end) {
+    if (!state || state.status !== 'review' || !state.done.length) {
         return;
     }
 
-    state.queue.unshift(last.sourceIndices.filter(i => i !== 0 || !state.plan.includesZero));
+    let indices = null;
+    if (state.plan.manual && end != null) {
+        const problem = manualEndProblem('redo', end);
+        if (problem) {
+            throw new RecallError(problem, { kind: 'empty' });
+        }
+        indices = readableFrom(doneRange(state.done.length - 1).from, Math.floor(Number(end)));
+    }
+
+    const last = state.done.pop();
+    state.queue.unshift(indices ?? last.sourceIndices.filter(i => i !== 0 || !state.plan.includesZero));
     deleteSummary(last.id);
     state.pendingNote = String(steeringNote ?? '').trim();
 

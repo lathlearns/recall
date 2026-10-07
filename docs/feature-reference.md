@@ -634,8 +634,23 @@ touching visibility until the end.
   after an existing summary, which becomes the basis; or a message number, which builds on
   nothing — or on the built-in summary, if the fallback is on and one exists), where to end
   (the active summary's last message, or the newest), how to cut batches (at the existing
-  summaries' break points, or every N messages, default 50), whether to pause after each batch,
-  and whether old summaries are kept or replaced.
+  summaries' break points, every N messages, default 50, or by hand, one at a time), whether to
+  pause after each batch, and whether old summaries are kept or replaced.
+- **Cutting by hand** plans only the first batch: the dialog asks where it ends, suggesting one
+  batch size (N) past the start, and recalculates that suggestion when the start changes until
+  the user types an end of their own. Pausing is always on and its box is ticked and fixed; the
+  user's own setting is kept for the other choices. Each pause offers two ends, both filled in:
+  where **the next batch** ends (suggested as the same number of messages as the one just
+  read), used by *Keep going*, and where **a redo** of this batch ends (where it ended), used by
+  *Redo*, so a batch that went too far can be redone shorter. Each field shows, as it is typed,
+  how many messages that would read, about how many tokens they are, and where the batch would
+  stop if they will not all fit in one request; an end that cannot be used says why and
+  disables its button. Each batch starts right after the last message the one before it read.
+  One that will not fit in one request stops where it stops fitting, and the pause says so; the
+  rest is not queued, because the user chooses the next end anyway. With nothing readable left,
+  *Keep going* becomes *Finish*. The number of batches is not known in advance, so progress
+  reads "batch 3" with how many messages are left rather than "3 of 7", and the estimate covers
+  the first batch only.
 - **Each batch is read by index, like a regenerate.** It reads its stretch of messages plus
   message 0, the same as any pass would: messages Recall hid are read, messages hidden by
   anything else are not — unless the user ticks *Read them too*. The dialog shows that choice
@@ -670,6 +685,11 @@ touching visibility until the end.
 - **The estimate** shown before starting counts the messages, prompt and reference material
   exactly. The summary carried from batch to batch cannot be known in advance, so it is guessed
   from the current summary's size, and the dialog says so.
+- **To revisit: moving the next end in any rebuild.** The next-batch end field could appear at
+  every pause, whichever way batches are cut. Changing it would override where the next batch
+  ends, and the batches after it would be cut again from there by the rule chosen (every N, or
+  the existing break points). Left out for now: cutting by hand covers the need, and it is
+  clearer than choosing "every 50" and then overriding it at every pause.
 
 ---
 
