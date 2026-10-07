@@ -978,7 +978,7 @@ async function openRebuildDialog() {
                     <select id="recall-rb-breaks" class="text_pole recall-grow" data-rb="breaks">
                         <option value="existing">Follow the break points of your existing summaries</option>
                         <option value="fixed">A fixed number of messages each</option>
-                        <option value="manual">I'll choose where each one ends, one at a time</option>
+                        <option value="manual">One at a time, I pick the ends</option>
                     </select>
                 </div>
                 <div class="recall-row recall-row-field" data-rb="size-row" hidden>
@@ -1122,6 +1122,14 @@ async function openRebuildDialog() {
     let plan = null;
     let generation = 0;
 
+    // Whether Start rebuild can go: the plan is complete and has something to read.
+    let ready = false;
+    let popup = null;
+    const setReady = value => {
+        ready = value;
+        popup?.okButton.classList.toggle('disabled', !value);
+    };
+
     const refresh = async () => {
         const mine = ++generation;
         showFollowUps();
@@ -1131,9 +1139,15 @@ async function openRebuildDialog() {
         const guessLine = field('[data-rb="guess"]');
         const shortBox = field('[data-rb="short"]');
         shortBox.toggleAttribute('hidden', true);
+        setReady(false);
+
+        // Cutting by hand with no first end yet is not a mistake to report: it is
+        // a field still to fill. The rest of the plan is shown meanwhile, as if
+        // the first batch ran to the end, and the plan line says what is missing.
+        const awaitingFirst = choices.breaks === 'manual' && choices.firstEnd === '';
 
         try {
-            plan = planRebuild(choices);
+            plan = planRebuild(awaitingFirst ? { ...choices, firstEnd: Number.MAX_SAFE_INTEGER } : choices);
         } catch (error) {
             plan = null;
             planLine.textContent = error.message;
@@ -1164,10 +1178,13 @@ async function openRebuildDialog() {
             first.max = String(plan.to);
         }
 
-        const parts = [plan.manual
-            ? `Messages ${plan.from}–${plan.to}, one batch at a time: the first reads ${plan.from}–${plan.firstEnd}, `
-                + 'and after reading each one you choose where the next ends'
-            : `Messages ${plan.from}–${plan.to} in ${plan.batches.length} batch${plan.batches.length === 1 ? '' : 'es'}`];
+        const parts = [awaitingFirst
+            ? `Messages ${plan.from}–${plan.to}, one batch at a time. Choose where the first one ends, under `
+                + '"How it runs", to see what it reads and what it costs'
+            : plan.manual
+                ? `Messages ${plan.from}–${plan.to}, one batch at a time: the first reads ${plan.from}–${plan.firstEnd}, `
+                    + 'and after reading each one you choose where the next ends'
+                : `Messages ${plan.from}–${plan.to} in ${plan.batches.length} batch${plan.batches.length === 1 ? '' : 'es'}`];
         if (plan.skipped && !plan.manual) {
             parts.push(`${plan.skipped} more had nothing readable in ${plan.skipped === 1 ? 'it' : 'them'} and ${plan.skipped === 1 ? 'is' : 'are'} skipped`);
         }
@@ -1198,6 +1215,12 @@ async function openRebuildDialog() {
             shortBox.toggleAttribute('hidden', false);
         }
         planLine.textContent = `${parts.join(' · ')}.`;
+        if (awaitingFirst) {
+            estimateLine.textContent = '';
+            guessLine.textContent = '';
+            return;
+        }
+        setReady(true);
         estimateLine.textContent = 'Counting tokens…';
         guessLine.textContent = '';
 
@@ -1231,16 +1254,19 @@ async function openRebuildDialog() {
     };
     wrapper.addEventListener('input', replan);
     wrapper.addEventListener('change', replan);
-    void refresh();
 
     // Wider than a plain confirm so the two columns sit side by side and the
     // whole form fits without scrolling; ST drops it to 90% of a narrow screen.
-    const popup = new Popup(wrapper, POPUP_TYPE.CONFIRM, '', {
+    popup = new Popup(wrapper, POPUP_TYPE.CONFIRM, '', {
         okButton: 'Start rebuild',
         cancelButton: 'Cancel',
         wider: true,
         allowVerticalScrolling: true,
+        // Greying the button out does not stop Enter, which also starts it.
+        // Kept open, the dialog still shows the plan line saying what is missing.
+        onClosing: closing => closing.result !== POPUP_RESULT.AFFIRMATIVE || ready,
     });
+    void refresh();
     // The scroller here is ST's, so the class that gives it Recall's scrollbar
     // gutter goes on the dialog.
     popup.dlg.classList.add('recall-rebuild-popup');

@@ -648,7 +648,8 @@ touching visibility until the end.
   than a clause in the plan, and the finishing notice says it again.
 - **Cutting by hand** plans only the first batch: the dialog asks where it ends, with no number
   filled in, since where a stretch of story ends is the user's call; it will not start without
-  one. Pausing is always on and its box is ticked and fixed; the
+  one: until it is filled in, the plan line says where to choose it and *Start rebuild* is
+  disabled, Enter included. Pausing is always on and its box is ticked and fixed; the
   user's own setting is kept for the other choices. Each pause offers two ends, both filled in:
   where **the next batch** ends (suggested as the same number of messages as the one just
   read), used by *Keep going*, and where **a redo** of this batch ends (where it ended), used by

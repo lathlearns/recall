@@ -468,26 +468,31 @@
 }
 
 /* A rebuild cut by hand: its own line under the bar's text, so the two ends
-   and their sizes read as a short form rather than squeezing beside it. */
+   and their sizes read as a short form rather than squeezing beside it.
+   A grid, with each row's label, box and size line joining it, so the two
+   boxes share a column and line up however the labels wrap. A width given to
+   the labels instead lined them up only where both fit on one line. */
 .recall-rebuild-ends {
     flex: 1 1 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 0.3em;
+    display: grid;
+    grid-template-columns: auto 6em;
+    align-items: center;
+    justify-content: start;
+    gap: 0.3em 0.6em;
+}
+
+.recall-rebuild-ends .recall-row-field {
+    display: contents;
 }
 
 .recall-rebuild-ends .text_pole {
+    width: 100%;
     margin: 0;
 }
 
-/* One width for both labels, so the two boxes line up under each other. */
-.recall-rebuild-ends .recall-row-field > label {
-    flex: 0 0 auto;
-    min-width: 12.5em;
-}
-
+/* The size lines and the note under them run the full width. */
 .recall-rebuild-ends .recall-help {
-    flex: 1 1 12em;
+    grid-column: 1 / -1;
 }
 
 .recall-banner-dismiss {
