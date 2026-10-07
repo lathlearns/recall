@@ -883,6 +883,13 @@ function chosenRebuildEnd(which) {
 }
 
 /**
+ * Said wherever a rebuild asks for a message number. People count from 1, and
+ * an end typed one too early silently leaves the last message out.
+ */
+const ZERO_BASED_NOTE = 'Message numbers count from 0, the way SillyTavern numbers them: '
+    + 'the chat\'s first message is message 0, so message 50 is the 51st.';
+
+/**
  * The rebuild dialog. Every choice defaults to the last one started, and the
  * plan and estimate under it follow the choices as they change, so what the
  * button will do is visible before it is pressed.
@@ -950,6 +957,10 @@ async function openRebuildDialog() {
                     <label for="recall-rb-end-message">Message</label>
                     <input id="recall-rb-end-message" class="text_pole recall-number" type="number" min="0" max="${last}" value="${last}" data-rb="end-message">
                 </div>
+                <div class="recall-banner recall-banner-info" data-rb="zero-read" hidden>
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>${ZERO_BASED_NOTE}</span>
+                </div>
                 <div class="recall-banner recall-banner-warn" data-rb="foreign" hidden>
                     <i class="fa-solid fa-eye-slash"></i>
                     <div class="recall-rebuild-foreign">
@@ -984,6 +995,10 @@ async function openRebuildDialog() {
                         <input id="recall-rb-first" class="text_pole recall-number" type="number" min="0" data-rb="first">
                     </span>
                 </div>
+                <div class="recall-banner recall-banner-info" data-rb="zero-runs" hidden>
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>${ZERO_BASED_NOTE}</span>
+                </div>
                 <p class="recall-help" data-rb="split-help"></p>
                 <div class="recall-row recall-row-field">
                     <label for="recall-rb-old">Old summaries</label>
@@ -1006,6 +1021,11 @@ async function openRebuildDialog() {
                 For one batch only, type in the guidance field at the top of the manager before
                 pressing Keep going or Redo. Both are sent when both are set.
             </p>
+        </div>
+
+        <div class="recall-banner recall-banner-warn" data-rb="short" hidden>
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span data-rb="short-text"></span>
         </div>
 
         <div class="recall-rebuild-plan">
@@ -1078,6 +1098,10 @@ async function openRebuildDialog() {
         field('[data-rb="end-message-row"]').toggleAttribute('hidden', chosen('end') !== 'message');
         field('[data-rb="size-row"]').toggleAttribute('hidden', chosen('breaks') !== 'fixed');
         field('[data-rb="first-row"]').toggleAttribute('hidden', chosen('breaks') !== 'manual');
+        // Said beside whichever message number is being asked for. Each column has
+        // its own, so it is never off to the side of the field it is about.
+        field('[data-rb="zero-read"]').toggleAttribute('hidden', chosen('start') !== 'message' && chosen('end') !== 'message');
+        field('[data-rb="zero-runs"]').toggleAttribute('hidden', chosen('breaks') !== 'manual');
 
         const manual = chosen('breaks') === 'manual';
         const review = field('[data-rb="review"]');
@@ -1105,6 +1129,8 @@ async function openRebuildDialog() {
         const planLine = field('[data-rb="plan"]');
         const estimateLine = field('[data-rb="estimate"]');
         const guessLine = field('[data-rb="guess"]');
+        const shortBox = field('[data-rb="short"]');
+        shortBox.toggleAttribute('hidden', true);
 
         try {
             plan = planRebuild(choices);
@@ -1159,10 +1185,17 @@ async function openRebuildDialog() {
             // built-in's. That is true of Summarize now, not of this, so say so.
             parts.push('the built-in Summarize\'s summary is not used: starting at message 0 reads everything it covered, and building on it would count those messages twice');
         }
+        // Its own box rather than one more clause in the plan: it changes what
+        // finishing does, which is the thing a user is least likely to expect.
         if (plan.activeReaches) {
-            parts.push(`it ends before the active summary does (message ${plan.activeReaches}), so when it finishes `
-                + 'its batches are kept in the archive and nothing else changes: the active summary stays, '
-                + 'nothing is hidden or unhidden, and no old summaries are deleted');
+            field('[data-rb="short-text"]').textContent =
+                `This rebuild ends at message ${plan.to}, before your active summary, which reaches message ${plan.activeReaches}. `
+                + 'When it finishes, its batches are kept in the archive but none of them becomes active: the active summary stays, '
+                + 'nothing is hidden or unhidden'
+                + (choices.oldSummaries === 'replace' ? ', and no old summaries are deleted' : '')
+                + `. Making a shorter summary active would unhide messages ${plan.to + 1}–${plan.activeReaches}. `
+                + 'To carry on afterwards, start another rebuild after its last batch.';
+            shortBox.toggleAttribute('hidden', false);
         }
         planLine.textContent = `${parts.join(' · ')}.`;
         estimateLine.textContent = 'Counting tokens…';

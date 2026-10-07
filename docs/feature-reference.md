@@ -636,13 +636,16 @@ touching visibility until the end.
   (the active summary's last message, the newest, or a message number), how to cut batches (at
   the existing summaries' break points, every N messages, default 50, or by hand, one at a
   time), whether to pause after each batch, and whether old summaries are kept or replaced.
-  Message numbers are not remembered: they depend on the chat.
+  Message numbers are not remembered: they depend on the chat. Wherever one is asked for — the
+  start, the end, the first hand-cut end, and the pause's two ends — a note beside it says they
+  count from 0, as the host numbers them, so the first message is message 0.
 - **Ending at a message number** stops the batches there, whichever way they are cut: from 23
   to 173 every 50 is 23–72, 73–122, 123–172 and 173. The end field starts at the newest
   message. A number past the newest means the newest. If the end is before the active
   summary's, finishing is like stopping: the batches are kept and nothing else changes, since
   the last one covers less than the active summary and making it active would unhide the
-  messages in between. The dialog says so before it starts.
+  messages in between. The dialog says so before it starts, in a warning box of its own rather
+  than a clause in the plan, and the finishing notice says it again.
 - **Cutting by hand** plans only the first batch: the dialog asks where it ends, with no number
   filled in, since where a stretch of story ends is the user's call; it will not start without
   one. Pausing is always on and its box is ticked and fixed; the
