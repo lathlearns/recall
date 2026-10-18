@@ -313,11 +313,28 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     gen.control.during = async step => {
         if (step !== 2) return;
         await rebuild.stopRebuild();
-        check('stop cancellable: aborted', gen.control.run.controller.signal.aborted, true);
-        check('stop cancellable: no undo', rebuild.canUndoStop(), false);
+        check('stop after batch, cancellable: not aborted', gen.control.run.controller.signal.aborted, false);
+        check('stop after batch, cancellable: can be undone', rebuild.canUndoStop(), true);
     };
     await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
-    check('stop cancellable: the batch is dropped', [rebuild.getRebuild(), rebuildCount()], [null, 1]);
+    check('stop after batch, cancellable: the batch is kept', [rebuild.getRebuild(), rebuildCount()], [null, 2]);
+
+    reset();
+    gen.control.run = run(true);
+    gen.control.during = async step => {
+        if (step !== 2) return;
+        await rebuild.stopRebuild({ now: true });
+        check('stop now: aborted', gen.control.run.controller.signal.aborted, true);
+        check('stop now: no undo', rebuild.canUndoStop(), false);
+    };
+    await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    check('stop now: the batch is dropped', [rebuild.getRebuild(), rebuildCount()], [null, 1]);
+
+    reset();
+    gen.control.run = run(false);
+    gen.control.during = step => step === 2 ? rebuild.stopRebuild({ now: true }) : undefined;
+    await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    check('stop now, not cancellable: lands and is kept', [gen.control.run.controller.signal.aborted, rebuildCount()], [false, 2]);
 
     gen.control.run = null;
     gen.control.during = null;

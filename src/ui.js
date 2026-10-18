@@ -777,41 +777,57 @@ function renderRebuildBar() {
 /** What the bar says between a mid-batch Stop and the rebuild actually ending. */
 function stoppingText() {
     return canUndoStop()
-        ? 'Stopping the rebuild once this batch lands — this connection cannot cancel a request mid-way. '
-            + 'The batch will be kept. Pressed Stop by mistake? Undo carries on as before.'
+        ? 'Stopping the rebuild once this batch lands. The batch will be kept. '
+            + 'Pressed Stop by mistake? Undo carries on as before.'
         : 'Stopping the rebuild.';
 }
 
 /**
- * Asks before stopping a rebuild. A stop in a pause, or one that cancels the
- * request in flight, cannot be taken back, and a misplaced tap on a phone should
- * not cost a batch or end a rebuild that is half done.
- * @returns {Promise<boolean>}
+ * Asks before stopping a rebuild, and how: a misplaced tap on a phone should not
+ * cost a batch or end a rebuild that is half done.
+ *
+ * Mid-batch the safe choice is the default — stop after this batch, which keeps
+ * it and can be undone until it lands. Stopping now is offered beside it only
+ * where the request can actually be cancelled, and is final.
+ * @returns {Promise<'none'|'after'|'now'>}
  */
 async function confirmStopRebuild() {
     const rebuild = getRebuild();
     if (!rebuild) {
-        return false;
+        return 'none';
     }
     const kept = rebuild.done.length
         ? `The ${rebuild.done.length === 1 ? 'batch' : `${rebuild.done.length} batches`} written so far stay in the archive, but none becomes active.`
         : 'Nothing has been written yet.';
-    let detail;
+
     if (rebuild.status !== 'running') {
-        detail = `${kept} This cannot be undone — carrying on later means starting a new rebuild after the last of them.`;
-    } else if (getActiveRun()?.cancellable) {
-        detail = `The batch being written now is cancelled and thrown away. ${kept}`;
-    } else {
-        detail = 'The batch being written now cannot be cancelled, so it is left to finish and kept, and the rebuild stops after it. '
-            + 'Until it lands, you can still undo the stop.';
+        const answer = await Popup.show.confirm('Stop the rebuild?',
+            `${kept} This cannot be undone — carrying on later means starting a new rebuild after the last of them.`,
+            { okButton: 'Stop', cancelButton: 'Keep rebuilding' });
+        return answer === POPUP_RESULT.AFFIRMATIVE ? 'now' : 'none';
     }
-    // Popup.show.confirm resolves to POPUP_RESULT, so coerce.
-    return !!await Popup.show.confirm('Stop the rebuild?', detail, { okButton: 'Stop', cancelButton: 'Keep rebuilding' });
+
+    const canCancel = !!getActiveRun()?.cancellable;
+    const detail = 'Stop after this batch: it finishes and is kept, and until it lands you can undo the stop.'
+        + (canCancel ? ' Stop now: it is cancelled and thrown away, and that is final.' : ' This connection cannot cancel a request mid-way, so stopping now is not offered.')
+        + ` ${kept}`;
+    const answer = await Popup.show.confirm('Stop the rebuild?', detail, {
+        okButton: 'Stop after this batch',
+        cancelButton: 'Keep rebuilding',
+        customButtons: canCancel
+            ? [{ text: 'Stop now', result: POPUP_RESULT.CUSTOM1, classes: ['recall-action-destructive'] }]
+            : null,
+    });
+    if (answer === POPUP_RESULT.CUSTOM1) {
+        return 'now';
+    }
+    return answer === POPUP_RESULT.AFFIRMATIVE ? 'after' : 'none';
 }
 
 async function requestStopRebuild() {
-    if (await confirmStopRebuild()) {
-        await stopRebuild();
+    const how = await confirmStopRebuild();
+    if (how !== 'none') {
+        await stopRebuild({ now: how === 'now' });
     }
 }
 

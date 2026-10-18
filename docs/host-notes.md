@@ -20,7 +20,7 @@ How each item in §21 is met.
 | Set the hidden flag and persist it | Set `is_system` per index, then `saveChatConditional` |
 | Per-chat metadata that travels with the chat file | `chat_metadata.recall`, saved with `saveMetadata` / `saveMetadataDebounced` |
 | Global settings storage | `extension_settings.recall`, saved with `saveSettingsDebounced` |
-| A two-message completion outside the chat flow | `ConnectionManagerRequestService.sendRequest` for a profile; `generateRawData` for the main API |
+| A two-message completion outside the chat flow | `ConnectionManagerRequestService.sendRequest` for a profile; on the main API, `createGenerationParameters` + `ChatCompletionService.sendRequest` for Chat Completion (see [below](#the-main-api-is-streamed-by-recall)) and `generateRawData` otherwise |
 | A token counter for the summarising model | `/api/tokenizers/openai/count?model=…` for a Chat Completion profile on another model; `getTokenCountAsync` otherwise |
 | The context limit | `getMaxPromptTokens`, or the profile context size the user enters |
 | The size of the last prompt sent | `itemizedPrompts` — see [the nudge](#the-nudge-reads-itemizedprompts-itself) |
@@ -30,8 +30,8 @@ How each item in §21 is met.
 | Reasoning stripping | `removeReasoningFromString`, `extractReasoningFromData` |
 | Connection profiles | `extension_settings.connectionManager.profiles` |
 | Custom stopping strings, suppressible per request | `power_user.custom_stopping_strings`; `stop: []` in the profile payload, `CHAT_COMPLETION_SETTINGS_READY` on the main API |
-| Streaming | `sendRequest(…, { stream: true })` — Chat Completion profiles only, see [below](#streaming-is-chat-completion-only) |
-| An abort signal | Honoured by `sendRequest`; `generateRawData` takes none |
+| Streaming | `sendRequest(…, { stream: true })` for a profile; `ChatCompletionService.sendRequest` with `stream: true` on the main API — Chat Completion only, see [below](#streaming-is-chat-completion-only) |
+| An abort signal | Honoured by both `sendRequest`s; `generateRawData` takes none |
 | Stored API key ids | `secret_state` |
 
 Other surfaces in use: `Popup` for the manager and its confirms,
@@ -41,12 +41,13 @@ Other surfaces in use: `Popup` for the manager and its confirms,
 
 ## Where Recall departs from the reference
 
-**Stop is hidden on the main API.** `generateRawData` takes no abort signal, so a summary
-running through your chat's own connection cannot be cancelled. The button is hidden there
-rather than offered and found to do nothing (§16). A rebuild's own Stop is still shown there,
-and must never call `cancelRun()` for such a request: the abort reaches nothing, the request
-runs to the end, and `wasCancelled()` then throws the paid-for batch away. `stopRebuild` only
-aborts when `getActiveRun().cancellable`, which is also what leaves the stop undoable.
+**Stop is hidden on a Text Completion main API.** `generateRawData` takes no abort signal, so
+a summary going through it cannot be cancelled — a Text Completion main API, or a Chat
+Completion one that fell back to it. The button is hidden there rather than offered and found
+to do nothing (§16). A rebuild's own Stop is still shown there, and must never call
+`cancelRun()` for such a request: the abort reaches nothing, the request runs to the end, and
+`wasCancelled()` then throws the paid-for batch away. `stopRebuild` only aborts for *Stop now*
+and only when `getActiveRun().cancellable`.
 
 **The title request thinks if the connection does.** The reference asks for no thinking on
 the separate title request "where the host can say so". SillyTavern cannot say it once for
@@ -122,6 +123,25 @@ and output sequences — all behind `if (!requestData.stream)`. `ChatCompletionS
 none of it. So streaming a Chat Completion profile is byte-identical to waiting for it, while
 streaming a text completion profile would save a summary still wearing its instruct
 scaffolding, permanently, in the one artefact that stays in context.
+
+### The main API is streamed by Recall
+
+`generateRawData` sends `sendOpenAIRequest('quiet', …)`, and `createGenerationParameters`
+sets `stream = settings.stream_openai && type !== 'quiet' && …` — so nothing an extension asks
+of the main API through it ever streams, whatever the user's streaming setting. `streamViaMainApi`
+in connection.js does what `generateRawData` does for Chat Completion — `createRawPrompt`,
+`CHAT_COMPLETION_PROMPT_READY`, `createGenerationParameters(…, 'quiet', …)`,
+`CHAT_COMPLETION_SETTINGS_READY` — then sets `stream: true` and sends through
+`ChatCompletionService.sendRequest`, whose generator is the one profiles already use.
+
+Two departures from `generateRawData`, both deliberate. The output budget goes in as a copy of
+`oai_settings` with `openai_max_tokens` replaced, not through `TempResponseLength`, which swaps
+the live value and relies on an event hook to swap it back. And it takes the abort signal.
+`GENERATION_STOPPED` aborts it as it aborts `generateRawData`.
+
+`createGenerationParameters`, `oai_settings` and `ChatCompletionService` are exported, not
+promised to extensions. A change to any of them shows as a request that fails before streaming,
+which falls back to `generateRawData` and stops trying for the session.
 
 ### Streamed chunks are cumulative, not deltas
 

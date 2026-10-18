@@ -37,7 +37,11 @@ import {
     describeTarget,
     suppressStoppingStrings,
     canStreamProfile,
+    canStreamMainApi,
+    streamViaMainApi,
+    markMainApiStreamingBroken,
 } from './connection.js';
+import { shouldRetryWithoutStreaming } from './stream.js';
 
 import {
     getSettings,
@@ -187,12 +191,14 @@ function beginRun(kind, progress = {}) {
         step: progress.step ?? 0,
         steps: progress.steps ?? 0,
         startedAt: Date.now(),
-        streaming: !!profile && canStreamProfile(profile),
+        streaming: profile ? canStreamProfile(profile) : canStreamMainApi(),
         // Every profile request goes through fetch with this signal, streamed or
-        // not, so both can be stopped. `generateRawData` takes no signal at all,
-        // so the main API path cannot — and the button is hidden there rather
-        // than offered and then found to do nothing.
-        cancellable: !!profile,
+        // not, so both can be stopped, and so can the main API's streamed one.
+        // `generateRawData` takes no signal at all, so the main API's plain path
+        // cannot — and the button is hidden there rather than offered and then
+        // found to do nothing. A streamed main-API request that falls back to it
+        // stops being cancellable at that point (runViaMainApi).
+        cancellable: !!profile || canStreamMainApi(),
         firstContentAt: 0,
         content: '',
         reasoning: '',
@@ -606,12 +612,69 @@ async function runGeneration(buffer, systemPrompt) {
 }
 
 /**
- * The main API path, unchanged: the same connection the chat itself uses.
+ * The main API path: the same connection the chat itself uses.
+ *
+ * Chat Completion is streamed (streamViaMainApi). A stream that fails before
+ * anything arrives is asked again through `generateRawData` — streaming is a
+ * display feature and must never be why a summary fails — and the session then
+ * goes straight there. One stopped, or one that broke after text arrived, is not
+ * retried: see shouldRetryWithoutStreaming.
  * @returns {Promise<{content: string, reasoning: string}>}
  */
 async function runViaMainApi(buffer, systemPrompt) {
     const settings = getSettings();
+    const budget = settings.outputBudget > 0 ? settings.outputBudget : 0;
 
+    if (activeRun?.streaming) {
+        // Your chat's custom stopping strings would otherwise apply to the
+        // summary. See suppressStoppingStrings.
+        const restore = suppressStoppingStrings();
+        let streamError;
+        try {
+            const { content, reasoning } = await streamViaMainApi(systemPrompt, buffer, {
+                signal: activeRun.controller.signal,
+                onProgress: makeProgressHandler(),
+                maxTokens: budget,
+            });
+            return {
+                content: removeReasoningFromString(String(content ?? '')).trim(),
+                reasoning: String(reasoning ?? ''),
+            };
+        } catch (error) {
+            if (wasCancelled()) {
+                return { content: '', reasoning: '' };
+            }
+            if (!shouldRetryWithoutStreaming({ aborted: !!error?.aborted, started: !!error?.started })) {
+                throw error;
+            }
+            streamError = error;
+        } finally {
+            restore();
+        }
+
+        console.warn('[Recall] The streamed main-API request failed; retrying through generateRawData.', streamError);
+        // Nothing more comes through the live pane, and the plain path takes no
+        // signal, so Stop is withdrawn rather than left to do nothing.
+        if (activeRun) {
+            activeRun.streaming = false;
+            activeRun.streamFailed = true;
+            activeRun.cancellable = false;
+            notifyRunChange();
+        }
+        const result = await runRawMainApi(buffer, systemPrompt, budget);
+        markMainApiStreamingBroken(streamError);
+        return result;
+    }
+
+    return runRawMainApi(buffer, systemPrompt, budget);
+}
+
+/**
+ * The main API through `generateRawData`, as ST sends it: Text Completion, and
+ * the fallback for a Chat Completion stream that would not start.
+ * @returns {Promise<{content: string, reasoning: string}>}
+ */
+async function runRawMainApi(buffer, systemPrompt, budget) {
     // Your chat's custom stopping strings would otherwise apply to the summary,
     // and `###` or `---` in that list truncates one at its first section break —
     // reported by the provider as a normal finish. See suppressStoppingStrings.
@@ -622,7 +685,7 @@ async function runViaMainApi(buffer, systemPrompt) {
         data = await generateRawData({
             prompt: buffer,
             systemPrompt,
-            responseLength: settings.outputBudget > 0 ? settings.outputBudget : null,
+            responseLength: budget > 0 ? budget : null,
         });
     } finally {
         restoreStoppingStrings();

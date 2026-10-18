@@ -694,11 +694,12 @@ touching visibility until the end.
   a finished one that was told to end before the active summary does.
 - **Stopping a rebuild asks first**, from the rebuild's own Stop or the Stop beside a running
   batch, saying what it will cost: a mis-tap should not end a rebuild that is half done. In a
-  pause it ends at once. Mid-batch, a request that can be cancelled is cancelled and its batch
-  dropped; one that cannot is left to land, its batch is kept, and the rebuild ends after it.
-  Until it lands that stop can be **undone**, and the rebuild carries on as though Stop was
-  never pressed. Aborting such a request would not stop it — it would only throw away a batch
-  already paid for.
+  pause it ends at once. Mid-batch it offers two stops. **Stop after this batch**, the default,
+  leaves the request to land, keeps its batch, and ends the rebuild then; until it lands that
+  stop can be **undone**, and the rebuild carries on as though Stop was never pressed. **Stop
+  now** cancels the request and drops its batch, and is final; it is offered only where the
+  request can be cancelled. A request that cannot be is never aborted: that would not stop it,
+  only throw away a batch already paid for.
 - **While a rebuild is in progress**, pauses included, Summarize now and Regenerate are refused
   and sending is blocked during each batch. Switching chats abandons it; its batches stay saved.
 - **The estimate** shown before starting counts the messages, prompt and reference material
@@ -976,6 +977,15 @@ undo that is not a trade worth making for a progress display. Text-completion co
 the non-streamed path and the working state above; the panel says which one is in effect and
 why.
 
+**The chat's own connection streams too, when it is Chat Completion.** A host's raw-generation
+call may never stream for an extension — SillyTavern's sends a "quiet" request, and quiet
+requests are never streamed — so on that path the streamed request is built from the host's
+own pieces instead: the same prompt shaping, the same payload builder and request type over the
+chat's own settings, the same events for other extensions to see, with streaming switched on
+and the output budget applied to a copy of the settings rather than to the live ones. If that
+fails before anything arrives — including because a host internal it relies on has moved — the
+host's raw-generation call is used as before (see "Streaming is never why a summary fails").
+
 ### The model's reasoning, shown and kept
 
 On a reasoning model, the first half of a pass produces no summary at all — it is thinking, and
@@ -1002,7 +1012,8 @@ recording it; summaries that already carry it keep it.
 
 ### Stop
 
-Any summary running through a connection profile can be cancelled, streamed or not, from both
+Any summary running through a connection profile can be cancelled, streamed or not, and so
+can a streamed request on the chat's own connection, from both
 the status strip and the manager — the manager is a modal the user may never have opened, and a
 request you cannot see is still one you should be able to stop. Nothing is saved (section 13).
 
@@ -1237,6 +1248,9 @@ For porting, the surface Recall depends on:
   ones — which is what restricts the live view to Chat Completion here.
 - An **abort signal** honoured by that request → Stop. Where the host's raw-generation call
   takes none, cancellation is simply not offered on that path.
+- If the host's raw-generation call will not stream for an extension: its Chat Completion
+  payload builder and request sender, so the chat's own connection can be streamed (and
+  stopped) with the request it would have sent.
 - Read access to the host's client-side registry of stored API keys — ids only, no values →
   detecting a profile whose key reference has gone stale.
 

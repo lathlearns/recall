@@ -740,21 +740,25 @@ export async function redoRebuildBatch(steeringNote = '', end) {
 }
 
 /**
- * Stops. Mid-batch, the request is cancelled where the connection allows it and
- * otherwise allowed to land and kept; in a pause, it ends straight away.
+ * Stops. In a pause, it ends straight away. Mid-batch there are two stops:
  *
- * Only a cancellable request is aborted. Aborting one that cannot be cancelled
- * stops nothing — it still runs to the end — but marks it cancelled, and the
- * batch it lands is then thrown away: paid for, and lost. Left alone, it lands,
- * is kept, and the stop can still be taken back until it does.
+ * - **After this batch** (the default): the request is left to land, its batch
+ *   is kept, and the rebuild ends then. Until it lands the stop can be undone.
+ * - **Now** (`now`): the request is cancelled and its batch dropped. Only where
+ *   the request can be cancelled; otherwise this is the stop after the batch.
+ *
+ * Never abort a request that cannot be cancelled: that stops nothing — it still
+ * runs to the end — but marks it cancelled, and the batch it lands is then
+ * thrown away, paid for and lost.
+ * @param {{ now?: boolean }} [options]
  */
-export async function stopRebuild() {
+export async function stopRebuild({ now = false } = {}) {
     if (!state) {
         return;
     }
     if (state.status === 'running') {
         state.stopRequested = true;
-        if (getActiveRun()?.cancellable) {
+        if (now && getActiveRun()?.cancellable) {
             cancelRun();
         }
         notify('change');

@@ -7,16 +7,18 @@
  * issues the request against that profile's API, model, secret and proxy, leaving
  * the user's selected profile exactly where it was.
  *
- * When no profile is chosen, Recall uses the main API through `generateRawData`
- * as before. That path stays the default and the fallback.
+ * When no profile is chosen, Recall uses the main API: streamed by Recall when it
+ * is Chat Completion (streamViaMainApi), otherwise through `generateRawData`,
+ * which stays the default and the fallback.
  */
 
-import { getMaxPromptTokens, main_api, eventSource, event_types } from '../../../../../script.js';
+import { getMaxPromptTokens, main_api, eventSource, event_types, createRawPrompt } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { getCustomStoppingStrings } from '../../../../power-user.js';
 import { secret_state } from '../../../../secrets.js';
 import { CONNECT_API_MAP } from '../../../../slash-commands.js';
-import { getChatCompletionModel } from '../../../../openai.js';
+import { getChatCompletionModel, createGenerationParameters, oai_settings } from '../../../../openai.js';
+import { ChatCompletionService } from '../../../../custom-request.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { getSettings } from './settings.js';
 import { consumeStream, shouldRetryWithoutStreaming } from './stream.js';
@@ -126,6 +128,93 @@ export function canStreamProfile(profile = getActiveProfile()) {
  */
 const streamingBroken = new Map();
 
+/** The main API's entry in `streamingBroken`. Profile ids are UUIDs, so it cannot collide. */
+const MAIN_API_KEY = 'main-api';
+
+/**
+ * Whether Recall will stream the main API's response.
+ *
+ * Chat Completion only, for the same reason as profiles (see canStreamProfile).
+ * ST's own `generateRawData` never streams — it sends a `quiet` request, and
+ * `createGenerationParameters` turns streaming off for every quiet one — so the
+ * streamed request is built by Recall: see streamViaMainApi.
+ * @returns {boolean}
+ */
+export function canStreamMainApi() {
+    return main_api === 'openai' && !streamingBroken.has(MAIN_API_KEY);
+}
+
+/**
+ * Records that the main API refused the streamed request but answered the plain
+ * one, so the rest of the session goes straight to the plain one.
+ * @param {unknown} error
+ */
+export function markMainApiStreamingBroken(error) {
+    streamingBroken.set(MAIN_API_KEY, error?.message || String(error));
+}
+
+/**
+ * The main API's Chat Completion request, streamed.
+ *
+ * Built the way `generateRawData` builds it, so the request is the one the main
+ * API would have sent, with `stream` on: the same prompt shaping
+ * (`createRawPrompt`), the same payload builder and request type
+ * (`createGenerationParameters`, `quiet`) over the chat's own settings — source,
+ * model, samplers, endpoint, proxy — and the same two events, so other extensions
+ * and Recall's own stopping-string suppression see it as they would have.
+ *
+ * The output budget goes in through a copy of the settings rather than ST's
+ * temporary-response-length swap, which edits the live settings object the
+ * user's own generations read.
+ *
+ * Unlike `generateRawData`, it takes the abort signal, so it can be stopped. ST's
+ * own stop event aborts it too, as it aborts `generateRawData`.
+ *
+ * These are ST internals that are exported but not promised to extensions. If
+ * one moves, the request fails before anything streams, and the caller falls back
+ * to `generateRawData`.
+ *
+ * @param {string} systemPrompt
+ * @param {string} buffer
+ * @param {{ signal?: AbortSignal|null, onProgress?: ((progress: {content: string, reasoning: string}) => void)|null, maxTokens?: number }} [options]
+ * @returns {Promise<{ content: string, reasoning: string }>} On failure, the error carries
+ *          `started` (text had arrived) and `aborted` (it was stopped, by Recall or by ST).
+ */
+export async function streamViaMainApi(systemPrompt, buffer, { signal = null, onProgress = null, maxTokens = 0 } = {}) {
+    const controller = new AbortController();
+    const forward = () => controller.abort(signal?.reason);
+    signal?.addEventListener('abort', forward);
+    const stopHook = () => controller.abort(new Error('Cancelled by stop event'));
+    eventSource.on(event_types.GENERATION_STOPPED, stopHook);
+
+    let started = false;
+    try {
+        const promptReady = { chat: createRawPrompt(buffer, 'openai', false, false, systemPrompt, ''), dryRun: false };
+        await eventSource.emit(event_types.CHAT_COMPLETION_PROMPT_READY, promptReady);
+        controller.signal.throwIfAborted();
+
+        const settings = Number(maxTokens) > 0 ? { ...oai_settings, openai_max_tokens: Number(maxTokens) } : oai_settings;
+        const { generate_data } = await createGenerationParameters(settings, getChatCompletionModel(settings), 'quiet', promptReady.chat);
+        generate_data.stream = true;
+        await eventSource.emit(event_types.CHAT_COMPLETION_SETTINGS_READY, generate_data);
+
+        const factory = await ChatCompletionService.sendRequest(generate_data, true, controller.signal);
+        const { content, reasoning } = await consumeStream(factory, progress => {
+            started = started || !!progress.content || !!progress.reasoning;
+            onProgress?.(progress);
+        });
+        return { content, reasoning };
+    } catch (error) {
+        const failure = error instanceof Error ? error : new Error(String(error));
+        failure.started = started;
+        failure.aborted = controller.signal.aborted;
+        throw failure;
+    } finally {
+        signal?.removeEventListener('abort', forward);
+        eventSource.removeListener(event_types.GENERATION_STOPPED, stopHook);
+    }
+}
+
 /**
  * Why the live view is or is not available, for the settings panel.
  * @returns {string}
@@ -134,8 +223,17 @@ export function describeStreaming() {
     const profile = getActiveProfile();
 
     if (!profile) {
-        return 'The summary appears when it is finished. Live output needs a Chat Completion '
-            + 'connection profile — the main API\'s raw-generation path does not stream.';
+        if (main_api !== 'openai') {
+            return 'The summary appears when it is finished: the main API is Text Completion, and '
+                + 'SillyTavern only strips instruct sequences from a response it did not stream. '
+                + 'Live output needs a Chat Completion connection, main or profile.';
+        }
+        if (streamingBroken.has(MAIN_API_KEY)) {
+            return 'The main API refused the streamed request, so Recall is using the ordinary one '
+                + 'for the rest of this session — summaries still work, they just appear all at once. '
+                + 'Reload SillyTavern to try again.';
+        }
+        return 'Streaming live from the main API. The summary is written into the manager as it arrives.';
     }
 
     if (streamingBroken.has(profile.id)) {
@@ -284,7 +382,8 @@ function hasCustomStoppingStrings() {
 
 /**
  * The same protection for the main API path, where there is no payload to
- * override — `generateRawData` takes no stopping-string option.
+ * override — `generateRawData` takes no stopping-string option. Recall's own
+ * streamed main-API request emits the same event, so it is covered by the same hook.
  *
  * ST emits `CHAT_COMPLETION_SETTINGS_READY` with the assembled payload and sends
  * whatever the listeners leave behind, which is the documented seam for exactly

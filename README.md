@@ -94,7 +94,8 @@ request, so it can't drift from it.
 A summary can take a minute or more, so the button counts up — elapsed, never a progress
 bar, because nothing can know how long a pass will take.
 
-On a **Chat Completion connection profile**, you watch the summary being written, and the
+On **Chat Completion** — a connection profile, or the main API when your chat uses Chat
+Completion — you watch the summary being written, and the
 model's reasoning above it while it thinks. The reasoning folds itself away to one line
 (*Thought for 0:31 · 624 tokens*) once the summary proper starts, and is kept with the
 finished summary so you can read it later from the archive. It's never sent to the model —
@@ -107,12 +108,12 @@ the next run, until you hide it, or until you change chat.
 Live output needs Chat Completion specifically, and that's deliberate rather than a gap:
 SillyTavern strips instruct scaffolding from a text completion response *only* when it
 didn't stream it, so streaming one would save a summary still wearing its stop sequences.
-Text completion profiles and the main API get the spinner and the clock. The settings panel
+Text completion, as a profile or as the main API, gets the spinner and the clock. The settings panel
 says which you're on. If a connection turns out to refuse streaming altogether, Recall
 reissues the request without it and you still get your summary.
 
-**Stop** cancels a summary running through a connection profile. Nothing is saved — a
-half-written summary isn't a summary.
+**Stop** cancels a summary running through a connection profile or a streamed main API. Nothing
+is saved — a half-written summary isn't a summary.
 
 **Titles.** Recall asks the model to name each summary and puts that name in front of the
 timestamp: *The Long Road North — 2026-09-12 14:31*. The title line is removed before the
@@ -167,8 +168,9 @@ each revising the one before, and you choose:
 Nothing is hidden or unhidden along the way. When the rebuild finishes, its last batch becomes
 active and the chat is synced to it; stop partway and the finished batches are kept but
 nothing else changes — start a new rebuild after the last of them to carry on. Stop asks
-before it does anything. On a connection that can't cancel a request mid-way, the batch
-being written is left to finish and kept, and until it does, **Undo** takes the stop back.
+before it does anything. Mid-batch, **Stop after this batch** lets the batch finish and keeps
+it, and until it does, **Undo** takes the stop back; **Stop now** (where the connection can
+cancel) throws the batch away.
 The dialog
 estimates the tokens it will send: the messages and prompt are counted exactly, but the
 summary carried between batches is guessed from your current summary's size, so the real
