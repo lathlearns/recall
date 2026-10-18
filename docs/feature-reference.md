@@ -692,6 +692,13 @@ touching visibility until the end.
   rebuild that is stopped keeps its batches and changes nothing else: its summary covers less
   than the one already active, and switching to it would unhide the middle of a story. So does
   a finished one that was told to end before the active summary does.
+- **Stopping a rebuild asks first**, from the rebuild's own Stop or the Stop beside a running
+  batch, saying what it will cost: a mis-tap should not end a rebuild that is half done. In a
+  pause it ends at once. Mid-batch, a request that can be cancelled is cancelled and its batch
+  dropped; one that cannot is left to land, its batch is kept, and the rebuild ends after it.
+  Until it lands that stop can be **undone**, and the rebuild carries on as though Stop was
+  never pressed. Aborting such a request would not stop it — it would only throw away a batch
+  already paid for.
 - **While a rebuild is in progress**, pauses included, Summarize now and Regenerate are refused
   and sending is blocked during each batch. Switching chats abandons it; its batches stay saved.
 - **The estimate** shown before starting counts the messages, prompt and reference material

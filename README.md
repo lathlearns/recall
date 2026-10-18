@@ -166,7 +166,10 @@ each revising the one before, and you choose:
 
 Nothing is hidden or unhidden along the way. When the rebuild finishes, its last batch becomes
 active and the chat is synced to it; stop partway and the finished batches are kept but
-nothing else changes — start a new rebuild after the last of them to carry on. The dialog
+nothing else changes — start a new rebuild after the last of them to carry on. Stop asks
+before it does anything. On a connection that can't cancel a request mid-way, the batch
+being written is left to finish and kept, and until it does, **Undo** takes the stop back.
+The dialog
 estimates the tokens it will send: the messages and prompt are counted exactly, but the
 summary carried between batches is guessed from your current summary's size, so the real
 figure can differ. Lorebook entries are never part of a summary request, so they don't

@@ -43,7 +43,10 @@ Other surfaces in use: `Popup` for the manager and its confirms,
 
 **Stop is hidden on the main API.** `generateRawData` takes no abort signal, so a summary
 running through your chat's own connection cannot be cancelled. The button is hidden there
-rather than offered and found to do nothing (§16).
+rather than offered and found to do nothing (§16). A rebuild's own Stop is still shown there,
+and must never call `cancelRun()` for such a request: the abort reaches nothing, the request
+runs to the end, and `wasCancelled()` then throws the paid-for batch away. `stopRebuild` only
+aborts when `getActiveRun().cancellable`, which is also what leaves the stop undoable.
 
 **The title request thinks if the connection does.** The reference asks for no thinking on
 the separate title request "where the host can say so". SillyTavern cannot say it once for

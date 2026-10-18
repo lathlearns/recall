@@ -55,6 +55,8 @@ import {
     manualPosition,
     manualEndProblem,
     measureManualBatch,
+    canUndoStop,
+    undoStopRebuild,
 } from './rebuild.js';
 import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
@@ -280,7 +282,7 @@ export async function initDrawer({ onSummarize }) {
 
     drawerRoot.find('[data-recall="summarize-now"]').on('click', () => onSummarize());
     drawerRoot.find('[data-recall="open-manager"]').on('click', () => openManager({ onSummarize }));
-    drawerRoot.find('[data-recall="stop"]').on('click', () => cancelRun());
+    drawerRoot.find('[data-recall="stop"]').on('click', () => stopRun());
 
     // Subscribed once, for the life of the page. The drawer outlives every run and
     // every manager, so it is the right place to own the clock.
@@ -735,7 +737,7 @@ function renderRebuildBar() {
             : '';
         if (rebuild.status === 'running') {
             text = rebuild.stopRequested
-                ? `Stopping the rebuild once this batch lands — this connection cannot cancel a request mid-way.`
+                ? stoppingText()
                 : `Rebuilding ${range} · batch ${rebuild.done.length + 1}.`;
         } else if (rebuild.status === 'review') {
             const cut = rebuild.cutShort
@@ -749,7 +751,7 @@ function renderRebuildBar() {
         }
     } else if (rebuild.status === 'running') {
         text = rebuild.stopRequested
-            ? `Stopping the rebuild once this batch lands — this connection cannot cancel a request mid-way.`
+            ? stoppingText()
             : `Rebuilding ${range} · batch ${rebuild.done.length + 1} of ${total}.`;
     } else if (rebuild.status === 'review') {
         text = `Batch ${rebuild.done.length} of ${total} is ready. Read it below and edit it if you need to; `
@@ -766,9 +768,63 @@ function renderRebuildBar() {
     proceed.textContent = rebuild.status === 'failed' ? 'Try again' : (isLast ? 'Finish' : 'Keep going');
 
     q('[data-recall="rebuild-redo"]').toggleAttribute('hidden', rebuild.status !== 'review');
-    q('[data-recall="rebuild-stop"]').classList.toggle('disabled', !!rebuild.stopRequested);
+    q('[data-recall="rebuild-stop"]').toggleAttribute('hidden', !!rebuild.stopRequested);
+    q('[data-recall="rebuild-undo-stop"]').toggleAttribute('hidden', !canUndoStop());
 
     renderRebuildEnds(rebuild, manual);
+}
+
+/** What the bar says between a mid-batch Stop and the rebuild actually ending. */
+function stoppingText() {
+    return canUndoStop()
+        ? 'Stopping the rebuild once this batch lands — this connection cannot cancel a request mid-way. '
+            + 'The batch will be kept. Pressed Stop by mistake? Undo carries on as before.'
+        : 'Stopping the rebuild.';
+}
+
+/**
+ * Asks before stopping a rebuild. A stop in a pause, or one that cancels the
+ * request in flight, cannot be taken back, and a misplaced tap on a phone should
+ * not cost a batch or end a rebuild that is half done.
+ * @returns {Promise<boolean>}
+ */
+async function confirmStopRebuild() {
+    const rebuild = getRebuild();
+    if (!rebuild) {
+        return false;
+    }
+    const kept = rebuild.done.length
+        ? `The ${rebuild.done.length === 1 ? 'batch' : `${rebuild.done.length} batches`} written so far stay in the archive, but none becomes active.`
+        : 'Nothing has been written yet.';
+    let detail;
+    if (rebuild.status !== 'running') {
+        detail = `${kept} This cannot be undone — carrying on later means starting a new rebuild after the last of them.`;
+    } else if (getActiveRun()?.cancellable) {
+        detail = `The batch being written now is cancelled and thrown away. ${kept}`;
+    } else {
+        detail = 'The batch being written now cannot be cancelled, so it is left to finish and kept, and the rebuild stops after it. '
+            + 'Until it lands, you can still undo the stop.';
+    }
+    // Popup.show.confirm resolves to POPUP_RESULT, so coerce.
+    return !!await Popup.show.confirm('Stop the rebuild?', detail, { okButton: 'Stop', cancelButton: 'Keep rebuilding' });
+}
+
+async function requestStopRebuild() {
+    if (await confirmStopRebuild()) {
+        await stopRebuild();
+    }
+}
+
+/**
+ * The Stop beside a running summary. A plain summary stops at once — one
+ * request, and manager.html says why that Stop is not confirmed — but a
+ * rebuild's batch ends the whole rebuild, so it goes through the rebuild's Stop.
+ */
+function stopRun() {
+    if (getActiveRun()?.kind === 'rebuild' && getRebuild()) {
+        return requestStopRebuild();
+    }
+    cancelRun();
 }
 
 /** Which pause the end fields were last filled for, so a repaint never overwrites what is being typed. */
@@ -1434,7 +1490,7 @@ function wireManager({ onSummarize }) {
         renderAll();
     });
 
-    on('[data-recall="stop"]', 'click', () => cancelRun());
+    on('[data-recall="stop"]', 'click', () => stopRun());
     on('[data-recall="live-hide"]', 'click', () => dismissFinishedRun());
     on('[data-recall="live-hide"]', 'keydown', event => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -1509,7 +1565,8 @@ function wireManager({ onSummarize }) {
     });
     on('[data-recall="rebuild-next-end"]', 'input', () => void measureRebuildEnd('next'));
     on('[data-recall="rebuild-redo-end"]', 'input', () => void measureRebuildEnd('redo'));
-    on('[data-recall="rebuild-stop"]', 'click', () => stopRebuild());
+    on('[data-recall="rebuild-stop"]', 'click', () => requestStopRebuild());
+    on('[data-recall="rebuild-undo-stop"]', 'click', () => undoStopRebuild());
 
     on('[data-recall="preview"]', 'click', showPreview);
     on('[data-recall="view-legacy"]', 'click', showLegacySummary);

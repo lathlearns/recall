@@ -742,6 +742,11 @@ export async function redoRebuildBatch(steeringNote = '', end) {
 /**
  * Stops. Mid-batch, the request is cancelled where the connection allows it and
  * otherwise allowed to land and kept; in a pause, it ends straight away.
+ *
+ * Only a cancellable request is aborted. Aborting one that cannot be cancelled
+ * stops nothing — it still runs to the end — but marks it cancelled, and the
+ * batch it lands is then thrown away: paid for, and lost. Left alone, it lands,
+ * is kept, and the stop can still be taken back until it does.
  */
 export async function stopRebuild() {
     if (!state) {
@@ -749,11 +754,28 @@ export async function stopRebuild() {
     }
     if (state.status === 'running') {
         state.stopRequested = true;
-        cancelRun();
+        if (getActiveRun()?.cancellable) {
+            cancelRun();
+        }
         notify('change');
         return;
     }
     await endRebuild(false);
+}
+
+/** Whether a stop asked for mid-batch can still be taken back: its request was left to land. */
+export function canUndoStop() {
+    return !!state?.stopRequested && state.status === 'running'
+        && !getActiveRun()?.controller?.signal?.aborted;
+}
+
+/** Takes back a stop that is waiting for its batch to land; the rebuild carries on as before. */
+export function undoStopRebuild() {
+    if (!canUndoStop()) {
+        return;
+    }
+    state.stopRequested = false;
+    notify('change');
 }
 
 /**

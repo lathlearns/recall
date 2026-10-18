@@ -66,11 +66,15 @@ export class RecallError extends Error {
 }
 
 export const calls = [];
-export const control = { fits: Infinity, failOn: null, locked: false };
+export const control = { fits: Infinity, failOn: null, locked: false, run: null, during: null };
 
 export function setRebuildLock(locked) { control.locked = locked; }
-export function getActiveRun() { return null; }
-export function cancelRun() { return false; }
+export function getActiveRun() { return control.run; }
+export function cancelRun() {
+    if (!control.run) return false;
+    control.run.controller.abort();
+    return true;
+}
 export async function countMessageTokens(index) { return chat[index] ? 10 : 0; }
 export async function measureRequestOverhead() { return { system: 100, reference: 0, available: 10000 }; }
 export async function fitBatch(indices) { return Math.min(indices.length, control.fits); }
@@ -80,6 +84,11 @@ export async function summarizeBatch({ indices, basis, seed, rebuildId, step, st
     if (control.failOn === step) {
         control.failOn = null;
         throw new RecallError('The model returned an empty response.', { kind: 'empty-response' });
+    }
+    // \`during\` stands in for the user acting while the request is out.
+    await control.during?.(step);
+    if (control.run?.controller.signal.aborted) {
+        throw new RecallError('Summary cancelled. Nothing was saved.', { kind: 'cancelled' });
     }
     const coversTo = indices[indices.length - 1];
     const record = createSummaryRecord({
@@ -272,6 +281,46 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     check('note: a batch note does not carry over', gen.calls[3]?.steeringNote ?? 'track the pier', 'track the pier');
 
     await rebuild.stopRebuild();
+}
+
+// 8c. Stop mid-batch. A request that cannot be cancelled is left to land and kept,
+//     and until then the stop can be undone; one that can is cancelled outright.
+{
+    const rebuildCount = () => store.getSummariesRaw().filter(s => s.rebuildId).length;
+    const run = cancellable => ({ cancellable, controller: new AbortController() });
+
+    reset();
+    gen.control.run = run(false);
+    gen.control.during = async step => {
+        if (step !== 2) return;
+        await rebuild.stopRebuild();
+        check('stop mid-batch: request not aborted', gen.control.run.controller.signal.aborted, false);
+        check('stop mid-batch: can be undone', rebuild.canUndoStop(), true);
+        rebuild.undoStopRebuild();
+        check('undo: stop taken back', rebuild.getRebuild()?.stopRequested, false);
+    };
+    await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    check('undo: rebuild ran to the end', [rebuild.getRebuild(), rebuildCount()], [null, 3]);
+
+    reset();
+    gen.control.run = run(false);
+    gen.control.during = step => step === 2 ? rebuild.stopRebuild() : undefined;
+    await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    check('stop mid-batch: the batch that lands is kept, then it stops', [rebuild.getRebuild(), rebuildCount()], [null, 2]);
+
+    reset();
+    gen.control.run = run(true);
+    gen.control.during = async step => {
+        if (step !== 2) return;
+        await rebuild.stopRebuild();
+        check('stop cancellable: aborted', gen.control.run.controller.signal.aborted, true);
+        check('stop cancellable: no undo', rebuild.canUndoStop(), false);
+    };
+    await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    check('stop cancellable: the batch is dropped', [rebuild.getRebuild(), rebuildCount()], [null, 1]);
+
+    gen.control.run = null;
+    gen.control.during = null;
 }
 
 // 9. A failed batch waits to be retried, and retrying carries on.
