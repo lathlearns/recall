@@ -974,11 +974,26 @@
  * explanation stretched to the far edge; side by side they read as a list of
  * settings. One column on a phone, where the minimum is wider than the screen.
  */
-.recall-advanced {
+.recall-advanced,
+.recall-settings-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 20em), 1fr));
     gap: 1em 2em;
+}
+
+.recall-advanced {
     padding-top: 0.5em;
+}
+
+/* A setting's text box fills its column, not ST's full width of the modal. */
+.recall-setting select.text_pole,
+.recall-setting input[type="text"].text_pole {
+    width: 100%;
+}
+
+/* Two settings in a half-width section sit one under the other. */
+.recall-section > .recall-setting + .recall-setting {
+    margin-top: 0.5em;
 }
 
 .recall-setting {

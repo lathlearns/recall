@@ -216,7 +216,12 @@ export async function streamViaMainApi(systemPrompt, buffer, { signal = null, on
 }
 
 /**
- * Why the live view is or is not available, for the settings panel.
+ * Why the summary won't be written live, for the settings panel, or '' when it
+ * will. Streaming is the normal case and needs no sentence.
+ *
+ * Text Completion is never streamed: SillyTavern only strips instruct sequences
+ * from a response it did not stream, and a summary keeping them would be wrong
+ * for as long as it stays active.
  * @returns {string}
  */
 export function describeStreaming() {
@@ -224,31 +229,27 @@ export function describeStreaming() {
 
     if (!profile) {
         if (main_api !== 'openai') {
-            return 'The summary appears when it is finished: the main API is Text Completion, and '
-                + 'SillyTavern only strips instruct sequences from a response it did not stream. '
-                + 'Live output needs a Chat Completion connection, main or profile.';
+            return 'The summary appears all at once when it\'s done. Writing it live needs a Chat Completion '
+                + 'connection.';
         }
         if (streamingBroken.has(MAIN_API_KEY)) {
-            return 'The main API refused the streamed request, so Recall is using the ordinary one '
-                + 'for the rest of this session — summaries still work, they just appear all at once. '
-                + 'Reload SillyTavern to try again.';
+            return 'Your connection refused to send the summary live, so for the rest of this session it '
+                + 'appears all at once when it\'s done. Reload SillyTavern to try again.';
         }
-        return 'Streaming live from the main API. The summary is written into the manager as it arrives.';
+        return '';
     }
 
     if (streamingBroken.has(profile.id)) {
-        return `"${profile.name}" refused the streamed request, so Recall is using the ordinary `
-            + 'one for the rest of this session — summaries still work, they just appear all at '
-            + 'once. Not every OpenAI-compatible endpoint streams. Reload SillyTavern to try again.';
+        return `"${profile.name}" refused to send the summary live, so for the rest of this session it `
+            + 'appears all at once when it\'s done. Reload SillyTavern to try again.';
     }
 
     if (!canStreamProfile(profile)) {
-        return `"${profile.name}" is a Text Completion profile, so the summary appears when it is `
-            + 'finished. SillyTavern only strips instruct sequences from a response it did not '
-            + 'stream, and a summary keeping them would be wrong for as long as it stays active.';
+        return `"${profile.name}" is a Text Completion profile, so the summary appears all at once when `
+            + 'it\'s done.';
     }
 
-    return `Streaming live from "${profile.name}". The summary is written into the manager as it arrives.`;
+    return '';
 }
 
 /**
@@ -564,33 +565,53 @@ export async function generateViaProfile(systemPrompt, buffer, { signal = null, 
 }
 
 /**
- * A one-line description of where summarization will run, for the settings panel.
+ * What is wrong with where summarization would run, or '' when nothing is. The
+ * settings panel shows only this: on a working connection the dropdown already
+ * says where requests go.
  * @returns {string}
  */
-export function describeTarget() {
+export function describeTargetProblem() {
     if (!isConnectionManagerAvailable()) {
-        return 'Connection Manager is disabled, so Recall uses the main API.';
+        return 'Connection Manager is turned off, so Recall uses your chat\'s connection.';
     }
 
     const settings = getSettings();
     const profile = getActiveProfile();
 
     if (!profile) {
-        if (settings.profileId) {
-            return 'That profile no longer exists. Recall is using the main API until you pick another.';
-        }
-        return `Using the main API (${main_api}), the same connection as your chat.`;
+        return settings.profileId
+            ? 'That profile no longer exists. Recall is using your chat\'s connection until you pick another.'
+            : '';
     }
 
-    // Ahead of everything else about the profile, because none of the rest of it
-    // will happen. Stated as a fault in the profile rather than as a Recall
-    // problem, since that is where it has to be fixed.
+    // Stated as a fault in the profile rather than as a Recall problem, since
+    // that is where it has to be fixed. The chat keeps working because it falls
+    // back to whichever key is active, and this does not.
     if (!hasResolvableSecret(profile)) {
-        return `"${profile.name}" points at a saved API key that no longer exists — it was probably `
-            + 'rotated or re-entered after the profile was made. Summaries will come back '
-            + 'Unauthorized even though the chat works, because the chat falls back to whichever '
-            + `key is active and this does not. Open Connection Manager, reselect the key for `
-            + `"${profile.name}", and save the profile.`;
+        return `"${profile.name}" points at a saved API key that no longer exists, so summaries will fail `
+            + 'with "Unauthorized" even though your chat works. Open Connection Manager, pick the key '
+            + `again for "${profile.name}", and save the profile.`;
+    }
+
+    return '';
+}
+
+/**
+ * A one-line description of where summarization will run, for Preview request
+ * and for a failed request's error.
+ * @returns {string}
+ */
+export function describeTarget() {
+    const problem = describeTargetProblem();
+    if (problem) {
+        return problem;
+    }
+
+    const settings = getSettings();
+    const profile = getActiveProfile();
+
+    if (!profile) {
+        return `Using the main API (${main_api}), the same connection as your chat.`;
     }
 
     const model = getEffectiveModel();

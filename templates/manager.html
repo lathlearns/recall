@@ -430,48 +430,38 @@
             <section class="recall-section">
                 <h4 class="recall-section-title">Where summarization runs</h4>
 
-                <div class="recall-row recall-row-field">
-                    <label for="recall-profile">Connection profile</label>
-                    <select id="recall-profile" class="text_pole recall-grow" data-recall="profile"></select>
+                <div class="recall-settings-grid">
+                    <div class="recall-setting">
+                        <label class="recall-setting-title" for="recall-profile">Connection profile</label>
+                        <select id="recall-profile" class="text_pole" data-recall="profile"></select>
+                        <p class="recall-help">
+                            Pick a profile to send Recall's summary requests through it, with that profile's
+                            preset and samplers. Your chat keeps its own connection.
+                        </p>
+                    </div>
+
+                    <div class="recall-setting" data-recall="profile-extras" hidden>
+                        <label class="recall-setting-title" for="recall-model-override">Model</label>
+                        <input id="recall-model-override" class="text_pole" type="text"
+                            data-recall="model-override" placeholder="The profile's model">
+                        <p class="recall-help">Leave blank to use the profile's model.</p>
+                    </div>
+
+                    <div class="recall-setting" data-recall="profile-context-row" hidden>
+                        <label class="recall-setting-title" for="recall-profile-context">Context size</label>
+                        <span class="recall-field-unit">
+                            <input id="recall-profile-context" class="text_pole recall-number" type="number" min="0"
+                                step="1000" data-recall="profile-context">
+                            <span class="recall-dim">tokens</span>
+                        </span>
+                        <p class="recall-help">How much this profile's model can take. 0 uses your chat's.</p>
+                    </div>
                 </div>
 
-                <div class="recall-row recall-row-field" data-recall="profile-extras" hidden>
-                    <label for="recall-model-override">Model</label>
-                    <input id="recall-model-override" class="text_pole recall-grow" type="text"
-                        data-recall="model-override" placeholder="Leave blank to use the profile's model">
-                </div>
-
-                <div class="recall-row recall-row-field" data-recall="profile-context-row" hidden>
-                    <label for="recall-profile-context">Its context size</label>
-                    <span class="recall-field-unit">
-                        <input id="recall-profile-context" class="text_pole recall-number" type="number" min="0"
-                            step="1000" data-recall="profile-context">
-                        <span class="recall-dim">tokens — 0 uses the main API's</span>
-                    </span>
-                </div>
-
-                <p class="recall-help" data-recall="profile-status"></p>
-                <!--
-                    Whether you get to watch it write. Stated next to the picker
-                    because the picker is what decides it, and the difference is
-                    otherwise only discoverable by pressing the button and waiting.
-                -->
-                <p class="recall-help" data-recall="streaming-status"></p>
-
-                <p class="recall-help">
-                    Summarising is a different job from roleplaying and often wants a different model.
-                    Picking a profile here sends only Recall's requests through it — your selected
-                    profile is untouched. A profile stores one model, and ST can only list models for
-                    the source it is currently connected to, so the model field is free text and a
-                    typo surfaces as the provider's own error.
-                </p>
-
-                <p class="recall-help">
-                    The profile's own generation preset comes with it: temperature, top&nbsp;P and the
-                    rest of its samplers are what the summary is generated under. Edit that preset in
-                    ST to change them. On the main API nothing is substituted — the request goes out
-                    the same way your chat's would.
-                </p>
+                <!-- Each shown only when it has something to say: see describeTargetProblem
+                     and describeStreaming. -->
+                <p class="recall-help recall-budget-warning" data-recall="profile-status" hidden></p>
+                <p class="recall-help" data-recall="streaming-status" hidden></p>
             </section>
 
             <section class="recall-section">
@@ -534,30 +524,33 @@
                 <section class="recall-section">
                     <h4 class="recall-section-title">Coming from the built-in Summarize</h4>
 
-                    <label class="checkbox_label recall-row">
-                        <input type="checkbox" data-recall="legacy-fallback">
-                        <span>Use its old summary until Recall has one</span>
-                    </label>
-                    <p class="recall-help">
-                        On a chat the built-in already summarised, <b>&#123;&#123;recall&#125;&#125;</b> resolves to that
-                        summary until you generate your first, and it seeds that first generation so
-                        Recall revises it instead of writing a new one from scratch. Read-only, and it
-                        does not need the built-in to be enabled — the text lives in the chat file.
-                        This is also what makes an old chat with already-hidden messages safe to
-                        summarise without unhiding everything first.
-                    </p>
+                    <div class="recall-setting">
+                        <label class="checkbox_label recall-setting-title">
+                            <input type="checkbox" data-recall="legacy-fallback">
+                            <span>Use its old summary until Recall has one</span>
+                        </label>
+                        <p class="recall-help">
+                            If SillyTavern's built-in Summarize already summarized this chat, Recall uses that
+                            summary until it makes its own, and builds its first summary from it.
+                        </p>
+                    </div>
 
-                    <label class="checkbox_label recall-row">
-                        <input type="checkbox" data-recall="summary-alias">
-                        <span>Also answer to <code>&#123;&#123;summary&#125;&#125;</code></span>
-                    </label>
-                    <p class="recall-help" data-recall="alias-status"></p>
+                    <div class="recall-setting">
+                        <label class="checkbox_label recall-setting-title">
+                            <input type="checkbox" data-recall="summary-alias">
+                            <span>Also answer to <code>&#123;&#123;summary&#125;&#125;</code></span>
+                        </label>
+                        <p class="recall-help">
+                            So a preset written for the built-in Summarize works with Recall unchanged.
+                        </p>
+                        <p class="recall-help recall-budget-warning" data-recall="alias-status" hidden></p>
+                    </div>
                 </section>
 
                 <section class="recall-section">
                     <h4 class="recall-section-title">Context nudge</h4>
 
-                    <label class="checkbox_label recall-row">
+                    <label class="checkbox_label recall-row recall-setting-title">
                         <input type="checkbox" data-recall="nudge-enabled">
                         <span>Remind me when the chat is getting long</span>
                     </label>

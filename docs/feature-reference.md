@@ -949,9 +949,12 @@ and often wants a cheaper, longer-context, less florid model.
   says which profile to re-save; an auth failure that gets through says the same thing. The
   check reads the host's own client-side key registry, so it costs no request and never handles
   a key value.
-- The panel always carries a plain sentence describing where the request will actually go:
-  *"Summarising through 'Cheap long-context' with gpt-4.1-mini, under its 'Summariser' preset.
-  Your selected profile is not changed."*
+- Under the picker, the panel says something only when it needs attention: a profile that no
+  longer exists, the stale key above, Connection Manager turned off, or a connection that won't
+  write the summary live. On a working connection the picker already says where requests go.
+  Preview request and a failed request's error still name the target in full: *"Summarising
+  through 'Cheap long-context' with gpt-4.1-mini, under its 'Summariser' preset. Your selected
+  profile is not changed."*
 
 ### Custom stopping strings are stripped from Recall's requests, and only Recall's
 
@@ -1187,7 +1190,7 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Show and keep the model's reasoning | on | Show the model's reasoning while it writes, on a connection that streams, and store it with the finished summary. Never sent to the model at any size. |
 | Connection profile | none (main) | Summarise through a different connection. Its preset's samplers apply. |
 | Model | blank | Free-text override of the profile's model. |
-| Its context size | 0 | The profile's context window, in tokens. 0 means use the main connection's — wrong whenever they differ. |
+| Context size | 0 | The profile's context window, in tokens. 0 means use the main connection's — wrong whenever they differ. |
 | Reference material toggles | all off, except preset blocks marked `{{// recall}}`, and card and persona fields while any block is marked | Which card/persona fields and which preset prompt blocks to send. |
 | Use the built-in's old summary | on | Stand in an existing external summary until Recall has one, and seed the first pass with it. |
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |

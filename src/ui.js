@@ -63,7 +63,7 @@ import { isLegacyFallbackActive, getLegacyMemory } from './legacy.js';
 import {
     listProfiles,
     getActiveProfile,
-    describeTarget,
+    describeTargetProblem,
     describeStreaming,
     isConnectionManagerAvailable,
 } from './connection.js';
@@ -2641,19 +2641,14 @@ function renderAliasStatus() {
         return;
     }
 
-    if (!getSettings().summaryAlias) {
-        status.textContent = 'Only {{recall}} resolves. Your preset must name it directly.';
-        return;
-    }
-
-    if (!isSummarizeDisabled()) {
-        status.textContent = 'Not active: the built-in Summarize is enabled, so {{summary}} is left to it. '
-            + 'Disable Summarize and reload for this to take effect — until then, use {{recall}}.';
-        return;
-    }
-
-    status.textContent = 'Active: {{summary}} resolves to the Recall summary, so an unedited preset keeps working. '
-        + 'Re-enabling the built-in Summarize hands the name straight back on the next reload.';
+    // Said only when ticked and not working: the built-in Summarize keeps the
+    // name while it is enabled, and gets it back on reload if re-enabled.
+    const blocked = getSettings().summaryAlias && !isSummarizeDisabled();
+    status.textContent = blocked
+        ? 'Not working yet: the built-in Summarize is turned on, so it keeps {{summary}}. Turn it off in '
+            + 'Extensions and reload SillyTavern.'
+        : '';
+    status.toggleAttribute('hidden', !blocked);
 }
 
 function isSummarizeDisabled() {
@@ -2710,14 +2705,13 @@ function renderProfile() {
         q(`[data-recall="${hook}"]`)?.toggleAttribute('hidden', !usingProfile);
     }
 
-    const status = q('[data-recall="profile-status"]');
-    if (status) {
-        status.textContent = describeTarget();
-    }
-
-    const streaming = q('[data-recall="streaming-status"]');
-    if (streaming) {
-        streaming.textContent = describeStreaming();
+    // Only what needs attention: the dropdown already says where requests go.
+    for (const [hook, text] of [['profile-status', describeTargetProblem()], ['streaming-status', describeStreaming()]]) {
+        const line = q(`[data-recall="${hook}"]`);
+        if (line) {
+            line.textContent = text;
+            line.toggleAttribute('hidden', !text);
+        }
     }
 }
 

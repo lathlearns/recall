@@ -224,7 +224,7 @@ the settings, see the last row below.
 | Have the model name each summary | Ask for a title and use it in the archive name. Removed from the summary before it's stored; never sent to the model. |
 | Show and keep the model's reasoning | Show reasoning while it writes, on a connection that streams, and store it with the summary. Never sent to the model. |
 | Connection profile | Summarise through a different connection. Blank = your chat's. |
-| Model / Its context size | Override the profile's model; tell Recall that profile's context window. |
+| Model / Context size | Override the profile's model; tell Recall that profile's context window. |
 | Reference material | What to send alongside the chat — see below. |
 | Use its old summary until Recall has one | Stand in the built-in's `extra.memory` until Recall has a summary of its own. |
 | Also answer to `{{summary}}` | Only registers while the built-in Summarize is disabled. |
