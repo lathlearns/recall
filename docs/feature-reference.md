@@ -754,9 +754,6 @@ summary to need. Set it too high and Recall starts refusing chats it could have 
 the API — a ceiling, not an expectation. Its real job is stopping a model that reasons without
 end.
 
-The panel renders both as live arithmetic rather than as bare numbers: the reserve help reads
-"The other 198,000 of the model's 200,000 go to the last summary and the messages." and updates as you type.
-
 ### Why they differ, and when that bites
 
 A summary runs about 1,400 tokens, so reserving room for a 15,000 ceiling that will almost

@@ -65,7 +65,6 @@ import {
     describeTarget,
     describeStreaming,
     isConnectionManagerAvailable,
-    getPromptBudget,
 } from './connection.js';
 import { previewContextBlocks, previewPresetBlocks } from './context-blocks.js';
 import { isPresetAvailable } from './preset-blocks.js';
@@ -2523,7 +2522,7 @@ function wireSettings() {
 
     bindNumber('tail-pin', 'tailPin', 0, 200);
     bindNumber('nudge-threshold', 'nudgeThreshold', 0, 10_000_000, renderNudgeHint);
-    bindNumber('response-reserve', 'responseReserve', 0, 1_000_000, renderBudgets);
+    bindNumber('response-reserve', 'responseReserve', 0, 1_000_000);
     bindNumber('output-budget', 'outputBudget', 0, 1_000_000);
     bindNumber('min-response', 'minResponseTokens', 0, 100_000);
 
@@ -2834,33 +2833,6 @@ function renderPresetBlocks() {
     renderRefCounts();
 }
 
-/**
- * The two generation limits, as arithmetic rather than as two abstract numbers.
- *
- * "Response reserve: 2000" tells you nothing about what it does to this chat. The
- * same setting rendered as "the other 198,000 go to the messages" is the whole explanation,
- * and it moves while you type. Doing the sum here is what lets the help text be
- * three lines: most of what the old paragraph was explaining is now just visible.
- *
- * The two numbers are deliberately different things — the reserve is what a
- * summary is expected to need, the budget a ceiling that stops a runaway reasoner
- * — so they are not merged and the reserve is not raised to match. Where that gap
- * bites, a near-full request whose cutoff runs past the window, each request is
- * fitted as it is sent (fitOutputLimit) and the run says so; nothing here warns
- * about a combination that is fine on every chat short of that.
- */
-function renderBudgets() {
-    const settings = getSettings();
-    const reserve = Math.max(0, Number(settings.responseReserve) || 0);
-    const forChat = Math.max(0, Number(getPromptBudget()) || 0);
-    const window = forChat + reserve;
-
-    setText('reserve-hint', window
-        ? ` The other ${forChat.toLocaleString()} of the model's ${window.toLocaleString()} go to the last `
-            + 'summary and the messages.'
-        : '');
-}
-
 function renderSettings() {
     const settings = getSettings();
 
@@ -2882,7 +2854,6 @@ function renderSettings() {
     setValue('framing-suffix', settings.framingSuffix);
 
     renderNudgeHint();
-    renderBudgets();
     renderAliasStatus();
     renderProfile();
     renderContextBlocks();

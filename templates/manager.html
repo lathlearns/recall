@@ -639,8 +639,8 @@
                             <span class="recall-dim">tokens</span>
                         </span>
                         <p class="recall-help">
-                            Recall keeps this many tokens free for the model to write the summary in. A summary
-                            is usually about 1,400.<span data-recall="reserve-hint"></span>
+                            How much of your context size Recall reserves for the model to write a summary with
+                            when you send a summarization request.
                         </p>
                     </div>
 
@@ -690,9 +690,8 @@
                             <span>Deep integrity check</span>
                         </label>
                         <p class="recall-help">
-                            Normally Recall only notices when the last message a summary covers is edited or
-                            deleted. With this on, an edit to any message it covers marks the summary out of
-                            date. Off by default, because every small fix sets it off.
+                            With this off, Recall notices and flags a summary whenever you edit or delete the
+                            last message it covers. With it on, editing any message the summary covers flags it.
                         </p>
                     </div>
 
