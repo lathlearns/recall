@@ -891,9 +891,9 @@ for the reply, and once the prompt reaches what is left — the **room** — it 
 messages out without saying so. The room, not the context limit, is what the user is racing,
 and the drawer measures against it: "64.2k of 108k room". The settings say it without figures:
 once the chat fills the context the host leaves the oldest messages out, so summarizing before
-then keeps them. The one number there is what 0 works out to (half the context). With a large enough response length the room falls below the threshold, and the
-nudge can then never fire; the panel shows a warning saying so, in words, whenever the
-threshold is at or above the room.
+then keeps them. The one number there is what 0 works out to (half the context). With a large
+enough response length the room falls below the threshold, and the nudge can then never fire;
+the panel shows a warning saying so, in words, whenever the threshold is at or above the room.
 
 When usage crosses the threshold:
 
