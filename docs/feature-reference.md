@@ -747,7 +747,7 @@ the API — a ceiling, not an expectation. Its real job is stopping a model that
 end.
 
 The panel renders both as live arithmetic rather than as bare numbers: the reserve field reads
-"The other 198,000 of the model's 200,000 are filled with chat." and updates as you type.
+"That leaves 198,000 of the model's 200,000 for the last summary and the messages." and updates as you type.
 
 ### Why they differ, and when that bites
 
