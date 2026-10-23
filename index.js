@@ -17,7 +17,7 @@ import { getStore, runDriftDetection, realignActiveSummary } from './src/store.j
 import { registerMacro, registerSlashCommand } from './src/macro.js';
 import { summarizeNow, RecallError } from './src/generate.js';
 import { evaluateNudge, resetNudge, disarmNudge } from './src/nudge.js';
-import { initDrawer, refreshDrawer, toastNudge } from './src/ui.js';
+import { initDrawer, refreshDrawer, toastNudge, confirmOverflow, openRebuildForUnsummarised } from './src/ui.js';
 import { applyScrollbarGutter } from './src/scrollbars.js';
 import { abandonRebuildIfElsewhere } from './src/rebuild.js';
 
@@ -31,9 +31,9 @@ const BUILTIN_SUMMARIZE = 'memory';
  * Refusals are user-facing text and are shown as toasts here; the manager also
  * renders them inline, since the user may not be looking at the screen.
  */
-async function handleSummarize(steeringNote = '') {
+async function handleSummarize(steeringNote = '', { force = false } = {}) {
     try {
-        const record = await summarizeNow(steeringNote);
+        const record = await summarizeNow(steeringNote, { force });
 
         // The nudge clears and re-arms only once usage has actually dropped back
         // below the threshold — see the dead zone in nudge.js.
@@ -41,11 +41,30 @@ async function handleSummarize(steeringNote = '') {
         refreshDrawer();
 
         toastr.success(
-            `Summarized messages ${record.coversFrom}–${record.coversTo}.`,
+            force
+                ? `Summarized messages ${record.coversFrom}–${record.coversTo}. Nothing was hidden, since it was `
+                    + 'sent over the limit: read the summary in the manager, and if nothing is missing, use '
+                    + '"Sync chat to this summary" there.'
+                : `Summarized messages ${record.coversFrom}–${record.coversTo}.`,
             'Recall',
+            force ? { timeOut: 15000, extendedTimeOut: 6000 } : {},
         );
         return record;
     } catch (error) {
+        // Too big for one request: a choice, not a report (see confirmOverflow).
+        if (error instanceof RecallError && error.kind === 'overflow' && !force) {
+            console.info(`[Recall] Too much to summarize: ~${error.used} tokens against ${error.available}.`);
+            refreshDrawer();
+            const choice = await confirmOverflow();
+            if (choice === 'anyway') {
+                return handleSummarize(steeringNote, { force: true });
+            }
+            if (choice === 'batches') {
+                await openRebuildForUnsummarised(steeringNote);
+                refreshDrawer();
+            }
+            return null;
+        }
         if (error instanceof RecallError) {
             toastr.warning(error.message, 'Recall', { timeOut: 12000, extendedTimeOut: 6000 });
         } else {

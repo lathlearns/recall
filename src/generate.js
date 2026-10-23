@@ -429,19 +429,24 @@ export function buildBuffer(steeringNote = '') {
  * Checks the buffer against the available context room.
  *
  * Refuses rather than truncating: trimmed messages would be recorded as covered
- * without ever having been read. And it cannot ask the user to narrow a range,
- * because ranges are not something the user controls — so the message names the
- * remedy that *is* in their hands.
+ * without ever having been read. It says what the problem is and nothing more:
+ * the ways out depend on where it was called from (see index.js for Summarize
+ * now's).
  *
  * Also fits the hard cutoff to the room the request leaves (fitOutputLimit), so
  * an API that checks input plus `max_tokens` against the window never refuses it.
  *
+ * `force` is the user's "Send anyway": the context size ST was told can be
+ * smaller than what the model really takes, and they are the one who knows. The
+ * request then goes as built, with the whole hard cutoff — fitting it to a room
+ * that by Recall's count is negative would ask for one token.
+ *
  * @param {string} buffer
  * @param {string} systemPrompt
- * @param {number[]} indices
+ * @param {{ force?: boolean }} [options]
  * @returns {Promise<{ used: number, available: number, output: { limit: number, lowered: boolean } }>}
  */
-async function enforceBudget(buffer, systemPrompt, indices) {
+async function enforceBudget(buffer, systemPrompt, { force = false } = {}) {
     // Sized against whichever connection will actually run the request — the main
     // API's context window is the wrong number when a profile is in use.
     const available = getPromptBudget()
@@ -457,28 +462,24 @@ async function enforceBudget(buffer, systemPrompt, indices) {
         return { used, available, output: fitOutputLimit(getSettings().outputBudget, available - used + reserve) };
     }
 
-    // Walk backward from the oldest visible message, counting, until the
-    // remainder would fit. Message 0 is never hidden, so it is never offered.
-    const hideable = indices.filter(i => i !== 0);
-    let reclaimed = 0;
-    let count = 0;
-
-    for (const index of hideable) {
-        reclaimed += await countTokens(formatMessage(index));
-        count++;
-        if (used - reclaimed <= available) {
-            break;
-        }
+    if (force) {
+        return { used, available, output: fitOutputLimit(getSettings().outputBudget, Infinity) };
     }
 
-    const advice = used - reclaimed <= available
-        ? `Hiding the oldest ${count} visible message${count === 1 ? '' : 's'} would bring it under.`
-        : 'Even hiding everything but the first message would not bring it under — raise the context size or lower "Reserved for the summary" in Advanced.';
-
-    throw new RecallError(
-        `Too much to summarize. The visible messages come to ~${used.toLocaleString()} tokens; the budget is ${Math.max(0, available).toLocaleString()}. ${advice}`,
+    // In words, not figures. The numbers are kept on the error, for the console
+    // and for anyone who wants them, but "57,389 against 40,269" asks the reader
+    // to work out what it means. Nor does it suggest hiding messages: the oldest
+    // visible ones are the ones not summarised yet, and hiding them leaves them
+    // out of every summary for good. Summarize now offers the ways out that lose
+    // nothing (index.js); here there is only the problem to state.
+    const error = new RecallError(
+        'This chat is too long to summarize in one go. The messages since your last summary '
+        + "don't all fit in what the model can take at once.",
         { kind: 'overflow' },
     );
+    error.used = used;
+    error.available = Math.max(0, available);
+    throw error;
 }
 
 /**
@@ -602,10 +603,10 @@ async function runGeneration(buffer, systemPrompt, output) {
         const spent = await countTokens(reasoning);
 
         // Raising the cutoff does nothing when the chat, not the cutoff, set the
-        // limit — the remedy then is room, which only hiding messages makes.
+        // limit — the remedy then is room, which smaller requests make.
         const remedy = output.lowered
-            ? 'This chat only left room for that many, less than your hard cutoff. Hide some older '
-                + 'messages to make room, or lower Reasoning Effort for this API'
+            ? 'This chat left less room than your hard cutoff. Summarize it in batches with Rebuild… '
+                + 'to give each request more room, or lower Reasoning Effort for this API'
             : 'Raise "Hard cutoff" in Advanced, or lower Reasoning Effort for this API';
 
         throw new RecallError(
@@ -965,7 +966,7 @@ export async function previewRequest(steeringNote = '') {
  * Summarize now — produce a new summary over the currently visible chat.
  * @returns {Promise<import('./store.js').RecallSummary>}
  */
-export async function summarizeNow(steeringNote = '') {
+export async function summarizeNow(steeringNote = '', { force = false } = {}) {
     checkGuards({ nothingNew: true });
 
     const settings = getSettings();
@@ -982,7 +983,7 @@ export async function summarizeNow(steeringNote = '') {
         throw new RecallError('Every message is hidden — there is nothing visible to summarize.', { kind: 'empty' });
     }
 
-    const { output } = await enforceBudget(buffer, systemPrompt, indices);
+    const { output } = await enforceBudget(buffer, systemPrompt, { force });
 
     // Captured from the buffer as it was built, never from chat.length afterwards:
     // in non-blocking mode the user can send messages while generation runs, and
@@ -1040,7 +1041,11 @@ export async function summarizeNow(steeringNote = '') {
         addSummary(record);
         saved = true;
 
-        if (settings.autoHide) {
+        // Not after Send anyway. Some providers trim a request that is too big
+        // rather than refusing it, and the summary would then claim messages the
+        // model never read; hidden, those would be gone from the story. Left
+        // visible, the manager offers to sync the chat to it once it is checked.
+        if (settings.autoHide && !force) {
             record.hiddenIndices = await hideIndices(hideableIndices(indices));
             await persist({ immediate: true });
         }
@@ -1150,7 +1155,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
     // be indistinguishable from one without, and the point of a sibling is that you
     // chose what changed between them.
     const buffer = buildBufferFrom(indices, basisContent, steeringNote);
-    const { output } = await enforceBudget(buffer, systemPrompt, indices);
+    const { output } = await enforceBudget(buffer, systemPrompt);
 
     const snapshot = captureContext();
 
@@ -1294,7 +1299,7 @@ export async function summarizeBatch({ indices, basis, seed = '', rebuildId, ste
     const systemPrompt = substituteParams(assemblePrompt());
     const basisContent = basis?.content ?? seed;
     const buffer = buildBufferFrom(present, basisContent, steeringNote);
-    const { output } = await enforceBudget(buffer, systemPrompt, present);
+    const { output } = await enforceBudget(buffer, systemPrompt);
 
     const coversTo = present[present.length - 1];
     const anchorHash = getStringHash(chat[coversTo]?.mes ?? '');

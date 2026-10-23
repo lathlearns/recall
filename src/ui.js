@@ -647,10 +647,9 @@ function onRunStateChanged(run) {
         // run produces — a summary cut short, or one that never gets written.
         if (run.outputLowered) {
             toastr.info(
-                `This chat leaves room for only ${run.outputLimit.toLocaleString()} tokens of reply, less than `
-                + `your hard cutoff of ${Number(getSettings().outputBudget).toLocaleString()}. Recall has asked `
-                + `the model to stop at ${run.outputLimit.toLocaleString()} instead, so the request isn't `
-                + 'refused. If the summary comes back empty or cut off, hide some older messages and try again.',
+                'This chat is long, so there is less room for the reply than your hard cutoff allows. '
+                + 'Recall has lowered the limit for this summary so the request isn\'t refused. If it comes '
+                + 'back empty or cut off, use Rebuild… to summarize in batches instead.',
                 'Recall',
                 { timeOut: 12000, extendedTimeOut: 6000 },
             );
@@ -837,6 +836,47 @@ async function confirmStopRebuild() {
     return answer === POPUP_RESULT.AFFIRMATIVE ? 'after' : 'none';
 }
 
+/**
+ * Summarize now found the messages too big for one request. Asked rather than
+ * toasted, because what to do next is a choice, and two of the three answers do
+ * something.
+ *
+ * Send anyway is offered because the context size ST was told is often smaller
+ * than what the model really takes, and then it just works. What it costs is
+ * said plainly: a provider that trims an oversized request instead of refusing
+ * it would leave a summary claiming messages it never read.
+ *
+ * @returns {Promise<'batches'|'anyway'|'cancel'>}
+ */
+export async function confirmOverflow() {
+    const answer = await Popup.show.confirm(
+        'This chat is too long to summarize in one go',
+        '<p>The messages since your last summary don\'t all fit in what the model can take at once.</p>'
+        + '<p><b>Summarize in batches</b> works through them a part at a time, so nothing is left out.</p>'
+        + '<p><b>Send anyway</b> sends them all at once. That works if your model can take more than the '
+        + 'context size SillyTavern is set to. If it can\'t, the request fails, or the provider quietly cuts '
+        + 'messages out to make it fit, so Recall won\'t hide anything until you\'ve checked the summary.</p>',
+        {
+            okButton: 'Summarize in batches',
+            cancelButton: 'Cancel',
+            customButtons: [{ text: 'Send anyway', result: POPUP_RESULT.CUSTOM1 }],
+        },
+    );
+    if (answer === POPUP_RESULT.CUSTOM1) {
+        return 'anyway';
+    }
+    return answer === POPUP_RESULT.AFFIRMATIVE ? 'batches' : 'cancel';
+}
+
+/**
+ * The Rebuild dialog, set up to summarise what Summarize now could not fit.
+ * Works with the manager closed: a rebuild reports by toast when it is.
+ * @param {string} [note] Guidance already taken for the Summarize now.
+ */
+export async function openRebuildForUnsummarised(note = '') {
+    await openRebuildDialog({ unsummarised: true, note });
+}
+
 async function requestStopRebuild() {
     const how = await confirmStopRebuild();
     if (how !== 'none') {
@@ -979,7 +1019,13 @@ const ZERO_BASED_NOTE = 'Message numbers count from 0, the way SillyTavern numbe
  * plan and estimate under it follow the choices as they change, so what the
  * button will do is visible before it is pressed.
  */
-async function openRebuildDialog() {
+/**
+ * @param {{ unsummarised?: boolean, note?: string }} [preset] `unsummarised` starts
+ *        it after the active summary and ends it at the latest message — what
+ *        Summarize now would have read, had it fitted. `note` is guidance that
+ *        was already taken from the manager's field for that Summarize now.
+ */
+async function openRebuildDialog(preset = {}) {
     if (getRebuild() || getActiveRun()) {
         return;
     }
@@ -1130,7 +1176,7 @@ async function openRebuildDialog() {
     };
     const chosen = name => field(`[data-rb="${name}"]`).value;
 
-    choose('end', settings.rebuildEnd);
+    choose('end', preset.unsummarised ? 'latest' : settings.rebuildEnd);
     // With no summaries there are no break points to follow, so the choice that
     // will actually apply is the one shown. Not saved unless the rebuild starts.
     choose('breaks', settings.rebuildBreaks === 'existing' && !hasOwnSummaries() ? 'fixed' : settings.rebuildBreaks);
@@ -1147,12 +1193,15 @@ async function openRebuildDialog() {
     // Guidance typed in the manager before opening this was almost certainly
     // meant for the rebuild, so it is carried in where it can be seen and edited,
     // rather than left behind to steer the next Summarize now by surprise.
-    field('[data-rb="note"]').value = peekSteeringNote();
+    field('[data-rb="note"]').value = preset.note || peekSteeringNote();
 
     // The summary list defaults to the active one, the likeliest place a good
     // chain ends — but the start stays on "beginning" until the user picks it.
     if (active && startable.some(s => s.id === active.id)) {
         field('[data-rb="summary"]').value = active.id;
+        if (preset.unsummarised) {
+            choose('start', 'summary');
+        }
     }
 
     const read = () => {
@@ -2427,6 +2476,15 @@ async function showPreview() {
 }
 
 function reportError(error) {
+    // The Rebuild dialog can be opened from Summarize now with the manager
+    // closed, and a banner nobody can see is no report at all.
+    if (!managerRoot) {
+        toastr.warning(error?.message ?? String(error), 'Recall', { timeOut: 12000, extendedTimeOut: 6000 });
+        if (!(error instanceof RecallError)) {
+            console.error('[Recall]', error);
+        }
+        return;
+    }
     if (error instanceof RecallError) {
         showBanner('error', error.message);
         return;

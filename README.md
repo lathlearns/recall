@@ -253,7 +253,8 @@ bites when a near-full buffer meets a reply allowed to exceed what was held for 
 and some others reject that combination up front instead of truncating. So Recall fits each
 request as it sends it: when the chat leaves less room than the cutoff, the model is asked to
 stop at the room there is, and Recall tells you it did. Your setting isn't changed. If a
-summary then comes back empty or cut off, hide some older messages to make room.
+summary then comes back empty or cut off, summarize in batches with **Rebuild…**, which gives
+each request more room.
 
 How the ceiling interacts with thinking models decides the right value, and the two failure
 modes are opposites:

@@ -770,11 +770,13 @@ budget or that room, whichever is less. The room is never less than the reserve,
 buffer that would have taken any of it was already refused. The *setting* is never changed —
 only the one request — and a short chat still gets the whole output budget.
 
-When a request is fitted below the output budget, the user is told as the run starts: how much
-room this chat left, against the output budget they set, and that hiding older messages makes
-more. If that run then spends all of it thinking, the reasoning-overrun error says the chat set
-the limit, and points at hiding messages rather than at raising a budget that wasn't the
-constraint.
+When a request is fitted below the output budget, the user is told as the run starts, in words
+rather than figures: the chat is long, so the limit was lowered for this summary so the request
+isn't refused, and summarizing in batches is the way to more room. If that run then spends all
+of it thinking, the reasoning-overrun error says the chat set the limit, and points at batches
+rather than at raising a budget that wasn't the constraint. Neither suggests hiding messages:
+the oldest visible messages are the ones not summarised yet, and hiding them would leave them
+out of every summary.
 
 There is no standing warning in the settings for an output budget above the reserve. The
 defaults are set that way on purpose, and it only matters on the near-full request that the
@@ -794,18 +796,34 @@ The right value depends on the provider, and the two failure modes are opposites
 
 Recall does not read or change the user's reasoning-effort setting. That is theirs.
 
-### Overflow behaviour: refuse, with an actionable message
+### Overflow behaviour: refuse, and ask
 
 Recall never silently trims the buffer, because trimmed messages would be recorded as covered
-without ever having been read. It also cannot ask the user to narrow a range, because ranges
-are not something the user controls. So it counts backward from the oldest visible message
-until the remainder would fit, and reports the remedy that *is* in the user's hands:
+without ever having been read. When the buffer will not fit, it refuses before sending, and
+says so in words rather than figures — the counts go to the console:
 
-> Too much to summarize. The visible messages come to ~19,200 tokens; the budget is 16,000.
-> Hiding the oldest 14 visible messages would bring it under.
+> This chat is too long to summarize in one go. The messages since your last summary don't all
+> fit in what the model can take at once.
 
-If even hiding everything but message 0 would not fit, it says so and points at the context
-size and the reserve instead.
+It does not suggest hiding messages to make it fit. The oldest visible messages are exactly
+the ones not summarised yet, so hiding them leaves them out of every summary for good.
+
+From **Summarize now** this is a dialog, not a notification, because what happens next is a
+choice:
+
+- **Summarize in batches** (the default) opens Rebuild, set to start after the active summary
+  and end at the latest message: the same messages, split into requests that fit. Any one-off
+  guidance typed for the summary is carried into it.
+- **Send anyway** sends the request as built, with the whole output budget. It is there because
+  the context size the host was told is often smaller than what the model really takes. The
+  dialog says what it risks: some providers trim an oversized request rather than refusing it,
+  and the summary would then claim messages the model never read. So a summary made this way
+  is **not auto-hidden**; the user reads it, then syncs the chat to it from the manager, which
+  already offers that for an active summary whose covered messages are still visible.
+- **Cancel** does nothing.
+
+Redo and Rebuild report the same refusal as an error, since neither has a single request to
+send anyway.
 
 ---
 
