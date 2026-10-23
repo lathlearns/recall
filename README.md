@@ -223,8 +223,8 @@ the settings, see the last row below.
 | Use its old summary until Recall has one | Stand in the built-in's `extra.memory` until Recall has a summary of its own. |
 | Also answer to `{{summary}}` | Only registers while the built-in Summarize is disabled. |
 | Warn me when context is filling up / Warn at | The nudge. In tokens, against the same number as **Total Tokens** in the Prompt Manager. 0 is half your context size. ST stops the prompt at your context minus Max Response Length and leaves out old messages past that, so the panel warns if this number can never be reached. |
-| **Kept free for the reply** | Context held back so the answer has room. Keep it at least as large as the next row. |
-| **Most the model may write** | The generation limit sent to the API — thinking included, on most sources. |
+| **Room kept for the summary** | Context held back so the summary has room to be written; the chat gets the rest. |
+| **Cut the model off after** | The generation limit sent to the API — thinking included, on most sources. |
 | Framing prefix/suffix | Wraps the previous summary in the buffer. Match your preset. |
 | Minimum summary length | In tokens. Shorter responses are treated as failures, not saved as stubs. |
 | Deep integrity check | Also hash the covered range, catching edits below a summary's anchor. Off by default — it flags on any edit anywhere. |
@@ -234,11 +234,11 @@ the settings, see the last row below.
 
 The defaults are fine. This section is for when they aren't.
 
-**Kept free for the reply** (the *response reserve*) is what Recall expects a summary to
+**Room kept for the summary** (the *response reserve*) is what Recall expects a summary to
 need, held out of the context window; the chat history gets everything else. Set it high and
 Recall starts refusing chats it could have handled.
 
-**Most the model may write** (the *output budget*) is the request's `max_tokens` — a ceiling,
+**Cut the model off after** (the *output budget*) is the request's `max_tokens` — a ceiling,
 not an expectation. Its job is stopping a model that reasons without end.
 
 The two differ on purpose: a summary runs about 1,400 tokens, so reserving room for a 15,000
