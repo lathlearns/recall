@@ -5,6 +5,12 @@
  * extension inherits the user's theme and keeps matching when it changes. Nothing
  * here hardcodes a colour value.
  *
+ * Quieter text — help, labels, units — is --recall-muted, the body colour at 70%.
+ * ST has no "secondary text" colour, and the one that looks like it, the italics
+ * colour, is what people choose for narration in their chats: an orange or purple
+ * there turned every help line in Recall orange or purple. The body colour is the
+ * one a theme has already made readable against its background.
+ *
  * Density: more breathing room and clearer grouping than the built-in Summarize,
  * which loses legibility by cramming a manager, an editor and a settings block
  * into one narrow accordion column.
@@ -31,9 +37,12 @@
     display: none !important;
 }
 
+:root {
+    --recall-muted: color-mix(in srgb, var(--SmartThemeBodyColor) 70%, transparent);
+}
+
 .recall-dim {
-    color: var(--SmartThemeEmColor);
-    opacity: 0.85;
+    color: var(--recall-muted);
 }
 
 /*
@@ -69,7 +78,7 @@
     border-radius: 0.75em;
     font-size: calc(var(--mainFontSize) * 0.8);
     line-height: 1.6;
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
     white-space: nowrap;
 }
 
@@ -209,7 +218,7 @@
     min-height: calc(var(--mainFontSize) * 2.3);
     cursor: pointer;
     font-size: calc(var(--mainFontSize) * 0.85);
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
 }
 
 .recall-think-toggle:hover,
@@ -229,6 +238,8 @@
     overflow-wrap: anywhere;
     font-size: calc(var(--mainFontSize) * 0.82);
     line-height: 1.4;
+    /* The one place the italics colour is meant: it is italic prose, like
+       narration in the chat. */
     color: var(--SmartThemeEmColor);
     font-style: italic;
 }
@@ -294,7 +305,7 @@
 
 .recall-strip-label {
     flex: 0 0 4.5em;
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
     font-size: calc(var(--mainFontSize) * 0.9);
 }
 
@@ -312,7 +323,7 @@
     border-left: 2px solid var(--SmartThemeQuoteColor);
     background-color: var(--black30a);
     font-size: calc(var(--mainFontSize) * 0.9);
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
 }
 
 .recall-strip-actions {
@@ -373,7 +384,7 @@
     padding: 0.4em 0.9em;
     border-bottom: 2px solid transparent;
     cursor: pointer;
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
     user-select: none;
 }
 
@@ -458,7 +469,7 @@
 .recall-banner-notice,
 .recall-banner-info {
     border-left-color: var(--SmartThemeUnderlineColor);
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
 }
 
 .recall-banner-actions {
@@ -825,7 +836,7 @@
        squeezing the value to nothing. */
     flex: 0 1 7.5em;
     min-width: 4.5em;
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
 }
 
 .recall-meta-value {
@@ -847,7 +858,7 @@
 }
 
 .recall-guidance-label {
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
     font-size: calc(var(--mainFontSize) * 0.82);
 }
 
@@ -987,7 +998,7 @@
 }
 
 .recall-setting-pair label {
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
 }
 
 .recall-row {
@@ -999,7 +1010,7 @@
 }
 
 .recall-row-field label {
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
 }
 
 .recall-number {
@@ -1029,7 +1040,7 @@
 .recall-help {
     margin: 0;
     font-size: calc(var(--mainFontSize) * 0.85);
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
     line-height: 1.5;
 }
 
@@ -1181,7 +1192,7 @@
 }
 
 .recall-editor-label {
-    color: var(--SmartThemeEmColor);
+    color: var(--recall-muted);
     font-size: calc(var(--mainFontSize) * 0.9);
 }
 
