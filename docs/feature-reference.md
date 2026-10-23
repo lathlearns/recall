@@ -889,11 +889,9 @@ Tokens* at the top of the Prompt Manager), because it is the number users alread
 **The prompt never gets the whole context.** The host holds the chat's response length back
 for the reply, and once the prompt reaches what is left — the **room** — it leaves the oldest
 messages out without saying so. The room, not the context limit, is what the user is racing,
-and the drawer and the notification are measured against it: the drawer reads "64.2k of 108k
-room", and the notification says where messages start being left out. The settings say it
-without figures: once the chat fills the context the host leaves the oldest messages out, so
-summarizing before then keeps them. The one number there is what 0 works out to (half the
-context). With a large enough response length the room falls below the threshold, and the
+and the drawer measures against it: "64.2k of 108k room". The settings say it without figures:
+once the chat fills the context the host leaves the oldest messages out, so summarizing before
+then keeps them. The one number there is what 0 works out to (half the context). With a large enough response length the room falls below the threshold, and the
 nudge can then never fire; the panel shows a warning saying so, in words, whenever the
 threshold is at or above the room.
 
@@ -901,8 +899,8 @@ When usage crosses the threshold:
 
 1. **One notification, once per crossing.** Not one per message — otherwise the user gets a
    notification every turn for the twenty messages they spend hunting for a scene break. It
-   reads, on SillyTavern: *"Your prompt is at 64.2k tokens, past your 64k warning. ST starts
-   leaving out old messages at 108k. A good time to find a stopping point and summarise."*
+   reads: *"This chat is getting long. It's a good time to find a stopping point and
+   summarize."* The figures are on the drawer's line, for anyone who wants them.
 2. The drawer shows a persistent line saying context is filling up, until it isn't.
 3. On a successful summary, the nudge disarms. It re-arms only after a reading *below* the
    threshold — a dead zone, so it cannot fire again immediately if usage is somehow still high

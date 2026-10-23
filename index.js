@@ -171,7 +171,7 @@ function onMessageReceived(mesId) {
     void evaluateNudge(Number(mesId))
         .then(result => {
             if (result?.fired) {
-                toastNudge(result);
+                toastNudge();
             }
             refreshDrawer();
         })

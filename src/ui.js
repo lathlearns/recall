@@ -3074,9 +3074,10 @@ function renderBlocksDirty() {
 // Toasts
 // ---------------------------------------------------------------------------
 
-export function toastNudge({ usage, room, threshold }) {
+/** In words: the drawer carries the figures for anyone who wants them. */
+export function toastNudge() {
     toastr.info(
-        `Your prompt is at ${formatTokens(usage)} tokens, past your ${formatTokens(threshold)} warning. ST starts leaving out old messages at ${formatTokens(room)}. A good time to find a stopping point and summarise.`,
+        'This chat is getting long. It\'s a good time to find a stopping point and summarize.',
         'Recall',
         { timeOut: 10000, extendedTimeOut: 5000 },
     );
