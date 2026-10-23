@@ -2767,7 +2767,7 @@ function renderPresetBlocks() {
  * The two generation limits, as arithmetic rather than as two abstract numbers.
  *
  * "Response reserve: 2000" tells you nothing about what it does to this chat. The
- * same setting rendered as "the other 198,000 are filled with chat" is the whole explanation,
+ * same setting rendered as "leaves 198,000 for the messages" is the whole explanation,
  * and it moves while you type. Doing the sum here is what lets the help text be
  * three lines: most of what the old paragraph was explaining is now just visible.
  *
@@ -2787,7 +2787,8 @@ function renderBudgets() {
     const window = forChat + reserve;
 
     setText('reserve-hint', window
-        ? `tokens. The other ${forChat.toLocaleString()} of the model's ${window.toLocaleString()} are filled with chat.`
+        ? `tokens. That leaves ${forChat.toLocaleString()} of the model's ${window.toLocaleString()} for the last `
+            + 'summary and the messages.'
         : 'tokens');
 
     setText('budget-hint', 'tokens written. Thinking counts too, on most APIs.');
@@ -2798,7 +2799,7 @@ function renderBudgets() {
         warning.textContent = overcommitted
             ? `If summaries fail on long chats: Recall leaves ${reserve.toLocaleString()} tokens free, `
                 + `but lets the model write up to ${budget.toLocaleString()}. Some APIs, Claude's included, `
-                + 'reject a request like that once the chat is long enough to fill the rest. Set the first '
+                + 'reject a request like that once the messages are long enough to fill the rest. Set the first '
                 + `number to ${budget.toLocaleString()} to fix it.`
             : '';
         warning.toggleAttribute('hidden', !overcommitted);
