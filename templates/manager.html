@@ -632,13 +632,12 @@
                 <div class="recall-advanced" data-recall="advanced" hidden>
 
                     <p class="recall-help">
-                        Each summary is one request to the model: as much of the chat as fits in its
-                        context, plus room for the summary it writes back. These two set that room and
-                        how long the model may go on.
+                        To write a summary, Recall sends the model as much of the chat as it can take,
+                        and leaves some tokens free for the model to write the summary in.
                     </p>
 
                     <div class="recall-row recall-row-field">
-                        <label for="recall-response-reserve">Room kept for the summary</label>
+                        <label for="recall-response-reserve">Tokens left free for the summary</label>
                         <span class="recall-field-unit">
                             <input id="recall-response-reserve" class="text_pole recall-number" type="number" min="0"
                                 step="100" data-recall="response-reserve">
@@ -647,7 +646,7 @@
                     </div>
 
                     <div class="recall-row recall-row-field">
-                        <label for="recall-output-budget">Cut the model off after</label>
+                        <label for="recall-output-budget">Stop the model after</label>
                         <span class="recall-field-unit">
                             <input id="recall-output-budget" class="text_pole recall-number" type="number" min="0"
                                 step="500" data-recall="output-budget">
@@ -656,9 +655,9 @@
                     </div>
 
                     <p class="recall-help">
-                        A summary is usually around 1,400 tokens, so the room rarely needs to grow. The
-                        cut-off is a safety stop for models that think without end. If summaries come back
-                        empty, raise the cut-off.
+                        A summary is usually about 1,400 tokens, so the default of 5,000 is plenty. The stop
+                        is there so a model that keeps thinking can't go on forever. If summaries come back
+                        empty, the model used all of its tokens thinking: raise the second number.
                     </p>
 
                     <p class="recall-help recall-budget-warning" data-recall="budget-warning" hidden></p>

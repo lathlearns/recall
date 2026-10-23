@@ -462,7 +462,7 @@ async function enforceBudget(buffer, systemPrompt, indices) {
 
     const advice = used - reclaimed <= available
         ? `Hiding the oldest ${count} visible message${count === 1 ? '' : 's'} would bring it under.`
-        : 'Even hiding everything but the first message would not bring it under — raise the context size or lower Room kept for the summary in Advanced.';
+        : 'Even hiding everything but the first message would not bring it under — raise the context size or lower "Tokens left free for the summary" in Advanced.';
 
     throw new RecallError(
         `Too much to summarize. The visible messages come to ~${used.toLocaleString()} tokens; the budget is ${Math.max(0, available).toLocaleString()}. ${advice}`,
@@ -592,7 +592,7 @@ async function runGeneration(buffer, systemPrompt) {
         throw new RecallError(
             'The model spent its entire output budget reasoning and never wrote a summary. '
             + `It produced ${spent.toLocaleString()} tokens of reasoning against an output budget `
-            + `of ${Number(settings.outputBudget).toLocaleString()}. Raise Cut the model off after in Advanced, `
+            + `of ${Number(settings.outputBudget).toLocaleString()}. Raise "Stop the model after" in Advanced, `
             + 'or lower Reasoning Effort for this API — the reasoning is kept so you can read it '
             + 'and judge which.',
             { kind: 'reasoning-overrun' },
