@@ -2694,7 +2694,7 @@ function renderPresetBlocks() {
  * The two generation limits, as arithmetic rather than as two abstract numbers.
  *
  * "Response reserve: 2000" tells you nothing about what it does to this chat. The
- * same setting rendered as "the chat gets the other 198,000" is the whole explanation,
+ * same setting rendered as "the other 198,000 are filled with chat" is the whole explanation,
  * and it moves while you type. Doing the sum here is what lets the help text be
  * three lines: most of what the old paragraph was explaining is now just visible.
  *
@@ -2714,19 +2714,19 @@ function renderBudgets() {
     const window = forChat + reserve;
 
     setText('reserve-hint', window
-        ? `tokens — the chat gets the other ${forChat.toLocaleString()} of ${window.toLocaleString()}`
+        ? `tokens. The other ${forChat.toLocaleString()} of the model's ${window.toLocaleString()} are filled with chat.`
         : 'tokens');
 
-    setText('budget-hint', 'tokens — its thinking counts toward this, on most APIs');
+    setText('budget-hint', 'tokens written. Thinking counts too, on most APIs.');
 
     const warning = q('[data-recall="budget-warning"]');
     if (warning) {
         const overcommitted = budget > reserve;
         warning.textContent = overcommitted
-            ? `If summaries fail on long chats: the model may write ${budget.toLocaleString()} tokens `
-                + `but only ${reserve.toLocaleString()} are kept for it, and some APIs (Claude among them) `
-                + 'refuse that once the chat fills its share. Raise the room to '
-                + `${budget.toLocaleString()}.`
+            ? `If summaries fail on long chats: Recall leaves ${reserve.toLocaleString()} tokens free, `
+                + `but lets the model write up to ${budget.toLocaleString()}. Some APIs, Claude's included, `
+                + 'reject a request like that once the chat is long enough to fill the rest. Set the first '
+                + `number to ${budget.toLocaleString()} to fix it.`
             : '';
         warning.toggleAttribute('hidden', !overcommitted);
     }
