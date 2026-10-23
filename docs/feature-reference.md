@@ -746,16 +746,16 @@ edits and deletions almost always land above the anchor where they cannot move i
 Two separate numbers, because one cannot do both jobs. They sit adjacent in the settings
 because neither is comprehensible without the other.
 
-**Tokens left free for the summary** (the response reserve, default ~5,000). Context room held back when
+**Reserved for the summary** (the response reserve, default ~5,000). Context room held back when
 sizing the buffer; the chat history gets everything else. This is what Recall *expects* a
 summary to need. Set it too high and Recall starts refusing chats it could have handled.
 
-**Stop the model after** (the output budget, default ~15,000). The generation limit sent to
+**Hard cutoff** (the output budget, default ~15,000). The generation limit sent to
 the API — a ceiling, not an expectation. Its real job is stopping a model that reasons without
 end.
 
-The panel renders both as live arithmetic rather than as bare numbers: the reserve field reads
-"That leaves 198,000 of the model's 200,000 for the last summary and the messages." and updates as you type.
+The panel renders both as live arithmetic rather than as bare numbers: the reserve help reads
+"The other 198,000 of the model's 200,000 go to the last summary and the messages." and updates as you type.
 
 ### Why they differ, and when that bites
 
@@ -1165,9 +1165,9 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
 | Warn me when context is filling up | on | Whether to notify at all. |
 | Warn at | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 50% of the context limit. Warns when it is at or above the room the prompt has. |
-| Tokens left free for the summary (response reserve) | 5,000 | Context held back when sizing the buffer. |
-| Stop the model after (output budget) | 15,000 | The generation limit sent to the API — thinking included, on most providers. |
-| Framing prefix / suffix | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
+| Reserved for the summary (response reserve) | 5,000 | Context held back when sizing the buffer. |
+| Hard cutoff (output budget) | 15,000 | The generation limit sent to the API — thinking included, on most providers. |
+| Summary wrapper (Before / After) | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
 | Minimum summary length | 50 tokens | Shorter responses are treated as failures rather than saved as stubs. |
 | Deep integrity check | off | Also hash the covered range, catching edits below a summary's anchor. Noisy — flags on any edit anywhere. |
 

@@ -941,11 +941,53 @@
     transform: rotate(180deg);
 }
 
+/*
+ * Each setting is a title, its control, and one line on what it does, laid out
+ * in columns where there is room. A label, box and paragraph run across the full
+ * width of a desktop modal left most of a line empty beside each number and the
+ * explanation stretched to the far edge; side by side they read as a list of
+ * settings. One column on a phone, where the minimum is wider than the screen.
+ */
 .recall-advanced {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20em), 1fr));
+    gap: 1em 2em;
+    padding-top: 0.5em;
+}
+
+.recall-setting {
     display: flex;
     flex-direction: column;
-    gap: 0.5em;
-    padding-top: 0.5em;
+    align-items: flex-start;
+    gap: 0.35em;
+    min-width: 0;
+}
+
+.recall-setting .text_pole {
+    margin: 0;
+}
+
+.recall-setting-title {
+    font-weight: bold;
+}
+
+.recall-setting > .menu_button {
+    margin: 0;
+    white-space: nowrap;
+    width: auto;
+}
+
+/* The wrapper's two boxes, labelled Before and After, on one line each. */
+.recall-setting-pair {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.35em 0.5em;
+    width: 100%;
+}
+
+.recall-setting-pair label {
+    color: var(--SmartThemeEmColor);
 }
 
 .recall-row {

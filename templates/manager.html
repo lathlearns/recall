@@ -631,80 +631,80 @@
 
                 <div class="recall-advanced" data-recall="advanced" hidden>
 
-                    <p class="recall-help">
-                        To write a summary, Recall sends the model its last summary and the messages that
-                        aren't hidden, and leaves some tokens free for the model to write the new summary in.
-                    </p>
-
-                    <div class="recall-row recall-row-field">
-                        <label for="recall-response-reserve">Tokens left free for the summary</label>
+                    <div class="recall-setting">
+                        <label class="recall-setting-title" for="recall-response-reserve">Reserved for the summary</label>
                         <span class="recall-field-unit">
                             <input id="recall-response-reserve" class="text_pole recall-number" type="number" min="0"
                                 step="100" data-recall="response-reserve">
-                            <span class="recall-dim" data-recall="reserve-hint"></span>
+                            <span class="recall-dim">tokens</span>
                         </span>
+                        <p class="recall-help">
+                            Recall keeps this many tokens free for the model to write the summary in. A summary
+                            is usually about 1,400.<span data-recall="reserve-hint"></span>
+                        </p>
+                        <p class="recall-help recall-budget-warning" data-recall="budget-warning" hidden></p>
                     </div>
 
-                    <div class="recall-row recall-row-field">
-                        <label for="recall-output-budget">Stop the model after</label>
+                    <div class="recall-setting">
+                        <label class="recall-setting-title" for="recall-output-budget">Hard cutoff</label>
                         <span class="recall-field-unit">
                             <input id="recall-output-budget" class="text_pole recall-number" type="number" min="0"
                                 step="500" data-recall="output-budget">
-                            <span class="recall-dim" data-recall="budget-hint"></span>
+                            <span class="recall-dim">tokens</span>
                         </span>
+                        <p class="recall-help">
+                            Recall stops the model after this many tokens, so a model stuck thinking can't run
+                            forever. Thinking counts toward it on most APIs. If summaries come back empty, raise
+                            this.
+                        </p>
                     </div>
 
-                    <p class="recall-help">
-                        A summary is usually about 1,400 tokens, so the default of 5,000 is plenty. The stop
-                        is there so a model that keeps thinking can't go on forever. If summaries come back
-                        empty, the model used all of its tokens thinking: raise the second number.
-                    </p>
-
-                    <p class="recall-help recall-budget-warning" data-recall="budget-warning" hidden></p>
-
-                    <div class="recall-row recall-row-field">
-                        <label for="recall-framing-prefix">Framing prefix</label>
-                        <input id="recall-framing-prefix" class="text_pole" type="text" data-recall="framing-prefix">
+                    <div class="recall-setting">
+                        <span class="recall-setting-title">Summary wrapper</span>
+                        <span class="recall-setting-pair">
+                            <label for="recall-framing-prefix">Before</label>
+                            <input id="recall-framing-prefix" class="text_pole" type="text" data-recall="framing-prefix">
+                            <label for="recall-framing-suffix">After</label>
+                            <input id="recall-framing-suffix" class="text_pole" type="text" data-recall="framing-suffix">
+                        </span>
+                        <p class="recall-help">
+                            Text put around the last summary when Recall sends it back to the model. Match what
+                            your preset uses. Either can be left empty.
+                        </p>
                     </div>
-                    <div class="recall-row recall-row-field">
-                        <label for="recall-framing-suffix">Framing suffix</label>
-                        <input id="recall-framing-suffix" class="text_pole" type="text" data-recall="framing-suffix">
-                    </div>
-                    <p class="recall-help">
-                        Wraps the previous summary in the buffer. The prompt branches on whether this block
-                        is empty, so it is always emitted — an empty one included. Match whatever your preset
-                        uses.
-                    </p>
 
-                    <div class="recall-row recall-row-field">
-                        <label for="recall-min-response">Minimum summary length</label>
+                    <div class="recall-setting">
+                        <label class="recall-setting-title" for="recall-min-response">Minimum summary length</label>
                         <span class="recall-field-unit">
                             <input id="recall-min-response" class="text_pole recall-number" type="number" min="0"
                                 step="10" data-recall="min-response">
                             <span class="recall-dim">tokens</span>
                         </span>
+                        <p class="recall-help">
+                            A reply shorter than this counts as a failed summary and isn't saved.
+                        </p>
                     </div>
-                    <p class="recall-help">
-                        Anything shorter is treated as a generation failure rather than saved as a stub.
-                    </p>
 
-                    <label class="checkbox_label recall-row">
-                        <input type="checkbox" data-recall="deep-integrity">
-                        <span>Deep integrity check</span>
-                    </label>
-                    <p class="recall-help">
-                        Also hashes the whole covered range, catching edits below a summary's anchor. Off by
-                        default: it flags on any edit anywhere in history, which is noisy in normal use.
-                    </p>
-
-                    <div class="recall-row">
-                        <div class="menu_button" data-recall="reset-settings">Reset settings to defaults</div>
+                    <div class="recall-setting">
+                        <label class="checkbox_label recall-setting-title">
+                            <input type="checkbox" data-recall="deep-integrity">
+                            <span>Deep integrity check</span>
+                        </label>
+                        <p class="recall-help">
+                            Normally Recall only notices when the last message a summary covers is edited or
+                            deleted. With this on, an edit to any message it covers marks the summary out of
+                            date. Off by default, because every small fix sets it off.
+                        </p>
                     </div>
-                    <p class="recall-help">
-                        Every setting on this tab goes back to how Recall ships, including the reference
-                        material ticks and where summarization runs. The summary prompt, any character's own
-                        copy of it, and your summaries are left alone.
-                    </p>
+
+                    <div class="recall-setting">
+                        <div class="menu_button recall-setting-title" data-recall="reset-settings">Reset settings to defaults</div>
+                        <p class="recall-help">
+                            Puts every setting on this tab back to how Recall ships, including reference material
+                            and where summaries run. Your summary prompt, any character's own copy of it, and your
+                            summaries are kept.
+                        </p>
+                    </div>
                 </div>
             </section>
 

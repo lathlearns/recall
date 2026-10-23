@@ -608,7 +608,7 @@ async function runQueue() {
             if (fits < Math.min(minimum, withZero.length)) {
                 throw new RecallError(
                     `Message ${batch[0]} does not fit in a request on top of the summary so far. `
-                    + 'Raise the context size or lower "Tokens left free for the summary" in Advanced, then try again.',
+                    + 'Raise the context size or lower "Reserved for the summary" in Advanced, then try again.',
                     { kind: 'overflow' },
                 );
             }
