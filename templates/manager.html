@@ -530,57 +530,59 @@
                 </div>
             </section>
 
-            <section class="recall-section">
-                <h4 class="recall-section-title">Coming from the built-in Summarize</h4>
+            <div class="recall-section-pair">
+                <section class="recall-section">
+                    <h4 class="recall-section-title">Coming from the built-in Summarize</h4>
 
-                <label class="checkbox_label recall-row">
-                    <input type="checkbox" data-recall="legacy-fallback">
-                    <span>Use its old summary until Recall has one</span>
-                </label>
-                <p class="recall-help">
-                    On a chat the built-in already summarised, <b>&#123;&#123;recall&#125;&#125;</b> resolves to that
-                    summary until you generate your first, and it seeds that first generation so
-                    Recall revises it instead of writing a new one from scratch. Read-only, and it
-                    does not need the built-in to be enabled — the text lives in the chat file.
-                    This is also what makes an old chat with already-hidden messages safe to
-                    summarise without unhiding everything first.
-                </p>
+                    <label class="checkbox_label recall-row">
+                        <input type="checkbox" data-recall="legacy-fallback">
+                        <span>Use its old summary until Recall has one</span>
+                    </label>
+                    <p class="recall-help">
+                        On a chat the built-in already summarised, <b>&#123;&#123;recall&#125;&#125;</b> resolves to that
+                        summary until you generate your first, and it seeds that first generation so
+                        Recall revises it instead of writing a new one from scratch. Read-only, and it
+                        does not need the built-in to be enabled — the text lives in the chat file.
+                        This is also what makes an old chat with already-hidden messages safe to
+                        summarise without unhiding everything first.
+                    </p>
 
-                <label class="checkbox_label recall-row">
-                    <input type="checkbox" data-recall="summary-alias">
-                    <span>Also answer to <code>&#123;&#123;summary&#125;&#125;</code></span>
-                </label>
-                <p class="recall-help" data-recall="alias-status"></p>
-            </section>
+                    <label class="checkbox_label recall-row">
+                        <input type="checkbox" data-recall="summary-alias">
+                        <span>Also answer to <code>&#123;&#123;summary&#125;&#125;</code></span>
+                    </label>
+                    <p class="recall-help" data-recall="alias-status"></p>
+                </section>
 
-            <section class="recall-section">
-                <h4 class="recall-section-title">Context nudge</h4>
+                <section class="recall-section">
+                    <h4 class="recall-section-title">Context nudge</h4>
 
-                <label class="checkbox_label recall-row">
-                    <input type="checkbox" data-recall="nudge-enabled">
-                    <span>Warn me when context is filling up</span>
-                </label>
+                    <label class="checkbox_label recall-row">
+                        <input type="checkbox" data-recall="nudge-enabled">
+                        <span>Warn me when context is filling up</span>
+                    </label>
 
-                <div class="recall-row recall-row-field">
-                    <label for="recall-nudge-threshold">Warn at</label>
-                    <span class="recall-field-unit">
-                        <input id="recall-nudge-threshold" class="text_pole recall-number" type="number" min="0"
-                            step="500" data-recall="nudge-threshold">
-                        <span class="recall-dim" data-recall="nudge-threshold-hint"></span>
-                    </span>
-                </div>
-                <p class="recall-help recall-budget-warning" data-recall="nudge-warning" hidden></p>
-                <p class="recall-help">
-                    Recall checks each prompt ST sends — the same number as <b>Total Tokens</b> at the top
-                    of the Prompt Manager. When it passes this number, you get one warning. 0 sets it to
-                    half your context size.
-                </p>
-                <p class="recall-help">
-                    ST never fills the whole context. It keeps your Max Response Length free for the answer,
-                    and once the prompt reaches what's left, it leaves out your oldest messages without
-                    telling you. Summarise before then.
-                </p>
-            </section>
+                    <div class="recall-row recall-row-field">
+                        <label for="recall-nudge-threshold">Warn at</label>
+                        <span class="recall-field-unit">
+                            <input id="recall-nudge-threshold" class="text_pole recall-number" type="number" min="0"
+                                step="500" data-recall="nudge-threshold">
+                            <span class="recall-dim" data-recall="nudge-threshold-hint"></span>
+                        </span>
+                    </div>
+                    <p class="recall-help recall-budget-warning" data-recall="nudge-warning" hidden></p>
+                    <p class="recall-help">
+                        Recall checks each prompt ST sends — the same number as <b>Total Tokens</b> at the top
+                        of the Prompt Manager. When it passes this number, you get one warning. 0 sets it to
+                        half your context size.
+                    </p>
+                    <p class="recall-help">
+                        ST never fills the whole context. It keeps your Max Response Length free for the answer,
+                        and once the prompt reaches what's left, it leaves out your oldest messages without
+                        telling you. Summarise before then.
+                    </p>
+                </section>
+            </div>
 
             <section class="recall-section">
                 <div class="recall-section-head">

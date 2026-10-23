@@ -927,6 +927,21 @@
     padding-bottom: 0;
 }
 
+/* Two short sections side by side where there is room, one under the other on a
+   phone. The pair takes the rule under it; the sections inside don't. */
+.recall-section-pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 24em), 1fr));
+    gap: 1em 2.5em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.recall-section-pair > .recall-section {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
 .recall-section-title {
     margin: 0;
     font-size: calc(var(--mainFontSize) * 1.05);
@@ -1080,19 +1095,25 @@
     margin: 0;
 }
 
+/* A name is a few words, so its box is sized for a few words rather than the
+   width of the modal; the token count sits beside it instead of on a line of
+   its own, and the buttons keep to the right edge. */
 .recall-block-name {
-    flex: 1 1 auto;
+    flex: 0 1 22em;
     min-width: 0;
+}
+
+.recall-block-size {
+    flex: 0 0 auto;
+    font-size: calc(var(--mainFontSize) * 0.8);
+    white-space: nowrap;
 }
 
 .recall-block-buttons {
     display: flex;
     gap: 0.25em;
     flex: 0 0 auto;
-}
-
-.recall-block-meta {
-    font-size: calc(var(--mainFontSize) * 0.8);
+    margin-left: auto;
 }
 
 .recall-block-summary {
@@ -1125,14 +1146,18 @@
 
 /* --- Reference material toggles ------------------------------------------ */
 
+/* Up to three columns, read top to bottom: the preset's blocks are in prompt
+   order, and columns keep it where a grid would read it across. One name and one
+   count across the whole modal left most of every row empty. */
 .recall-context-blocks {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15em;
+    columns: 3 16em;
+    column-gap: 2.5em;
 }
 
 .recall-context-row {
     justify-content: flex-start;
+    break-inside: avoid;
+    padding: 0.075em 0;
 }
 
 .recall-context-name {
@@ -1364,6 +1389,12 @@
      */
     .recall-block-head {
         flex-wrap: wrap;
+    }
+
+    /* Stacked here, so the pair's two sections get back the rule between them. */
+    .recall-section-pair > .recall-section + .recall-section {
+        padding-top: 1em;
+        border-top: 1px solid var(--SmartThemeBorderColor);
     }
 
     .recall-block-name {

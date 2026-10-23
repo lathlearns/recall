@@ -2957,6 +2957,7 @@ function renderBlocks() {
                     <input type="checkbox" data-block-enabled ${block.enabled ? 'checked' : ''}>
                 </label>
                 <input class="text_pole recall-block-name" data-block-name value="${escapeHtml(block.name)}" placeholder="Block name">
+                <span class="recall-dim recall-block-size" data-block-size="${index}"></span>
                 <div class="recall-block-buttons">
                     <div class="menu_button menu_button_icon" data-block-up title="Move up" ${index === 0 ? 'disabled' : ''}>
                         <i class="fa-solid fa-chevron-up"></i>
@@ -2979,9 +2980,6 @@ function renderBlocks() {
                         <i class="fa-solid fa-trash-can"></i>
                     </div>
                 </div>
-            </div>
-            <div class="recall-block-meta recall-dim">
-                <span data-block-size="${index}"></span>
             </div>
             <div class="recall-block-summary recall-dim">${escapeHtml(blockPreview(block))}</div>
             <textarea id="recall_block_${index}" class="text_pole textarea_compact recall-block-content monospace" data-block-content rows="12" hidden>${escapeHtml(block.content)}</textarea>

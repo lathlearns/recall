@@ -163,6 +163,7 @@ function populate() {
         <div class="recall-block"><div class="recall-block-head">
             <label class="checkbox_label recall-block-enable"><input type="checkbox" checked></label>
             <input class="text_pole recall-block-name" value="Continuity and consistency">
+            <span class="recall-dim recall-block-size">4,330 tokens</span>
             <div class="recall-block-buttons">${'<div class="menu_button menu_button_icon"><i class="fa-solid"></i></div>'.repeat(5)}</div>
         </div></div>`;
 }
