@@ -631,8 +631,14 @@
 
                 <div class="recall-advanced" data-recall="advanced" hidden>
 
+                    <p class="recall-help">
+                        Each summary is one request to the model: as much of the chat as fits in its
+                        context, plus room for the summary it writes back. These two set that room and
+                        how long the model may go on.
+                    </p>
+
                     <div class="recall-row recall-row-field">
-                        <label for="recall-response-reserve">Kept free for the reply</label>
+                        <label for="recall-response-reserve">Room kept for the summary</label>
                         <span class="recall-field-unit">
                             <input id="recall-response-reserve" class="text_pole recall-number" type="number" min="0"
                                 step="100" data-recall="response-reserve">
@@ -641,7 +647,7 @@
                     </div>
 
                     <div class="recall-row recall-row-field">
-                        <label for="recall-output-budget">Most the model may write</label>
+                        <label for="recall-output-budget">Cut the model off after</label>
                         <span class="recall-field-unit">
                             <input id="recall-output-budget" class="text_pole recall-number" type="number" min="0"
                                 step="500" data-recall="output-budget">
@@ -650,9 +656,9 @@
                     </div>
 
                     <p class="recall-help">
-                        The first is the room Recall expects a summary to need; the second is a hard ceiling
-                        that stops a model reasoning forever. The defaults suit most setups. Raise the
-                        ceiling first if summaries come back empty.
+                        A summary is usually around 1,400 tokens, so the room rarely needs to grow. The
+                        cut-off is a safety stop for models that think without end. If summaries come back
+                        empty, raise the cut-off.
                     </p>
 
                     <p class="recall-help recall-budget-warning" data-recall="budget-warning" hidden></p>
