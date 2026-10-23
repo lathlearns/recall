@@ -997,6 +997,10 @@
     font-weight: bold;
 }
 
+.recall-setting-label {
+    color: var(--recall-muted);
+}
+
 .recall-setting > .menu_button {
     margin: 0;
     white-space: nowrap;

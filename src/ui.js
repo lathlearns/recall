@@ -27,6 +27,7 @@ import {
     makeEmptyBlock,
     isOverriding,
     getAvatarKey,
+    AUTO_NUDGE_FRACTION,
 } from './settings.js';
 import {
     getSummaries,
@@ -2890,24 +2891,20 @@ function renderNudgeHint() {
     }
 
     const threshold = getThresholdTokens();
-    const limit = getMaxContextTokens();
     const room = getMaxPromptTokens();
-    const reply = limit - room;
-    const auto = !(Number(getSettings().nudgeThreshold) > 0);
-    const n = value => value.toLocaleString();
+    const auto = Math.round(getMaxContextTokens() * AUTO_NUDGE_FRACTION);
 
-    hint.textContent = `tokens — ${auto ? `auto: half your ${n(limit)} context. ` : ''}`
-        + `ST starts leaving out old messages at ${n(room)} (${n(limit)} − your ${n(reply)} Max Response Length).`;
+    hint.textContent = `0 means half your context size (${auto.toLocaleString()}).`;
 
-    // The case that went unnoticed: a Max Response Length so large that the room
-    // left for the prompt is below the warning, so the prompt can never reach it.
+    // A Max Response Length so large that the room left for the prompt is below
+    // the number, so the prompt can never reach it. The arithmetic behind that
+    // is in the README; here it only matters that it can't fire.
     const warning = q('[data-recall="nudge-warning"]');
     if (warning) {
         const unreachable = threshold >= room;
         warning.textContent = unreachable
-            ? `This warning can never fire. ST stops the prompt at ${n(room)} (${n(limit)} context − ${n(reply)} `
-                + 'Max Response Length) and leaves out older messages instead. Set a lower number here, or lower '
-                + 'Max Response Length in your preset.'
+            ? 'This number is past the point where SillyTavern starts leaving messages out, so the '
+                + 'reminder would never come. Set a lower one.'
             : '';
         warning.toggleAttribute('hidden', !unreachable);
     }

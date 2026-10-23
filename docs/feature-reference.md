@@ -889,12 +889,13 @@ Tokens* at the top of the Prompt Manager), because it is the number users alread
 **The prompt never gets the whole context.** The host holds the chat's response length back
 for the reply, and once the prompt reaches what is left — the **room** — it leaves the oldest
 messages out without saying so. The room, not the context limit, is what the user is racing,
-and everything the nudge shows is measured against it: the settings hint names it and how it
-was worked out, the drawer reads "64.2k of 108k room", and the notification says where messages
-start being left out. Each uses the host's own name for the response-length setting, so the
-user can find it. With a large enough response length the room falls below the
-threshold, and the nudge can then never fire; the panel shows a warning saying exactly that,
-with both remedies, whenever the threshold is at or above the room.
+and the drawer and the notification are measured against it: the drawer reads "64.2k of 108k
+room", and the notification says where messages start being left out. The settings say it
+without figures: once the chat fills the context the host leaves the oldest messages out, so
+summarizing before then keeps them. The one number there is what 0 works out to (half the
+context). With a large enough response length the room falls below the threshold, and the
+nudge can then never fire; the panel shows a warning saying so, in words, whenever the
+threshold is at or above the room.
 
 When usage crosses the threshold:
 
@@ -1192,8 +1193,8 @@ becomes that pass's steering note: `/recall keep all four characters present`.
 | Reference material toggles | all off, except preset blocks marked `{{// recall}}`, and card and persona fields while any block is marked | Which card/persona fields and which preset prompt blocks to send. |
 | Use the built-in's old summary | on | Stand in an existing external summary until Recall has one, and seed the first pass with it. |
 | Also answer to the built-in's macro | on | Register the legacy macro name too — only while the built-in is disabled. |
-| Warn me when context is filling up | on | Whether to notify at all. |
-| Warn at | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 50% of the context limit. Warns when it is at or above the room the prompt has. |
+| Remind me when the chat is getting long | on | Whether to notify at all. |
+| Remind me at | 0 (auto) | In tokens, measured against the last prompt sent. 0 derives 50% of the context limit. Warns when it is at or above the room the prompt has. |
 | Reserved for the summary (response reserve) | 5,000 | Context held back when sizing the buffer. |
 | Hard cutoff (output budget) | 15,000 | The generation limit sent to the API — thinking included, on most providers. |
 | Summary wrapper (Before / After) | `[Summary: ` / `]` | Wraps the previous summary in the buffer. Should match the user's preset. Must survive being blank. |
