@@ -605,7 +605,7 @@ async function runGeneration(buffer, systemPrompt, output) {
         // Raising the cutoff does nothing when the chat, not the cutoff, set the
         // limit — the remedy then is room, which smaller requests make.
         const remedy = output.lowered
-            ? 'This chat left less room than your hard cutoff. Summarize it in batches with Rebuild… '
+            ? 'This chat left less room than your hard cutoff. Summarize it in batches with the Rebuild button in the manager '
                 + 'to give each request more room, or lower Reasoning Effort for this API'
             : 'Raise "Hard cutoff" in Advanced, or lower Reasoning Effort for this API';
 

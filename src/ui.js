@@ -646,9 +646,9 @@ function onRunStateChanged(run) {
         // run produces — a summary cut short, or one that never gets written.
         if (run.outputLowered) {
             toastr.info(
-                'This chat is long, so there is less room for the reply than your hard cutoff allows. '
+                'This chat is long, so there is less room for the summary than your hard cutoff allows. '
                 + 'Recall has lowered the limit for this summary so the request isn\'t refused. If it comes '
-                + 'back empty or cut off, use Rebuild… to summarize in batches instead.',
+                + 'back empty or cut off, use the Rebuild button in the manager to summarize in batches instead.',
                 'Recall',
                 { timeOut: 12000, extendedTimeOut: 6000 },
             );
