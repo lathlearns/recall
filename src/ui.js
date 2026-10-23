@@ -642,6 +642,19 @@ function onRunStateChanged(run) {
         runTicker = setInterval(renderRunState, 1000);
         liveCount.reset();
         thinkCount.reset();
+
+        // Said as the run starts, because it is the explanation for whatever this
+        // run produces — a summary cut short, or one that never gets written.
+        if (run.outputLowered) {
+            toastr.info(
+                `This chat leaves room for only ${run.outputLimit.toLocaleString()} tokens of reply, less than `
+                + `your hard cutoff of ${Number(getSettings().outputBudget).toLocaleString()}. Recall has asked `
+                + `the model to stop at ${run.outputLimit.toLocaleString()} instead, so the request isn't `
+                + 'refused. If the summary comes back empty or cut off, hide some older messages and try again.',
+                'Recall',
+                { timeOut: 12000, extendedTimeOut: 6000 },
+            );
+        }
     } else if (!run && runTicker !== null) {
         clearInterval(runTicker);
         runTicker = null;
@@ -2453,7 +2466,7 @@ function wireSettings() {
     bindNumber('tail-pin', 'tailPin', 0, 200);
     bindNumber('nudge-threshold', 'nudgeThreshold', 0, 10_000_000, renderNudgeHint);
     bindNumber('response-reserve', 'responseReserve', 0, 1_000_000, renderBudgets);
-    bindNumber('output-budget', 'outputBudget', 0, 1_000_000, renderBudgets);
+    bindNumber('output-budget', 'outputBudget', 0, 1_000_000);
     bindNumber('min-response', 'minResponseTokens', 0, 100_000);
 
     bindText('framing-prefix', 'framingPrefix');
@@ -2773,16 +2786,14 @@ function renderPresetBlocks() {
  *
  * The two numbers are deliberately different things — the reserve is what a
  * summary is expected to need, the budget a ceiling that stops a runaway reasoner
- * — so they are not merged and the reserve is not raised to match. The warning
- * fires only where that gap actually bites: a reply allowed to exceed the room
- * held for it, which Claude and some others reject up front rather than truncate.
- * A warning and not a clamp, because a setting that silently corrects itself
- * teaches you nothing about why it moved.
+ * — so they are not merged and the reserve is not raised to match. Where that gap
+ * bites, a near-full request whose cutoff runs past the window, each request is
+ * fitted as it is sent (fitOutputLimit) and the run says so; nothing here warns
+ * about a combination that is fine on every chat short of that.
  */
 function renderBudgets() {
     const settings = getSettings();
     const reserve = Math.max(0, Number(settings.responseReserve) || 0);
-    const budget = Math.max(0, Number(settings.outputBudget) || 0);
     const forChat = Math.max(0, Number(getPromptBudget()) || 0);
     const window = forChat + reserve;
 
@@ -2790,18 +2801,6 @@ function renderBudgets() {
         ? ` The other ${forChat.toLocaleString()} of the model's ${window.toLocaleString()} go to the last `
             + 'summary and the messages.'
         : '');
-
-    const warning = q('[data-recall="budget-warning"]');
-    if (warning) {
-        const overcommitted = budget > reserve;
-        warning.textContent = overcommitted
-            ? `The hard cutoff (${budget.toLocaleString()}) is more than is reserved for the summary `
-                + `(${reserve.toLocaleString()}). On a long chat, some APIs, Claude's included, refuse a `
-                + 'request like that. If summaries fail on long chats, set Reserved for the summary to '
-                + `${budget.toLocaleString()}.`
-            : '';
-        warning.toggleAttribute('hidden', !overcommitted);
-    }
 }
 
 function renderSettings() {

@@ -1159,8 +1159,8 @@
     gap: 0.5em;
 }
 
-/* The overcommitted-budget warning. Accented rather than coloured text: it is a
-   caution about a combination, not an error, and the same left-border-in-quote
+/* The nudge's unreachable-threshold warning. Accented rather than coloured text: it
+   is a caution about a combination, not an error, and the same left-border-in-quote
    colour already means exactly that on .recall-banner-warn.
 
    Deliberately sets no `display` — that is what defeated the `hidden` attribute

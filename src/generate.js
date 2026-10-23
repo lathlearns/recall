@@ -42,6 +42,7 @@ import {
     markMainApiStreamingBroken,
 } from './connection.js';
 import { shouldRetryWithoutStreaming } from './stream.js';
+import { fitOutputLimit } from './util.js';
 
 import {
     getSettings,
@@ -182,7 +183,7 @@ function notifyRunChange() {
  * @param {'summarize'|'regenerate'|'rebuild'} kind
  * @param {{ step?: number, steps?: number }} [progress] Which batch of a rebuild this is.
  */
-function beginRun(kind, progress = {}) {
+function beginRun(kind, progress = {}, output = { limit: 0, lowered: false }) {
     inFlight = true;
     const profile = getActiveProfile();
 
@@ -204,6 +205,9 @@ function beginRun(kind, progress = {}) {
         reasoning: '',
         controller: new AbortController(),
         chatId: getCurrentChatId(),
+        // The UI says so when this is below the hard cutoff (ui.js onRunStateChanged).
+        outputLimit: output.limit,
+        outputLowered: output.lowered,
     };
     finishedRun = null;
     notifyRunChange();
@@ -429,9 +433,13 @@ export function buildBuffer(steeringNote = '') {
  * because ranges are not something the user controls — so the message names the
  * remedy that *is* in their hands.
  *
+ * Also fits the hard cutoff to the room the request leaves (fitOutputLimit), so
+ * an API that checks input plus `max_tokens` against the window never refuses it.
+ *
  * @param {string} buffer
  * @param {string} systemPrompt
  * @param {number[]} indices
+ * @returns {Promise<{ used: number, available: number, output: { limit: number, lowered: boolean } }>}
  */
 async function enforceBudget(buffer, systemPrompt, indices) {
     // Sized against whichever connection will actually run the request — the main
@@ -443,7 +451,10 @@ async function enforceBudget(buffer, systemPrompt, indices) {
     const used = await countTokens(buffer);
 
     if (used <= available) {
-        return { used, available };
+        // What the window has left once this request is in it: the reserve, plus
+        // whatever the buffer did not use of its own share.
+        const reserve = Math.max(0, Number(getSettings().responseReserve) || 0);
+        return { used, available, output: fitOutputLimit(getSettings().outputBudget, available - used + reserve) };
     }
 
     // Walk backward from the oldest visible message, counting, until the
@@ -545,13 +556,14 @@ function contextChanged(snapshot) {
  *
  * @param {string} buffer
  * @param {string} systemPrompt
+ * @param {{ limit: number, lowered: boolean }} output From enforceBudget.
  * @returns {Promise<string>}
  */
-async function runGeneration(buffer, systemPrompt) {
+async function runGeneration(buffer, systemPrompt, output) {
     const settings = getSettings();
     const { content: raw, reasoning } = getActiveProfile()
-        ? await runViaProfile(buffer, systemPrompt)
-        : await runViaMainApi(buffer, systemPrompt);
+        ? await runViaProfile(buffer, systemPrompt, output.limit)
+        : await runViaMainApi(buffer, systemPrompt, output.limit);
 
     lastReasoning = String(reasoning ?? '');
 
@@ -589,12 +601,18 @@ async function runGeneration(buffer, systemPrompt) {
         // could be compared against the number they are being told to raise.
         const spent = await countTokens(reasoning);
 
+        // Raising the cutoff does nothing when the chat, not the cutoff, set the
+        // limit — the remedy then is room, which only hiding messages makes.
+        const remedy = output.lowered
+            ? 'This chat only left room for that many, less than your hard cutoff. Hide some older '
+                + 'messages to make room, or lower Reasoning Effort for this API'
+            : 'Raise "Hard cutoff" in Advanced, or lower Reasoning Effort for this API';
+
         throw new RecallError(
             'The model spent its entire output budget reasoning and never wrote a summary. '
             + `It produced ${spent.toLocaleString()} tokens of reasoning against an output budget `
-            + `of ${Number(settings.outputBudget).toLocaleString()}. Raise "Hard cutoff" in Advanced, `
-            + 'or lower Reasoning Effort for this API — the reasoning is kept so you can read it '
-            + 'and judge which.',
+            + `of ${Number(output.limit || settings.outputBudget).toLocaleString()}. ${remedy} — the `
+            + 'reasoning is kept so you can read it and judge which.',
             { kind: 'reasoning-overrun' },
         );
     }
@@ -621,10 +639,7 @@ async function runGeneration(buffer, systemPrompt) {
  * retried: see shouldRetryWithoutStreaming.
  * @returns {Promise<{content: string, reasoning: string}>}
  */
-async function runViaMainApi(buffer, systemPrompt) {
-    const settings = getSettings();
-    const budget = settings.outputBudget > 0 ? settings.outputBudget : 0;
-
+async function runViaMainApi(buffer, systemPrompt, budget) {
     if (activeRun?.streaming) {
         // Your chat's custom stopping strings would otherwise apply to the
         // summary. See suppressStoppingStrings.
@@ -718,11 +733,12 @@ async function runRawMainApi(buffer, systemPrompt, budget) {
  *
  * @returns {Promise<{content: string, reasoning: string}>}
  */
-async function runViaProfile(buffer, systemPrompt) {
+async function runViaProfile(buffer, systemPrompt, budget) {
     try {
         const { content, reasoning, streamFailed } = await generateViaProfile(systemPrompt, buffer, {
             signal: activeRun?.controller?.signal ?? null,
             onProgress: makeProgressHandler(),
+            maxTokens: budget,
         });
 
         // The request fell back to the non-streaming path, so nothing more is
@@ -966,7 +982,7 @@ export async function summarizeNow(steeringNote = '') {
         throw new RecallError('Every message is hidden — there is nothing visible to summarize.', { kind: 'empty' });
     }
 
-    await enforceBudget(buffer, systemPrompt, indices);
+    const { output } = await enforceBudget(buffer, systemPrompt, indices);
 
     // Captured from the buffer as it was built, never from chat.length afterwards:
     // in non-blocking mode the user can send messages while generation runs, and
@@ -976,14 +992,14 @@ export async function summarizeNow(steeringNote = '') {
     const anchorHash = getStringHash(chat[coversTo]?.mes ?? '');
     const snapshot = captureContext();
 
-    beginRun('summarize');
+    beginRun('summarize', {}, output);
     if (settings.blocking) {
         deactivateSendButtons();
     }
 
     let saved = false;
     try {
-        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
+        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt, output);
 
         if (contextChanged(snapshot)) {
             throw new RecallError('The chat changed while the summary was generating, so the result was discarded.', { kind: 'context-changed' });
@@ -1134,18 +1150,18 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
     // be indistinguishable from one without, and the point of a sibling is that you
     // chose what changed between them.
     const buffer = buildBufferFrom(indices, basisContent, steeringNote);
-    await enforceBudget(buffer, systemPrompt, indices);
+    const { output } = await enforceBudget(buffer, systemPrompt, indices);
 
     const snapshot = captureContext();
 
-    beginRun('regenerate');
+    beginRun('regenerate', {}, output);
     if (settings.blocking) {
         deactivateSendButtons();
     }
 
     let saved = false;
     try {
-        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
+        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt, output);
 
         if (contextChanged(snapshot)) {
             throw new RecallError('The chat changed while the summary was generating, so the result was discarded.', { kind: 'context-changed' });
@@ -1278,7 +1294,7 @@ export async function summarizeBatch({ indices, basis, seed = '', rebuildId, ste
     const systemPrompt = substituteParams(assemblePrompt());
     const basisContent = basis?.content ?? seed;
     const buffer = buildBufferFrom(present, basisContent, steeringNote);
-    await enforceBudget(buffer, systemPrompt, present);
+    const { output } = await enforceBudget(buffer, systemPrompt, present);
 
     const coversTo = present[present.length - 1];
     const anchorHash = getStringHash(chat[coversTo]?.mes ?? '');
@@ -1286,12 +1302,12 @@ export async function summarizeBatch({ indices, basis, seed = '', rebuildId, ste
 
     // Always blocked, whatever the blocking setting says. A rebuild runs for a
     // long time, and a message sent mid-batch is one more thing to go wrong.
-    beginRun('rebuild', { step, steps });
+    beginRun('rebuild', { step, steps }, output);
     deactivateSendButtons();
 
     let saved = false;
     try {
-        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt);
+        const { content, reasoning, title } = await runGeneration(buffer, systemPrompt, output);
 
         if (contextChanged(snapshot)) {
             throw new RecallError('The chat changed while the batch was generating, so the result was discarded.', { kind: 'context-changed' });

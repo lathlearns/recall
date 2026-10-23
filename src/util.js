@@ -86,3 +86,28 @@ export function clampNumber(value, min, max, fallback) {
     }
     return Math.min(max, Math.max(min, n));
 }
+
+/**
+ * The most the model may write in one request: the hard cutoff, or whatever the
+ * window has left once the request is in it, whichever is less.
+ *
+ * Some APIs (Claude's among them) refuse a request whose input plus its
+ * `max_tokens` exceeds the context window, rather than letting the reply run
+ * into the end. The buffer is sized against the reserve, not the cutoff, so on a
+ * near-full one the cutoff can ask for more room than exists. Fitting the
+ * request — never the setting — keeps it under, and the room left is never less
+ * than the reserve, because the buffer was refused if it would have taken any of
+ * that.
+ *
+ * @param {number} cutoff The hard cutoff; 0 means none is sent.
+ * @param {number} room Tokens the window has left after the request.
+ * @returns {{ limit: number, lowered: boolean }}
+ */
+export function fitOutputLimit(cutoff, room) {
+    const ceiling = Math.max(0, Number(cutoff) || 0);
+    if (!ceiling) {
+        return { limit: 0, lowered: false };
+    }
+    const limit = Math.max(1, Math.min(ceiling, Math.floor(Number(room) || 0)));
+    return { limit, lowered: limit < ceiling };
+}

@@ -762,9 +762,23 @@ The panel renders both as live arithmetic rather than as bare numbers: the reser
 A summary runs about 1,400 tokens, so reserving room for a 15,000 ceiling that will almost
 never be reached would waste buffer on every pass. The gap only bites when a near-full buffer
 meets a reply allowed to exceed what was held for it — some providers reject that combination
-up front rather than truncating. So the panel *warns* when the output budget exceeds the
-reserve, naming the number to raise the reserve to, and does not silently clamp: a setting that
-corrects itself teaches nothing about why it moved.
+up front rather than truncating.
+
+So each request is fitted as it is sent. The room it leaves is the context window minus the
+system prompt, the buffer and the padding allowance; the generation limit sent is the output
+budget or that room, whichever is less. The room is never less than the reserve, because a
+buffer that would have taken any of it was already refused. The *setting* is never changed —
+only the one request — and a short chat still gets the whole output budget.
+
+When a request is fitted below the output budget, the user is told as the run starts: how much
+room this chat left, against the output budget they set, and that hiding older messages makes
+more. If that run then spends all of it thinking, the reasoning-overrun error says the chat set
+the limit, and points at hiding messages rather than at raising a budget that wasn't the
+constraint.
+
+There is no standing warning in the settings for an output budget above the reserve. The
+defaults are set that way on purpose, and it only matters on the near-full request that the
+fitting above already handles.
 
 ### How the output budget interacts with thinking models
 
