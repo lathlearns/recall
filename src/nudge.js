@@ -49,13 +49,21 @@ export function getLastUsage() {
  * @returns {number}
  */
 export function getThresholdTokens() {
-    const settings = getSettings();
-    const stored = Number(settings.nudgeThreshold);
+    return isAutoThreshold() ? getAutoThresholdTokens() : Number(getSettings().nudgeThreshold);
+}
 
-    if (Number.isFinite(stored) && stored > 0) {
-        return stored;
-    }
+/** Whether the threshold is derived (a stored 0, or nothing usable) rather than set. */
+export function isAutoThreshold() {
+    const stored = Number(getSettings().nudgeThreshold);
+    return !(Number.isFinite(stored) && stored > 0);
+}
 
+/**
+ * What a stored 0 means. One place, so the settings hint can never show a
+ * different number from the one the nudge actually uses.
+ * @returns {number}
+ */
+export function getAutoThresholdTokens() {
     return Math.round(getMaxContextTokens() * AUTO_NUDGE_FRACTION);
 }
 

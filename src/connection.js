@@ -216,6 +216,29 @@ export async function streamViaMainApi(systemPrompt, buffer, { signal = null, on
 }
 
 /**
+ * Notes whether SillyTavern's own Stop fired, from now until `dispose`.
+ *
+ * ST's Stop aborts a main-API summary: the streamed request through the hook in
+ * streamViaMainApi, `generateRawData` by ST's own doing. Neither error says that
+ * is why, so the caller asks this, and a press of Stop is reported as one rather
+ * than as the request failing.
+ * @returns {{ readonly fired: boolean, dispose: () => void }}
+ */
+export function watchGenerationStopped() {
+    let fired = false;
+    const hook = () => {
+        fired = true;
+    };
+    eventSource.on(event_types.GENERATION_STOPPED, hook);
+    return {
+        get fired() {
+            return fired;
+        },
+        dispose: () => eventSource.removeListener(event_types.GENERATION_STOPPED, hook),
+    };
+}
+
+/**
  * Why the summary won't be written live, for the settings panel, or '' when it
  * will. Streaming is the normal case and needs no sentence.
  *

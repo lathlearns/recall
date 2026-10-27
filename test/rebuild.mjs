@@ -66,7 +66,7 @@ export class RecallError extends Error {
 }
 
 export const calls = [];
-export const control = { fits: Infinity, failOn: null, locked: false, run: null, during: null, before: null };
+export const control = { fits: Infinity, failOn: null, locked: false, run: null, during: null, before: null, failKind: null };
 
 export function setRebuildLock(locked) { control.locked = locked; }
 export function getActiveRun() { return control.run; }
@@ -87,7 +87,9 @@ export async function summarizeBatch({ indices, basis, seed, rebuildId, step, st
     calls.push({ indices: [...indices], basis: basis?.id ?? null, basisContent: basis?.content ?? seed, step, steps, steeringNote });
     if (control.failOn === step) {
         control.failOn = null;
-        throw new RecallError('The model returned an empty response.', { kind: 'empty-response' });
+        const kind = control.failKind ?? 'empty-response';
+        control.failKind = null;
+        throw new RecallError('The batch failed (' + kind + ').', { kind });
     }
     // \`during\` stands in for the user acting while the request is out.
     await control.during?.(step);
@@ -405,6 +407,16 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
 
 // 9. A failed batch waits to be retried, and retrying carries on.
 {
+    // SillyTavern's own Stop asks nothing first, so it fails the batch rather
+    // than ending the rebuild the way a cancel does.
+    reset();
+    gen.control.failOn = 2;
+    gen.control.failKind = 'st-stopped';
+    await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    check('ST stop: the batch failed, the rebuild did not end', rebuild.getRebuild()?.status, 'failed');
+    await rebuild.continueRebuild();
+    check('ST stop: retry finished', rebuild.getRebuild(), null);
+
     reset();
     gen.control.failOn = 2;
     await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });

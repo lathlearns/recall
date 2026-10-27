@@ -9,7 +9,7 @@
  * All styling goes through ST's theme tokens. Nothing here hardcodes a colour.
  */
 
-import { chat, getMaxContextTokens, getMaxPromptTokens } from '../../../../../script.js';
+import { chat, getMaxPromptTokens } from '../../../../../script.js';
 import { renderExtensionTemplateAsync, extension_settings } from '../../../../extensions.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../../popup.js';
 
@@ -27,7 +27,6 @@ import {
     makeEmptyBlock,
     isOverriding,
     getAvatarKey,
-    AUTO_NUDGE_FRACTION,
 } from './settings.js';
 import {
     getSummaries,
@@ -41,7 +40,7 @@ import {
 } from './store.js';
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
 import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, getFinishedRun, dismissFinishedRun, onRunChange, cancelRun, getLastReasoning } from './generate.js';
-import { getLastUsage, getThresholdTokens } from './nudge.js';
+import { getLastUsage, getThresholdTokens, getAutoThresholdTokens, isAutoThreshold } from './nudge.js';
 import {
     getRebuild,
     onRebuildChange,
@@ -1168,6 +1167,11 @@ async function openRebuildDialog(preset = {}) {
             </p>
         </div>
 
+        <div class="recall-banner recall-banner-warn" data-rb="stale" hidden>
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span data-rb="stale-text"></span>
+        </div>
+
         <div class="recall-banner recall-banner-warn" data-rb="short" hidden>
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span data-rb="short-text"></span>
@@ -1216,6 +1220,25 @@ async function openRebuildDialog(preset = {}) {
         if (preset.unsummarised) {
             choose('start', 'summary');
         }
+    } else if (preset.unsummarised && active) {
+        // Summarize now would have built on the active summary, but a rebuild
+        // cannot start after a stale one. Falling back to the beginning would
+        // re-read the whole chat at many times the cost, so it starts after the
+        // newest summary it can — and says so, since that is not what was asked.
+        const fallback = startable[startable.length - 1];
+        const why = active.stale
+            ? 'Your active summary is stale, so the rebuild can\'t build on it'
+            : 'Your active summary covers messages that are no longer in the chat, so the rebuild can\'t build on it';
+        if (fallback) {
+            field('[data-rb="summary"]').value = fallback.id;
+            choose('start', 'summary');
+        }
+        field('[data-rb="stale-text"]').textContent = fallback
+            ? `${why}. It starts after "${fallback.name || 'Untitled'}", the newest summary that it can build on, `
+                + `and reads from message ${fallback.coversTo + 1}.`
+            : `${why}, and there is no other summary it can build on. It starts from the beginning and reads `
+                + 'the whole chat.';
+        field('[data-rb="stale"]').toggleAttribute('hidden', false);
     }
 
     const read = () => {
@@ -1425,7 +1448,11 @@ async function openRebuildDialog(preset = {}) {
     }
 
     const choices = read();
-    settings.rebuildEnd = choices.end;
+    // Opened from Summarize now, End was set for this one rebuild, so it is only
+    // remembered if the user changed it.
+    if (!preset.unsummarised || choices.end !== 'latest') {
+        settings.rebuildEnd = choices.end;
+    }
     settings.rebuildBreaks = choices.breaks;
     settings.rebuildBatchSize = choices.batchSize;
     // Cutting by hand ticks the box itself; what is remembered is the user's own setting.
@@ -2893,20 +2920,25 @@ function renderNudgeHint() {
 
     const threshold = getThresholdTokens();
     const room = getMaxPromptTokens();
-    const auto = Math.round(getMaxContextTokens() * AUTO_NUDGE_FRACTION);
 
-    hint.textContent = `0 means half your context size (${auto.toLocaleString()}).`;
+    hint.textContent = `0 means half your context size (${getAutoThresholdTokens().toLocaleString()}).`;
 
     // A Max Response Length so large that the room left for the prompt is below
     // the number, so the prompt can never reach it. The arithmetic behind that
     // is in the README; here it only matters that it can't fire.
     const warning = q('[data-recall="nudge-warning"]');
     if (warning) {
+        // Max Response Length is named either way: with a large one it is the
+        // cause, and with 0 there is no number here to lower.
         const unreachable = threshold >= room;
-        warning.textContent = unreachable
-            ? 'This number is past the point where SillyTavern starts leaving messages out, so the '
-                + 'reminder would never come. Set a lower one.'
-            : '';
+        warning.textContent = !unreachable
+            ? ''
+            : isAutoThreshold()
+                ? 'Half your context size is past the point where SillyTavern starts leaving messages out, '
+                    + 'because Max Response Length takes up so much of the context. The reminder would never '
+                    + 'come. Set a number here, or lower Max Response Length in your preset.'
+                : 'This number is past the point where SillyTavern starts leaving messages out, so the '
+                    + 'reminder would never come. Set a lower one, or lower Max Response Length in your preset.';
         warning.toggleAttribute('hidden', !unreachable);
     }
 }

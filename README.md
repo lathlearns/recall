@@ -113,7 +113,9 @@ says which you're on. If a connection turns out to refuse streaming altogether, 
 reissues the request without it and you still get your summary.
 
 **Stop** cancels a summary running through a connection profile or a streamed main API. Nothing
-is saved — a half-written summary isn't a summary.
+is saved — a half-written summary isn't a summary. On the main API, SillyTavern's own Stop
+stops Recall's request too, and Recall says that's what happened; a rebuild batch stopped
+that way can be tried again.
 
 **Titles.** Recall asks the model to name each summary and puts that name in front of the
 timestamp: *The Long Road North — 2026-09-12 14:31*. The title line is removed before the
@@ -229,7 +231,7 @@ the settings, see the last row below.
 | Reference material | What to send alongside the chat — see below. |
 | Use its old summary until Recall has one | Stand in the built-in's `extra.memory` until Recall has a summary of its own. |
 | Also answer to `{{summary}}` | Only registers while the built-in Summarize is disabled. |
-| Remind me when the chat is getting long / Remind me at | The nudge. In tokens, against the same number as **Total Tokens** in the Prompt Manager. 0 is half your context size. ST stops the prompt at your context minus Max Response Length and leaves out old messages past that, so the panel warns if this number can never be reached. |
+| Remind me when the chat is getting long / Remind me at | The nudge. In tokens, against the same number as **Total Tokens** in the Prompt Manager. 0 is half your context size. ST stops the prompt at your context minus Max Response Length and leaves out old messages past that, so the panel warns if this number can never be reached, and says to lower it or Max Response Length. |
 | **Reserved for the summary** | Context held back so the summary has room to be written; the chat gets the rest. |
 | **Hard cutoff** | The generation limit sent to the API — thinking included, on most sources. |
 | Summary wrapper (Before / After) | Wraps the previous summary in the buffer. Match your preset. |

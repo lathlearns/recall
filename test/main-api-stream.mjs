@@ -164,6 +164,16 @@ const failureOf = async promise => promise.then(() => null, error => error);
     await st.eventSource.emit(st.event_types.GENERATION_STOPPED);
     check('ST stop: aborted', (await pendingSt)?.aborted, true);
     check('stop hook removed after a stop', st.eventSource.count('generation_stopped'), 0);
+
+    // What lets a press of ST's Stop be reported as one, on either path.
+    const quiet = connection.watchGenerationStopped();
+    check('watcher: not fired yet', quiet.fired, false);
+    quiet.dispose();
+    const watcher = connection.watchGenerationStopped();
+    await st.eventSource.emit(st.event_types.GENERATION_STOPPED);
+    check('watcher: fired on ST stop', watcher.fired, true);
+    watcher.dispose();
+    check('watcher: removed when disposed', st.eventSource.count('generation_stopped'), 0);
 }
 
 // 7. Which main APIs stream, and the session's memory of one that would not.

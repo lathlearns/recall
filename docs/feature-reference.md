@@ -823,7 +823,11 @@ choice:
 
 - **Summarize in batches** (the default) opens Rebuild, set to start after the active summary
   and end at the latest message: the same messages, split into requests that fit. Any one-off
-  guidance typed for the summary is carried into it.
+  guidance typed for the summary is carried into it. That end is for this one rebuild, so it
+  replaces the remembered one only if the user changes it. If the active summary is stale, a
+  rebuild cannot start after it; rather than falling back to the beginning and re-reading the
+  whole chat, it starts after the newest summary it can build on, and the dialog says so and
+  where it reads from. Only with none does it start at the beginning, and it says that too.
 - **Send anyway** sends the request as built, with the whole output budget. It is there because
   the context size the host was told is often smaller than what the model really takes. The
   dialog says what it risks: some providers trim an oversized request rather than refusing it,
@@ -864,6 +868,17 @@ built; if it was edited, deleted or moved, nothing is saved or hidden.
 not as the too-short response it would otherwise be mistaken for — and nothing is saved. A
 half-written summary is not a summary, and one stored as though it were would sit in permanent
 context looking complete.
+
+**The host's own Stop stops it too, and says so.** On the chat's own connection, the host's
+Stop aborts Recall's request as it aborts any raw generation — in non-blocking mode, stopping
+the user's own reply included. That is reported as what it was ("SillyTavern's Stop was
+pressed, which stops Recall's request too"), not as the request failing. It is not a
+cancellation: a rebuild's own Stop asks first and the host's does not, so a rebuild batch
+stopped this way fails and can be tried again, rather than ending the rebuild.
+
+**A failed request says which connection it was.** On the chat's own connection as through a
+profile, a provider error is shown with what Recall was connected to, then the provider's own
+words — whether the request failed outright or broke after text arrived.
 
 **Coverage is captured from the buffer as it was built**, never from the chat length afterwards.
 In non-blocking mode the user can send messages while a summary generates; reading the length
@@ -908,6 +923,8 @@ once the chat fills the context the host leaves the oldest messages out, so summ
 then keeps them. The one number there is what 0 works out to (half the context). With a large
 enough response length the room falls below the threshold, and the nudge can then never fire;
 the panel shows a warning saying so, in words, whenever the threshold is at or above the room.
+It names both ways out: a lower threshold, or a lower response length. When the threshold is
+derived (0), there is no number to lower, so it says to set one instead.
 
 When usage crosses the threshold:
 
@@ -921,9 +938,9 @@ When usage crosses the threshold:
    right after summarizing.
 
 The threshold is set in tokens. **0 means "derive it"**, at 50% of the context limit, which
-keeps the default meaningful across wildly different context sizes. The panel shows the
-resolved number and the room live, on SillyTavern: "tokens — auto: half your 128,000 context. ST starts leaving
-out old messages at 108,000 (128,000 − your 20,000 Max Response Length)."
+keeps the default meaningful across wildly different context sizes. The panel shows what 0
+works out to, live: "0 means half your context size (64,000)." It is worked out in one place,
+so that number and the one the nudge uses cannot drift apart.
 
 If there is no record of a prompt yet — a fresh chat, or a swipe before any generation — the
 check is skipped rather than falling back to an estimate.

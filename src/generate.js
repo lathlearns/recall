@@ -40,6 +40,7 @@ import {
     canStreamMainApi,
     streamViaMainApi,
     markMainApiStreamingBroken,
+    watchGenerationStopped,
 } from './connection.js';
 import { shouldRetryWithoutStreaming } from './stream.js';
 import { fitOutputLimit, roomRemedy } from './util.js';
@@ -647,9 +648,41 @@ async function runGeneration(buffer, systemPrompt, output) {
  * display feature and must never be why a summary fails — and the session then
  * goes straight there. One stopped, or one that broke after text arrived, is not
  * retried: see shouldRetryWithoutStreaming.
+ *
+ * Failures are reported as the profile path reports them, saying which
+ * connection it was — except a press of SillyTavern's own Stop, which aborts
+ * this request too and is said to be that. It is not a cancel: a rebuild ends on
+ * a cancel, and ST's Stop asks nothing first, so its batch fails and can be
+ * tried again instead.
  * @returns {Promise<{content: string, reasoning: string}>}
  */
 async function runViaMainApi(buffer, systemPrompt, budget) {
+    const stStop = watchGenerationStopped();
+    try {
+        return await requestViaMainApi(buffer, systemPrompt, budget);
+    } catch (error) {
+        if (error instanceof RecallError) {
+            throw error;
+        }
+        if (stStop.fired) {
+            throw new RecallError(
+                'SillyTavern\'s Stop was pressed, which stops Recall\'s request too. Nothing was saved.',
+                { kind: 'st-stopped' },
+            );
+        }
+        console.warn('[Recall] The main API request failed', error);
+        const detail = error?.cause?.message || error?.message || String(error);
+        throw new RecallError(`${describeTarget()}\n\nThe request failed: ${detail}`, { kind: 'main-failed' });
+    } finally {
+        stStop.dispose();
+    }
+}
+
+/**
+ * The main API, streamed where it can be (runViaMainApi).
+ * @returns {Promise<{content: string, reasoning: string}>}
+ */
+async function requestViaMainApi(buffer, systemPrompt, budget) {
     if (activeRun?.streaming) {
         // Your chat's custom stopping strings would otherwise apply to the
         // summary. See suppressStoppingStrings.
