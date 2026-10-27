@@ -111,3 +111,41 @@ export function fitOutputLimit(cutoff, room) {
     const limit = Math.max(1, Math.min(ceiling, Math.floor(Number(room) || 0)));
     return { limit, lowered: limit < ceiling };
 }
+
+/**
+ * Why a run's limit was fitted below the hard cutoff, and what gives it more
+ * room — which depends on what set the room.
+ *
+ * Summarize now reads everything since the last summary, so smaller requests
+ * are the way out. A redo reads a fixed set of messages, and the reserve cancels
+ * out of the room it leaves, so only a bigger window helps. A rebuild batch is
+ * cut to fit wherever it would take any of the reserve, so raising the reserve
+ * cuts batches smaller and leaves each one more room. Raising the hard cutoff helps
+ * none of them: it was not the limit.
+ *
+ * Said by the run as it starts (ui.js) and by a run that then thinks its whole
+ * room away (generate.js), so the two always agree.
+ *
+ * @param {'summarize'|'regenerate'|'rebuild'} kind
+ * @returns {{ why: string, fix: string }} Both clauses, without a full stop; `fix` starts lower-case.
+ */
+export function roomRemedy(kind) {
+    if (kind === 'rebuild') {
+        return {
+            why: 'This batch leaves less room for the summary than your hard cutoff allows',
+            fix: 'raise "Reserved for the summary" in Advanced so batches are cut smaller and leave more room, '
+                + 'or lower Reasoning Effort for this API',
+        };
+    }
+    if (kind === 'regenerate') {
+        return {
+            why: 'The messages this summary read leave less room for the summary than your hard cutoff allows',
+            fix: 'raise the context size if your model can take more, or lower Reasoning Effort for this API',
+        };
+    }
+    return {
+        why: 'This chat is long, so there is less room for the summary than your hard cutoff allows',
+        fix: 'summarize it in batches with the Rebuild button in the manager to give each request more room, '
+            + 'or lower Reasoning Effort for this API',
+    };
+}

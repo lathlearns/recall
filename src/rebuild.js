@@ -93,6 +93,17 @@ import { uuid } from './util.js';
  */
 let state = null;
 
+/**
+ * Pending while the user decides whether to stop, or null.
+ *
+ * A request already out cannot wait, but the next one can: without this, a batch
+ * that lands while the Stop dialog is open lets the next one start, and the
+ * answer then lands on a batch the user never saw — "after this batch" paying
+ * for one more, "now" cancelling one they did not mean.
+ * @type {Promise<void>|null}
+ */
+let held = null;
+
 /** @type {Set<(event: { type: string, message?: string }) => void>} */
 const listeners = new Set();
 
@@ -585,6 +596,19 @@ export async function measureManualBatch(which, end) {
     };
 }
 
+/**
+ * Passed last before a batch's request is sent: waits out an open Stop dialog,
+ * then refuses if a stop was asked for since the loop last looked — sizing the
+ * batch takes long enough to press Stop in, and nothing is out to land then.
+ * Thrown as a cancel, which runQueue ends the rebuild on.
+ */
+async function gate() {
+    await held;
+    if (!state || state.stopRequested) {
+        throw new RecallError('Rebuild stopped before the next batch was sent.', { kind: 'cancelled' });
+    }
+}
+
 async function runQueue() {
     while (state && state.queue.length) {
         if (state.stopRequested) {
@@ -624,6 +648,7 @@ async function runQueue() {
 
             const step = state.done.length + 1;
             const record = await summarizeBatch({
+                beforeSend: gate,
                 indices: state.plan.includesZero ? [0, ...state.queue[0]] : state.queue[0],
                 basis,
                 seed,
@@ -653,6 +678,13 @@ async function runQueue() {
             return;
         }
 
+        // A Stop dialog opened while the batch was out is answered about that
+        // batch, so the answer is waited for before anything else is decided —
+        // the last batch included, or "stop after this batch" would finish it.
+        await held;
+        if (!state) {
+            return;
+        }
         if (state.stopRequested) {
             return endRebuild(false);
         }
@@ -765,6 +797,24 @@ export async function stopRebuild({ now = false } = {}) {
         return;
     }
     await endRebuild(false);
+}
+
+/**
+ * Holds the rebuild where it is while the user decides whether to stop: a batch
+ * already out runs on, but none is sent and none is acted on until `release`.
+ * Release after acting on the answer, so nothing slips through in between.
+ * @returns {() => void} release
+ */
+export function holdRebuild() {
+    if (!state || held) {
+        return () => {};
+    }
+    let resolve;
+    held = new Promise(r => { resolve = r; });
+    return () => {
+        held = null;
+        resolve();
+    };
 }
 
 /** Whether a stop asked for mid-batch can still be taken back: its request was left to land. */

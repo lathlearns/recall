@@ -170,7 +170,8 @@ active and the chat is synced to it; stop partway and the finished batches are k
 nothing else changes — start a new rebuild after the last of them to carry on. Stop asks
 before it does anything. Mid-batch, **Stop after this batch** lets the batch finish and keeps
 it, and until it does, **Undo** takes the stop back; **Stop now** (where the connection can
-cancel) throws the batch away.
+cancel) throws the batch away. While you decide, the rebuild waits: nothing new is sent until
+you answer.
 The dialog
 estimates the tokens it will send: the messages and prompt are counted exactly, but the
 summary carried between batches is guessed from your current summary's size, so the real

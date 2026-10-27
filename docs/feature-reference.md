@@ -699,7 +699,11 @@ touching visibility until the end.
   stop can be **undone**, and the rebuild carries on as though Stop was never pressed. **Stop
   now** cancels the request and drops its batch, and is final; it is offered only where the
   request can be cancelled. A request that cannot be is never aborted: that would not stop it,
-  only throw away a batch already paid for.
+  only throw away a batch already paid for. Between batches, with nothing out, it offers only
+  Stop. While the question is open the rebuild waits: a batch already out lands and is kept,
+  but no other is sent and none is acted on until it is answered, so the answer always applies
+  to the batch the user saw. A stop asked for while the next batch is still being sized ends
+  the rebuild before that batch is sent.
 - **While a rebuild is in progress**, pauses included, Summarize now and Regenerate are refused
   and sending is blocked during each batch. Switching chats abandons it; its batches stay saved.
 - **The estimate** shown before starting counts the messages, prompt and reference material
@@ -768,12 +772,21 @@ buffer that would have taken any of it was already refused. The *setting* is nev
 only the one request — and a short chat still gets the whole output budget.
 
 When a request is fitted below the output budget, the user is told as the run starts, in words
-rather than figures: the chat is long, so the limit was lowered for this summary so the request
-isn't refused, and summarizing in batches is the way to more room. If that run then spends all
-of it thinking, the reasoning-overrun error says the chat set the limit, and points at batches
-rather than at raising a budget that wasn't the constraint. Neither suggests hiding messages:
-the oldest visible messages are the ones not summarised yet, and hiding them would leave them
-out of every summary.
+rather than figures, that the limit was lowered for this summary so the request isn't refused.
+If that run then spends all of it thinking, the reasoning-overrun error says the room set the
+limit, not the budget, and gives the same advice. What makes room depends on the run:
+
+- **Summarize now**: the chat is long, and summarizing in batches gives each request more room.
+- **Redo**: the messages it reads are fixed, and the reserve cancels out of the room they leave,
+  so only a bigger context size helps.
+- **Rebuild**: a batch is cut to fit wherever it would take any of the reserve, so raising the
+  reserve cuts batches smaller and leaves each one more room. A rebuild says nothing as each
+  batch starts — once one batch is cut to fit, most are, and a notice per batch is noise — and
+  leaves the advice to the error, where it matters.
+
+Each also offers lowering the reasoning effort. None suggests hiding messages: the oldest
+visible messages are the ones not summarised yet, and hiding them would leave them out of every
+summary.
 
 There is no standing warning in the settings for an output budget above the reserve. The
 defaults are set that way on purpose, and it only matters on the near-full request that the
@@ -819,8 +832,9 @@ choice:
   already offers that for an active summary whose covered messages are still visible.
 - **Cancel** does nothing.
 
-Redo and Rebuild report the same refusal as an error, since neither has a single request to
-send anyway.
+Redo and Rebuild report the refusal as an error instead, since neither has a single request to
+send anyway, and their messages were already chosen, so the error names the way to more room:
+raise the context size, or lower the reserve.
 
 ---
 

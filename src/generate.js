@@ -42,7 +42,7 @@ import {
     markMainApiStreamingBroken,
 } from './connection.js';
 import { shouldRetryWithoutStreaming } from './stream.js';
-import { fitOutputLimit } from './util.js';
+import { fitOutputLimit, roomRemedy } from './util.js';
 
 import {
     getSettings,
@@ -426,12 +426,28 @@ export function buildBuffer(steeringNote = '') {
 }
 
 /**
+ * What a refusal says, by caller. None suggests hiding messages: the oldest
+ * visible ones are the ones not summarised yet, and hiding them leaves them out
+ * of every summary for good.
+ *
+ * Summarize now's states the problem only; index.js offers the ways out that lose
+ * nothing. A redo and a rebuild batch read a set of messages already chosen, so
+ * what is left is more room for them.
+ */
+const SUMMARIZE_TOO_LONG = 'This chat is too long to summarize in one go. The messages since your last summary '
+    + "don't all fit in what the model can take at once.";
+const REGENERATE_TOO_LONG = "The messages this summary read don't all fit in one request now. Raise the context "
+    + 'size, or lower "Reserved for the summary" in Advanced, then try again.';
+const BATCH_TOO_LONG = 'This batch does not fit in a request on top of the summary so far. Raise the context size '
+    + 'or lower "Reserved for the summary" in Advanced, then try again.';
+
+/**
  * Checks the buffer against the available context room.
  *
  * Refuses rather than truncating: trimmed messages would be recorded as covered
- * without ever having been read. It says what the problem is and nothing more:
- * the ways out depend on where it was called from (see index.js for Summarize
- * now's).
+ * without ever having been read. The ways out depend on where it was called
+ * from, so the caller says what the refusal says (`tooLong`). Summarize now's
+ * says only what the problem is, because index.js turns it into a choice.
  *
  * Also fits the hard cutoff to the room the request leaves (fitOutputLimit), so
  * an API that checks input plus `max_tokens` against the window never refuses it.
@@ -443,10 +459,10 @@ export function buildBuffer(steeringNote = '') {
  *
  * @param {string} buffer
  * @param {string} systemPrompt
- * @param {{ force?: boolean }} [options]
+ * @param {{ force?: boolean, tooLong?: string }} [options]
  * @returns {Promise<{ used: number, available: number, output: { limit: number, lowered: boolean } }>}
  */
-async function enforceBudget(buffer, systemPrompt, { force = false } = {}) {
+async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SUMMARIZE_TOO_LONG } = {}) {
     // Sized against whichever connection will actually run the request — the main
     // API's context window is the wrong number when a profile is in use.
     const available = getPromptBudget()
@@ -468,15 +484,8 @@ async function enforceBudget(buffer, systemPrompt, { force = false } = {}) {
 
     // In words, not figures. The numbers are kept on the error, for the console
     // and for anyone who wants them, but "57,389 against 40,269" asks the reader
-    // to work out what it means. Nor does it suggest hiding messages: the oldest
-    // visible ones are the ones not summarised yet, and hiding them leaves them
-    // out of every summary for good. Summarize now offers the ways out that lose
-    // nothing (index.js); here there is only the problem to state.
-    const error = new RecallError(
-        'This chat is too long to summarize in one go. The messages since your last summary '
-        + "don't all fit in what the model can take at once.",
-        { kind: 'overflow' },
-    );
+    // to work out what it means.
+    const error = new RecallError(tooLong, { kind: 'overflow' });
     error.used = used;
     error.available = Math.max(0, available);
     throw error;
@@ -602,11 +611,11 @@ async function runGeneration(buffer, systemPrompt, output) {
         // could be compared against the number they are being told to raise.
         const spent = await countTokens(reasoning);
 
-        // Raising the cutoff does nothing when the chat, not the cutoff, set the
-        // limit — the remedy then is room, which smaller requests make.
-        const remedy = output.lowered
-            ? 'This chat left less room than your hard cutoff. Summarize it in batches with the Rebuild button in the manager '
-                + 'to give each request more room, or lower Reasoning Effort for this API'
+        // Raising the cutoff does nothing when the room, not the cutoff, set the
+        // limit — and what makes room depends on the run (roomRemedy).
+        const room = output.lowered ? roomRemedy(activeRun?.kind) : null;
+        const remedy = room
+            ? `${room.why}. ${room.fix[0].toUpperCase()}${room.fix.slice(1)}`
             : 'Raise "Hard cutoff" in Advanced, or lower Reasoning Effort for this API';
 
         throw new RecallError(
@@ -1155,7 +1164,7 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
     // be indistinguishable from one without, and the point of a sibling is that you
     // chose what changed between them.
     const buffer = buildBufferFrom(indices, basisContent, steeringNote);
-    const { output } = await enforceBudget(buffer, systemPrompt);
+    const { output } = await enforceBudget(buffer, systemPrompt, { tooLong: REGENERATE_TOO_LONG });
 
     const snapshot = captureContext();
 
@@ -1278,10 +1287,11 @@ export async function fitBatch(indices, basis, steeringNote = '') {
  *   step: number,
  *   steps: number,
  *   steeringNote?: string,
- * }} options
+ *   beforeSend?: () => Promise<void>,
+ * }} options `beforeSend` runs last before the request goes, and can refuse it by throwing.
  * @returns {Promise<import('./store.js').RecallSummary>}
  */
-export async function summarizeBatch({ indices, basis, seed = '', rebuildId, step, steps, steeringNote = '' }) {
+export async function summarizeBatch({ indices, basis, seed = '', rebuildId, step, steps, steeringNote = '', beforeSend }) {
     checkGuards({ fromRebuild: true });
 
     const settings = getSettings();
@@ -1299,7 +1309,8 @@ export async function summarizeBatch({ indices, basis, seed = '', rebuildId, ste
     const systemPrompt = substituteParams(assemblePrompt());
     const basisContent = basis?.content ?? seed;
     const buffer = buildBufferFrom(present, basisContent, steeringNote);
-    const { output } = await enforceBudget(buffer, systemPrompt);
+    const { output } = await enforceBudget(buffer, systemPrompt, { tooLong: BATCH_TOO_LONG });
+    await beforeSend?.();
 
     const coversTo = present[present.length - 1];
     const anchorHash = getStringHash(chat[coversTo]?.mes ?? '');

@@ -66,7 +66,7 @@ export class RecallError extends Error {
 }
 
 export const calls = [];
-export const control = { fits: Infinity, failOn: null, locked: false, run: null, during: null };
+export const control = { fits: Infinity, failOn: null, locked: false, run: null, during: null, before: null };
 
 export function setRebuildLock(locked) { control.locked = locked; }
 export function getActiveRun() { return control.run; }
@@ -79,7 +79,11 @@ export async function countMessageTokens(index) { return chat[index] ? 10 : 0; }
 export async function measureRequestOverhead() { return { system: 100, reference: 0, available: 10000 }; }
 export async function fitBatch(indices) { return Math.min(indices.length, control.fits); }
 
-export async function summarizeBatch({ indices, basis, seed, rebuildId, step, steps, steeringNote }) {
+export async function summarizeBatch({ indices, basis, seed, rebuildId, step, steps, steeringNote, beforeSend }) {
+    // \`before\` stands in for the user acting while the batch is being sized,
+    // with nothing sent yet; \`beforeSend\` is the rebuild's last say before it is.
+    await control.before?.(step);
+    await beforeSend?.();
     calls.push({ indices: [...indices], basis: basis?.id ?? null, basisContent: basis?.content ?? seed, step, steps, steeringNote });
     if (control.failOn === step) {
         control.failOn = null;
@@ -338,6 +342,65 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
 
     gen.control.run = null;
     gen.control.during = null;
+}
+
+// 8d. A stop asked for while the next batch is being sized: nothing is out, so
+//     nothing more is sent, and what was written is kept.
+{
+    const rebuildCount = () => store.getSummariesRaw().filter(s => s.rebuildId).length;
+
+    for (const now of [false, true]) {
+        reset();
+        const sent = gen.calls.length;
+        gen.control.before = step => step === 2 ? rebuild.stopRebuild({ now }) : undefined;
+        await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+        check(`stop while sizing (${now ? 'now' : 'after'}): ended, one batch kept`, [rebuild.getRebuild(), rebuildCount()], [null, 1]);
+        check(`stop while sizing (${now ? 'now' : 'after'}): batch 2 never sent`, gen.calls.length - sent, 1);
+    }
+    gen.control.before = null;
+}
+
+// 8e. Held while the Stop dialog is open: a batch already out lands and is kept,
+//     but the next is not sent, and the answer decides — the last batch included.
+{
+    const rebuildCount = () => store.getSummariesRaw().filter(s => s.rebuildId).length;
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+    let release = null;
+
+    reset();
+    let sent = gen.calls.length;
+    gen.control.during = step => { if (step === 2) release = rebuild.holdRebuild(); };
+    let running = rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    await settle();
+    check('held: batch 2 landed and kept', rebuildCount(), 2);
+    check('held: batch 3 not sent', gen.calls.length - sent, 2);
+    await rebuild.stopRebuild();
+    release();
+    await running;
+    check('held, then stop after this batch: ends with what landed', [rebuild.getRebuild(), rebuildCount(), gen.calls.length - sent], [null, 2, 2]);
+
+    reset();
+    sent = gen.calls.length;
+    running = rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    await settle();
+    release();
+    await running;
+    check('held, then keep rebuilding: runs to the end', [rebuild.getRebuild(), rebuildCount(), gen.calls.length - sent], [null, 3, 3]);
+
+    reset();
+    const activeBefore = store.getActiveSummary()?.id;
+    gen.control.during = step => { if (step === 3) release = rebuild.holdRebuild(); };
+    running = rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    await settle();
+    check('held on the last batch: not finished yet', rebuild.getRebuild()?.status, 'running');
+    await rebuild.stopRebuild();
+    release();
+    await running;
+    check('held on the last batch, then stop: stopped, not finished', [rebuild.getRebuild(), rebuildCount()], [null, 3]);
+    check('held on the last batch, then stop: active unchanged', store.getActiveSummary()?.id, activeBefore);
+
+    gen.control.during = null;
+    check('hold with no rebuild: a no-op', typeof rebuild.holdRebuild(), 'function');
 }
 
 // 9. A failed batch waits to be retried, and retrying carries on.

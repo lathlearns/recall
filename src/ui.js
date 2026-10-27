@@ -49,6 +49,7 @@ import {
     continueRebuild,
     redoRebuildBatch,
     stopRebuild,
+    holdRebuild,
     planRebuild,
     estimateRebuild,
     startableSummaries,
@@ -71,7 +72,7 @@ import { previewContextBlocks, previewPresetBlocks } from './context-blocks.js';
 import { isPresetAvailable } from './preset-blocks.js';
 import { paintTokens, createStreamingCount } from './tokens.js';
 import { splitTitle } from './title.js';
-import { escapeHtml, formatTimestamp, formatTokens, clampNumber } from './util.js';
+import { escapeHtml, formatTimestamp, formatTokens, clampNumber, roomRemedy } from './util.js';
 
 /**
  * Where ST finds the templates, relative to its extensions folder: the folder
@@ -645,11 +646,14 @@ function onRunStateChanged(run) {
 
         // Said as the run starts, because it is the explanation for whatever this
         // run produces — a summary cut short, or one that never gets written.
-        if (run.outputLowered) {
+        // Not for a rebuild: a batch cut to fit is always lowered, and once one
+        // is most are, so it would say the same thing every batch. The
+        // reasoning-overrun error says what to do if it matters.
+        if (run.outputLowered && run.kind !== 'rebuild') {
+            const room = roomRemedy(run.kind);
             toastr.info(
-                'This chat is long, so there is less room for the summary than your hard cutoff allows. '
-                + 'Recall has lowered the limit for this summary so the request isn\'t refused. If it comes '
-                + 'back empty or cut off, use the Rebuild button in the manager to summarize in batches instead.',
+                `${room.why}. Recall has lowered the limit for this summary so the request isn't refused. `
+                + `If it comes back empty or cut off, ${room.fix}.`,
                 'Recall',
                 { timeOut: 12000, extendedTimeOut: 6000 },
             );
@@ -800,7 +804,11 @@ function stoppingText() {
  *
  * Mid-batch the safe choice is the default — stop after this batch, which keeps
  * it and can be undone until it lands. Stopping now is offered beside it only
- * where the request can actually be cancelled, and is final.
+ * where the request can actually be cancelled, and is final. Between batches,
+ * with nothing out, there is only stopping.
+ *
+ * Asked with the rebuild held (requestStopRebuild), so what it describes is
+ * still true when it is answered.
  * @returns {Promise<'none'|'after'|'now'>}
  */
 async function confirmStopRebuild() {
@@ -812,7 +820,7 @@ async function confirmStopRebuild() {
         ? `The ${rebuild.done.length === 1 ? 'batch' : `${rebuild.done.length} batches`} written so far stay in the archive, but none becomes active.`
         : 'Nothing has been written yet.';
 
-    if (rebuild.status !== 'running') {
+    if (rebuild.status !== 'running' || !getActiveRun()) {
         const answer = await Popup.show.confirm('Stop the rebuild?',
             `${kept} This cannot be undone — carrying on later means starting a new rebuild after the last of them.`,
             { okButton: 'Stop', cancelButton: 'Keep rebuilding' });
@@ -878,9 +886,15 @@ export async function openRebuildForUnsummarised(note = '') {
 }
 
 async function requestStopRebuild() {
-    const how = await confirmStopRebuild();
-    if (how !== 'none') {
-        await stopRebuild({ now: how === 'now' });
+    // Held from the question to the stop, so no batch starts in between.
+    const release = holdRebuild();
+    try {
+        const how = await confirmStopRebuild();
+        if (how !== 'none') {
+            await stopRebuild({ now: how === 'now' });
+        }
+    } finally {
+        release();
     }
 }
 
@@ -2855,13 +2869,6 @@ function renderSettings() {
     renderPresetBlocks();
     renderScope();
     renderBlocks();
-}
-
-function setText(hook, value) {
-    const element = q(`[data-recall="${hook}"]`);
-    if (element) {
-        element.textContent = value;
-    }
 }
 
 function setChecked(hook, value) {
