@@ -1,7 +1,6 @@
 # Recall
 
-A summary extension for **SillyTavern 1.18.0+**, replacing the built-in Summarize. Its twin,
-[LumiRecall](https://github.com/lathlearns/LumiRecall), does the same for Lumiverse.
+A summary extension for **SillyTavern 1.18.0+**, replacing the built-in Summarize.
 
 > **Before you install:** Recall was written almost entirely by Claude, Anthropic's AI model,
 > for one person's private use. It's shared as-is in case it's useful to someone else, but
