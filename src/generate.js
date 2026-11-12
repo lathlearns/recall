@@ -495,7 +495,9 @@ async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SU
         // back for the reply — which is not always the reserve setting, see
         // getHeldBackTokens — plus whatever the buffer did not use of its share.
         const output = fitOutputLimit(getOutputCeiling(), available - used + getHeldBackTokens());
-        if (!force && outputRoomTooSmall(output, getSettings().minResponseTokens)) {
+        // Whatever `force` says: Send anyway overrides a request that does not
+        // fit, and this one does.
+        if (outputRoomTooSmall(output, getSettings().minResponseTokens)) {
             throw new RecallError(noRoom, { kind: 'no-room' });
         }
         return { used, available, over: false, output };

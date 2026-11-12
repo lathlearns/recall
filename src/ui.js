@@ -881,16 +881,10 @@ export async function confirmOverflow() {
  * @param {string} [note] Guidance already taken for the Summarize now.
  */
 export async function openRebuildForUnsummarised(note = '') {
-    const started = await openRebuildDialog({ unsummarised: true, note });
-
     // Summarize now took the note out of the manager's field before it was known
-    // not to fit. A rebuild that went ahead used it; one that was declined did
-    // not, so it goes back where it was typed — unless something has been typed
-    // there since.
-    const input = q('[data-recall="steering-note"]');
-    if (!started && note && input && !String(input.value ?? '').trim()) {
-        input.value = note;
-    }
+    // not to fit. It is not put back if the rebuild is declined, any more than
+    // after any other run that did not go ahead: see takeSteeringNote.
+    await openRebuildDialog({ unsummarised: true, note });
 }
 
 async function requestStopRebuild() {
@@ -1064,14 +1058,13 @@ const ZERO_BASED_NOTE = 'Message numbers count from 0, the way SillyTavern numbe
  *        it after the active summary and ends it at the latest message — what
  *        Summarize now would have read, had it fitted. `note` is guidance that
  *        was already taken from the manager's field for that Summarize now.
- * @returns {Promise<boolean>} Whether the user went ahead with a rebuild.
  */
 async function openRebuildDialog(preset = {}) {
     if (getRebuild() || getActiveRun()) {
-        return false;
+        return;
     }
     if (isDetailDirty() && !(await confirmDiscardDetail())) {
-        return false;
+        return;
     }
 
     const settings = getSettings();
@@ -1472,7 +1465,7 @@ async function openRebuildDialog(preset = {}) {
     const result = await popup.show();
 
     if (result !== POPUP_RESULT.AFFIRMATIVE) {
-        return false;
+        return;
     }
 
     const choices = read();
@@ -1497,7 +1490,6 @@ async function openRebuildDialog(preset = {}) {
     } catch (error) {
         reportError(error);
     }
-    return true;
 }
 
 function describeCoverage(summary) {

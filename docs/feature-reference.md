@@ -855,8 +855,9 @@ choice:
   was hidden only when auto-hide is on and was skipped.
 - **Cancel** does nothing.
 
-If Rebuild is opened this way and then declined, the one-off guidance goes back into the field
-it was typed in, unless something else has been typed there since.
+One-off guidance typed before Summarize now was pressed is carried into Send anyway, and into
+the Rebuild dialog's guidance field. Cancelling here, or declining that dialog, leaves it used
+up, like guidance given to any other run that did not go ahead.
 
 The dialog is only for someone who pressed a button. The slash command can be run by a script
 with nobody there to answer, so it reports the refusal instead and says the choice is offered
