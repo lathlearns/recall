@@ -1012,10 +1012,6 @@
     font-weight: bold;
 }
 
-.recall-setting-label {
-    color: var(--recall-muted);
-}
-
 .recall-setting > .menu_button {
     margin: 0;
     white-space: nowrap;
@@ -1031,10 +1027,6 @@
     width: 100%;
 }
 
-.recall-setting-pair label {
-    color: var(--recall-muted);
-}
-
 .recall-row {
     display: flex;
     align-items: center;
@@ -1043,7 +1035,9 @@
     margin: 0;
 }
 
-.recall-row-field label {
+.recall-row-field label,
+.recall-setting-label,
+.recall-setting-pair label {
     color: var(--recall-muted);
 }
 
@@ -1214,14 +1208,15 @@
     gap: 0.5em;
 }
 
-/* The nudge's unreachable-threshold warning. Accented rather than coloured text: it
+/* A line of caution that shows only while it applies: the nudge's unreachable
+   threshold, a profile or alias that is not working. Accented rather than coloured text: it
    is a caution about a combination, not an error, and the same left-border-in-quote
    colour already means exactly that on .recall-banner-warn.
 
    Deliberately sets no `display` — that is what defeated the `hidden` attribute
    across this whole panel once already, and this element is toggled. */
 
-.recall-budget-warning {
+.recall-caution {
     padding-left: 0.75em;
     border-left: 2px solid var(--SmartThemeQuoteColor);
 }

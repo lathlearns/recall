@@ -185,12 +185,7 @@ export async function streamViaMainApi(systemPrompt, buffer, { signal = null, on
     const controller = new AbortController();
     const forward = () => controller.abort(signal?.reason);
     signal?.addEventListener('abort', forward);
-    let stopped = false;
-    const stopHook = () => {
-        stopped = true;
-        controller.abort(new Error('Cancelled by stop event'));
-    };
-    eventSource.on(event_types.GENERATION_STOPPED, stopHook);
+    const stStop = watchGenerationStopped(() => controller.abort(new Error('Cancelled by stop event')));
 
     let started = false;
     try {
@@ -213,11 +208,11 @@ export async function streamViaMainApi(systemPrompt, buffer, { signal = null, on
         const failure = error instanceof Error ? error : new Error(String(error));
         failure.started = started;
         failure.aborted = controller.signal.aborted;
-        failure.stopped = stopped;
+        failure.stopped = stStop.fired;
         throw failure;
     } finally {
         signal?.removeEventListener('abort', forward);
-        eventSource.removeListener(event_types.GENERATION_STOPPED, stopHook);
+        stStop.dispose();
     }
 }
 
@@ -228,13 +223,16 @@ export async function streamViaMainApi(systemPrompt, buffer, { signal = null, on
  * say that is why, so the caller asks this, and a press of Stop is reported as
  * one rather than as the request failing. Watch only for as long as that one
  * call is out: a Stop from before it is about something else. The streamed
- * request needs no watcher — its error says so itself (`stopped`).
+ * request keeps its own, so its caller needs none — its error says so itself
+ * (`stopped`).
+ * @param {() => void} [onStop] Run as the Stop fires.
  * @returns {{ readonly fired: boolean, dispose: () => void }}
  */
-export function watchGenerationStopped() {
+export function watchGenerationStopped(onStop) {
     let fired = false;
     const hook = () => {
         fired = true;
+        onStop?.();
     };
     eventSource.on(event_types.GENERATION_STOPPED, hook);
     return {
@@ -386,12 +384,24 @@ export function getCountingModel() {
  */
 export function getPromptBudget() {
     const settings = getSettings();
+    const override = profileContextSize();
 
-    if (getActiveProfile() && Number(settings.profileContextSize) > 0) {
-        return Number(settings.profileContextSize) - Math.max(0, Number(settings.responseReserve) || 0);
+    if (override) {
+        return override - Math.max(0, Number(settings.responseReserve) || 0);
     }
 
     return getMaxPromptTokens(settings.responseReserve);
+}
+
+/**
+ * The context size given for the profile in use, or 0 where the main API's
+ * applies: no profile, or none given. The one place that decides which window a
+ * request is measured against.
+ * @returns {number}
+ */
+function profileContextSize() {
+    const size = Number(getSettings().profileContextSize);
+    return getActiveProfile() && size > 0 ? size : 0;
 }
 
 /**
@@ -406,10 +416,7 @@ export function getPromptBudget() {
  * @returns {number}
  */
 export function getHeldBackTokens() {
-    const settings = getSettings();
-    const window = getActiveProfile() && Number(settings.profileContextSize) > 0
-        ? Number(settings.profileContextSize)
-        : getMaxContextTokens();
+    const window = profileContextSize() || getMaxContextTokens();
 
     return Math.max(0, (Number(window) || 0) - getPromptBudget());
 }

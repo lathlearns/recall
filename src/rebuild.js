@@ -40,7 +40,7 @@ import {
 import { syncToSummary } from './coverage.js';
 import { getFallbackSummary } from './legacy.js';
 import { countTokens } from './tokens.js';
-import { uuid } from './util.js';
+import { uuid, MAKE_ROOM } from './util.js';
 
 /**
  * @typedef {{ kind: 'beginning' } | { kind: 'summary', id: string } | { kind: 'message', index: number }} RebuildStart
@@ -631,8 +631,7 @@ async function runQueue() {
             const minimum = state.plan.includesZero ? 2 : 1;
             if (fits < Math.min(minimum, withZero.length)) {
                 throw new RecallError(
-                    `Message ${batch[0]} does not fit in a request on top of the summary so far. `
-                    + 'Raise the context size or lower "Reserved for the summary" in Advanced, then try again.',
+                    `Message ${batch[0]} does not fit in a request on top of the summary so far. ${MAKE_ROOM}`,
                     { kind: 'overflow' },
                 );
             }

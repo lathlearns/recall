@@ -62,19 +62,17 @@ async function handleSummarize(steeringNote = '', { force = false, interactive =
         // Only asked of someone who pressed a button. `/recall` can be run by a
         // script with nobody there to answer, and a dialog would hold it up for
         // good — so it gets the refusal, and where the choice is offered.
-        if (error instanceof RecallError && error.kind === 'overflow' && !interactive) {
-            console.info(`[Recall] Too much to summarize: ~${error.used} tokens against ${error.available}.`);
-            toastr.warning(
-                `${error.message} Press Summarize now in Recall to summarize in batches or send it anyway.`,
-                'Recall',
-                { timeOut: 12000, extendedTimeOut: 6000 },
-            );
-            refreshDrawer();
-            return null;
-        }
-        if (error instanceof RecallError && error.kind === 'overflow' && !force) {
+        if (error instanceof RecallError && error.kind === 'overflow' && !(interactive && force)) {
             console.info(`[Recall] Too much to summarize: ~${error.used} tokens against ${error.available}.`);
             refreshDrawer();
+            if (!interactive) {
+                toastr.warning(
+                    `${error.message} Press Summarize now in Recall to summarize in batches or send it anyway.`,
+                    'Recall',
+                    { timeOut: 12000, extendedTimeOut: 6000 },
+                );
+                return null;
+            }
             const choice = await confirmOverflow();
             if (choice === 'anyway') {
                 return handleSummarize(steeringNote, { force: true });

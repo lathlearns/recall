@@ -125,7 +125,8 @@ export async function readPromptUsage(mesId) {
  * the user is racing — and with a large enough response length it sits below a
  * threshold derived from the whole context, which then never fires.
  *
- * @returns {Promise<{ usage: number, limit: number, room: number, threshold: number, crossed: boolean, fired: boolean }|null>}
+ * @returns {Promise<{ fired: boolean }|null>} Null when there was nothing to measure. The figures are
+ *          kept for the drawer (getLastUsage).
  */
 export async function evaluateNudge(mesId) {
     const settings = getSettings();
@@ -144,15 +145,15 @@ export async function evaluateNudge(mesId) {
 
     if (!crossed) {
         armed = true;
-        return { usage, limit, room, threshold, crossed, fired: false };
+        return { fired: false };
     }
 
     if (!settings.nudgeEnabled || !armed) {
-        return { usage, limit, room, threshold, crossed, fired: false };
+        return { fired: false };
     }
 
     // One toast per crossing, not one per message — otherwise the user gets a
     // toast every turn for the twenty messages spent hunting for a scene break.
     armed = false;
-    return { usage, limit, room, threshold, crossed, fired: true };
+    return { fired: true };
 }

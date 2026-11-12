@@ -39,7 +39,7 @@ import {
     persist,
 } from './store.js';
 import { checkCoverage, syncToSummary, transferHideRecord } from './coverage.js';
-import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, getFinishedRun, dismissFinishedRun, onRunChange, cancelRun, getLastReasoning } from './generate.js';
+import { summarizeNow, regenerateSummary, previewRequest, resolveSourceIndices, RecallError, getActiveRun, getFinishedRun, dismissFinishedRun, onRunChange, cancelRun, getLastReasoning, SUMMARIZE_TOO_LONG_TITLE, SUMMARIZE_TOO_LONG_DETAIL } from './generate.js';
 import { getLastUsage, getThresholdTokens, getAutoThresholdTokens, isAutoThreshold } from './nudge.js';
 import {
     getRebuild,
@@ -857,8 +857,8 @@ async function confirmStopRebuild() {
  */
 export async function confirmOverflow() {
     const answer = await Popup.show.confirm(
-        'This chat is too long to summarize in one go',
-        '<p>The messages since your last summary don\'t all fit in what the model can take at once.</p>'
+        SUMMARIZE_TOO_LONG_TITLE,
+        `<p>${escapeHtml(SUMMARIZE_TOO_LONG_DETAIL)}</p>`
         + '<p><b>Summarize in batches</b> works through them a part at a time, so nothing is left out.</p>'
         + '<p><b>Send anyway</b> sends them all at once. That works if your model can take more than the '
         + 'context size SillyTavern is set to. If it can\'t, the request fails, or the provider quietly cuts '
@@ -1568,6 +1568,20 @@ async function guardUnsaved() {
         'Discard unsaved changes?',
         `You have unsaved changes to ${what.join(' and ')}. Closing now loses them.`,
     );
+}
+
+/**
+ * A line that is only there when it has something to say: sets its text, and
+ * hides it when that is empty.
+ * @param {string} hook
+ * @param {string} text
+ */
+function setStatus(hook, text) {
+    const line = q(`[data-recall="${hook}"]`);
+    if (line) {
+        line.textContent = text;
+        line.toggleAttribute('hidden', !text);
+    }
 }
 
 function q(selector) {
@@ -2698,19 +2712,13 @@ function bindCheckbox(hook, key, after) {
  * setting took effect.
  */
 function renderAliasStatus() {
-    const status = q('[data-recall="alias-status"]');
-    if (!status) {
-        return;
-    }
-
     // Said only when ticked and not working: the built-in Summarize keeps the
     // name while it is enabled, and gets it back on reload if re-enabled.
     const blocked = getSettings().summaryAlias && !isSummarizeDisabled();
-    status.textContent = blocked
+    setStatus('alias-status', blocked
         ? 'Not working yet: the built-in Summarize is turned on, so it keeps {{summary}}. Turn it off in '
             + 'Extensions and reload SillyTavern.'
-        : '';
-    status.toggleAttribute('hidden', !blocked);
+        : '');
 }
 
 function isSummarizeDisabled() {
@@ -2768,13 +2776,8 @@ function renderProfile() {
     }
 
     // Only what needs attention: the dropdown already says where requests go.
-    for (const [hook, text] of [['profile-status', describeTargetProblem()], ['streaming-status', describeStreaming()]]) {
-        const line = q(`[data-recall="${hook}"]`);
-        if (line) {
-            line.textContent = text;
-            line.toggleAttribute('hidden', !text);
-        }
-    }
+    setStatus('profile-status', describeTargetProblem());
+    setStatus('streaming-status', describeStreaming());
 }
 
 /**
@@ -2947,21 +2950,17 @@ function renderNudgeHint() {
     // A Max Response Length so large that the room left for the prompt is below
     // the number, so the prompt can never reach it. The arithmetic behind that
     // is in the README; here it only matters that it can't fire.
-    const warning = q('[data-recall="nudge-warning"]');
-    if (warning) {
-        // Max Response Length is named either way: with a large one it is the
-        // cause, and with 0 there is no number here to lower.
-        const unreachable = threshold >= room;
-        warning.textContent = !unreachable
-            ? ''
-            : isAutoThreshold()
-                ? 'Half your context size is past the point where SillyTavern starts leaving messages out, '
-                    + 'because Max Response Length takes up so much of the context. The reminder would never '
-                    + 'come. Set a number here, or lower Max Response Length in your preset.'
-                : 'This number is past the point where SillyTavern starts leaving messages out, so the '
-                    + 'reminder would never come. Set a lower one, or lower Max Response Length in your preset.';
-        warning.toggleAttribute('hidden', !unreachable);
-    }
+    //
+    // Max Response Length is named either way: with a large one it is the
+    // cause, and with 0 there is no number here to lower.
+    setStatus('nudge-warning', !(threshold >= room)
+        ? ''
+        : isAutoThreshold()
+            ? 'Half your context size is past the point where SillyTavern starts leaving messages out, '
+                + 'because Max Response Length takes up so much of the context. The reminder would never '
+                + 'come. Set a number here, or lower Max Response Length in your preset.'
+            : 'This number is past the point where SillyTavern starts leaving messages out, so the '
+                + 'reminder would never come. Set a lower one, or lower Max Response Length in your preset.');
 }
 
 function renderScope() {

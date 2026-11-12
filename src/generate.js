@@ -45,7 +45,7 @@ import {
     getOutputCeiling,
 } from './connection.js';
 import { shouldRetryWithoutStreaming } from './stream.js';
-import { fitOutputLimit, outputRoomTooSmall, roomRemedy } from './util.js';
+import { fitOutputLimit, outputRoomTooSmall, roomRemedy, MAKE_ROOM } from './util.js';
 
 import {
     getSettings,
@@ -185,6 +185,7 @@ function notifyRunChange() {
 /**
  * @param {'summarize'|'regenerate'|'rebuild'} kind
  * @param {{ step?: number, steps?: number }} [progress] Which batch of a rebuild this is.
+ * @param {{ limit: number, lowered: boolean }} [output] The fitted output limit (enforceBudget).
  */
 function beginRun(kind, progress = {}, output = { limit: 0, lowered: false }) {
     inFlight = true;
@@ -208,8 +209,8 @@ function beginRun(kind, progress = {}, output = { limit: 0, lowered: false }) {
         reasoning: '',
         controller: new AbortController(),
         chatId: getCurrentChatId(),
-        // The UI says so when this is below the hard cutoff (ui.js onRunStateChanged).
-        outputLimit: output.limit,
+        // The limit was fitted below the hard cutoff. The UI says so as the run
+        // starts (ui.js onRunStateChanged).
         outputLowered: output.lowered,
     };
     finishedRun = null;
@@ -437,12 +438,15 @@ export function buildBuffer(steeringNote = '') {
  * nothing. A redo and a rebuild batch read a set of messages already chosen, so
  * what is left is more room for them.
  */
-const SUMMARIZE_TOO_LONG = 'This chat is too long to summarize in one go. The messages since your last summary '
-    + "don't all fit in what the model can take at once.";
+// In two parts because the dialog index.js offers shows them as title and text
+// (ui.js confirmOverflow).
+export const SUMMARIZE_TOO_LONG_TITLE = 'This chat is too long to summarize in one go';
+export const SUMMARIZE_TOO_LONG_DETAIL = "The messages since your last summary don't all fit in what the model can "
+    + 'take at once.';
+const SUMMARIZE_TOO_LONG = `${SUMMARIZE_TOO_LONG_TITLE}. ${SUMMARIZE_TOO_LONG_DETAIL}`;
 const REGENERATE_TOO_LONG = "The messages this summary read don't all fit in one request now. Raise the context "
     + 'size, or lower "Reserved for the summary" in Advanced, then try again.';
-const BATCH_TOO_LONG = 'This batch does not fit in a request on top of the summary so far. Raise the context size '
-    + 'or lower "Reserved for the summary" in Advanced, then try again.';
+const BATCH_TOO_LONG = `This batch does not fit in a request on top of the summary so far. ${MAKE_ROOM}`;
 // The opposite remedy from the three above, so never said in their place.
 const NO_ROOM_TO_WRITE = 'The request fits, but leaves almost no room for the summary to be written. Raise '
     + '"Reserved for the summary" in Advanced, then try again.';
@@ -468,15 +472,15 @@ const REGENERATE_NO_ROOM = 'The messages this summary read fit in one request, b
  * request then goes as built, with the whole hard cutoff — fitting it to a room
  * that by Recall's count is negative would ask for one token.
  *
- * @param {string} buffer
- * @param {string} systemPrompt
- * @param {{ force?: boolean, tooLong?: string, noRoom?: string }} [options]
  * A request that fits but leaves less room than the shortest summary Recall
  * accepts is refused too (`no-room`): its answer would be thrown away as too
  * short. That only happens where nothing was held back for the reply — the
  * reserve at 0 on a connection whose context size Recall was given. What gives
  * it room depends on the caller too (`noRoom`).
  *
+ * @param {string} buffer
+ * @param {string} systemPrompt
+ * @param {{ force?: boolean, tooLong?: string, noRoom?: string }} [options]
  * @returns {Promise<{ used: number, available: number, over: boolean, output: { limit: number, lowered: boolean } }>}
  *          `over` when the request was sent although it did not fit (`force`).
  */
@@ -489,8 +493,7 @@ async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SU
 
     const used = await countTokens(buffer);
 
-    const fits = used <= available;
-    if (fits) {
+    if (used <= available) {
         // What the window has left once this request is in it: what was held
         // back for the reply — which is not always the reserve setting, see
         // getHeldBackTokens — plus whatever the buffer did not use of its share.
@@ -504,7 +507,7 @@ async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SU
     }
 
     if (force) {
-        return { used, available, over: !fits, output: fitOutputLimit(getOutputCeiling(), Infinity) };
+        return { used, available, over: true, output: fitOutputLimit(getOutputCeiling(), Infinity) };
     }
 
     // In words, not figures. The numbers are kept on the error, for the console
@@ -688,20 +691,19 @@ async function runViaMainApi(buffer, systemPrompt, budget) {
             throw error;
         }
         console.warn('[Recall] The main API request failed', error);
-        throw requestFailed(error, 'main-failed');
+        throw requestFailed(failureDetail(error), 'main-failed');
     }
 }
 
 /**
  * A request that failed, said the same way on every path: which connection it
  * was, then what it answered.
- * @param {unknown} error
+ * @param {string} detail What it answered (failureDetail).
  * @param {string} kind
  * @param {string} [hint] What to do about it, where the cause is known.
  * @returns {RecallError}
  */
-function requestFailed(error, kind, hint = '') {
-    const detail = failureDetail(error);
+function requestFailed(detail, kind, hint = '') {
     return new RecallError(`${describeTarget()}\n\nThe request failed: ${detail}${hint}`, { kind });
 }
 
@@ -729,51 +731,51 @@ function stoppedBySt() {
  * @returns {Promise<{content: string, reasoning: string}>}
  */
 async function requestViaMainApi(buffer, systemPrompt, budget) {
-    if (activeRun?.streaming) {
-        // Your chat's custom stopping strings would otherwise apply to the
-        // summary. See suppressStoppingStrings.
-        const restore = suppressStoppingStrings();
-        let streamError;
-        try {
-            const { content, reasoning } = await streamViaMainApi(systemPrompt, buffer, {
-                signal: activeRun.controller.signal,
-                onProgress: makeProgressHandler(),
-                maxTokens: budget,
-            });
-            return {
-                content: removeReasoningFromString(String(content ?? '')).trim(),
-                reasoning: String(reasoning ?? ''),
-            };
-        } catch (error) {
-            if (wasCancelled()) {
-                return { content: '', reasoning: '' };
-            }
-            if (error?.stopped) {
-                throw stoppedBySt();
-            }
-            if (!shouldRetryWithoutStreaming({ aborted: !!error?.aborted, started: !!error?.started })) {
-                throw error;
-            }
-            streamError = error;
-        } finally {
-            restore();
-        }
-
-        console.warn('[Recall] The streamed main-API request failed; retrying through generateRawData.', streamError);
-        // Nothing more comes through the live pane, and the plain path takes no
-        // signal, so Stop is withdrawn rather than left to do nothing.
-        if (activeRun) {
-            activeRun.streaming = false;
-            activeRun.streamFailed = true;
-            activeRun.cancellable = false;
-            notifyRunChange();
-        }
-        const result = await runRawMainApi(buffer, systemPrompt, budget);
-        markMainApiStreamingBroken(streamError);
-        return result;
+    if (!activeRun?.streaming) {
+        return runRawMainApi(buffer, systemPrompt, budget);
     }
 
-    return runRawMainApi(buffer, systemPrompt, budget);
+    // Your chat's custom stopping strings would otherwise apply to the
+    // summary. See suppressStoppingStrings.
+    const restore = suppressStoppingStrings();
+    let streamError;
+    try {
+        const { content, reasoning } = await streamViaMainApi(systemPrompt, buffer, {
+            signal: activeRun.controller.signal,
+            onProgress: makeProgressHandler(),
+            maxTokens: budget,
+        });
+        return {
+            content: removeReasoningFromString(String(content ?? '')).trim(),
+            reasoning: String(reasoning ?? ''),
+        };
+    } catch (error) {
+        if (wasCancelled()) {
+            return { content: '', reasoning: '' };
+        }
+        if (error?.stopped) {
+            throw stoppedBySt();
+        }
+        if (!shouldRetryWithoutStreaming({ aborted: !!error?.aborted, started: !!error?.started })) {
+            throw error;
+        }
+        streamError = error;
+    } finally {
+        restore();
+    }
+
+    console.warn('[Recall] The streamed main-API request failed; retrying through generateRawData.', streamError);
+    // Nothing more comes through the live pane, and the plain path takes no
+    // signal, so Stop is withdrawn rather than left to do nothing.
+    if (activeRun) {
+        activeRun.streaming = false;
+        activeRun.streamFailed = true;
+        activeRun.cancellable = false;
+        notifyRunChange();
+    }
+    const result = await runRawMainApi(buffer, systemPrompt, budget);
+    markMainApiStreamingBroken(streamError);
+    return result;
 }
 
 /**
@@ -877,7 +879,7 @@ async function runViaProfile(buffer, systemPrompt, budget) {
             + 'open Connection Manager, reselect the key for this profile, and save it.'
             : '';
 
-        throw requestFailed(error, 'profile-failed', hint);
+        throw requestFailed(detail, 'profile-failed', hint);
     }
 }
 

@@ -153,6 +153,12 @@ export function roomRemedy(kind) {
 }
 
 /**
+ * What makes room for a set of messages that is already chosen — a rebuild
+ * batch — and does not fit: a bigger window, or less of it held back.
+ */
+export const MAKE_ROOM = 'Raise the context size or lower "Reserved for the summary" in Advanced, then try again.';
+
+/**
  * Whether a fitted limit leaves too little room to write a summary in at all.
  *
  * A response shorter than the minimum is thrown away as a failed generation, so
