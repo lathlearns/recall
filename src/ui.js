@@ -901,6 +901,9 @@ async function requestStopRebuild() {
         if (how === 'none') {
             return;
         }
+        // Read before the stop ends the rebuild: a batch that failed while the
+        // question was open left nothing to keep, and must not be said to have.
+        const failed = getRebuild()?.status === 'failed';
         const { cancelled } = await stopRebuild({ now: how === 'now' });
         // "Stop now" was promised to throw the batch away. Where it could not —
         // the request finished, or fell back to one that cannot be cancelled,
@@ -910,7 +913,9 @@ async function requestStopRebuild() {
             toastr.info(
                 getActiveRun()
                     ? 'This batch can no longer be cancelled, so the rebuild stops once it lands and the batch is kept.'
-                    : 'The batch finished before you answered, so it was kept. The rebuild has stopped.',
+                    : failed
+                        ? 'The batch failed before you answered, so nothing was saved for it. The rebuild has stopped.'
+                        : 'The batch finished before you answered, so it was kept. The rebuild has stopped.',
                 'Recall',
                 { timeOut: 10000, extendedTimeOut: 5000 },
             );

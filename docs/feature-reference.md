@@ -780,7 +780,12 @@ connection, and that room is there to be written in. Where nothing at all was he
 reserve at 0 on a connection whose context size Recall was given — a full buffer leaves next
 to nothing. A request whose fitted limit is below the shortest response accepted as a summary
 (section 13) cannot succeed, so it is refused before it is sent, and the refusal says to raise
-the reserve. A limit the user set that low themselves is left alone.
+the reserve — except for a redo, whose messages are fixed: the reserve cancels out of the room
+they leave, so its refusal says to raise the context size. A limit the user set that low
+themselves is left alone.
+
+With the output budget at 0 no limit is sent on the chat's own connection. A connection
+profile's request has to carry one, so it is sent with 1,024, fitted and refused the same way.
 
 When a request is fitted below the output budget, the user is told as the run starts, in words
 rather than figures, that the limit was lowered for this summary so the request isn't refused.

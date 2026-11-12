@@ -42,6 +42,7 @@ import {
     markMainApiStreamingBroken,
     watchGenerationStopped,
     getHeldBackTokens,
+    getOutputCeiling,
 } from './connection.js';
 import { shouldRetryWithoutStreaming } from './stream.js';
 import { fitOutputLimit, outputRoomTooSmall, roomRemedy } from './util.js';
@@ -445,6 +446,11 @@ const BATCH_TOO_LONG = 'This batch does not fit in a request on top of the summa
 // The opposite remedy from the three above, so never said in their place.
 const NO_ROOM_TO_WRITE = 'The request fits, but leaves almost no room for the summary to be written. Raise '
     + '"Reserved for the summary" in Advanced, then try again.';
+// Not the reserve, for a redo: its messages are fixed, so the room they leave is
+// the same whatever is reserved, and raising it only gets REGENERATE_TOO_LONG,
+// which says to lower it again.
+const REGENERATE_NO_ROOM = 'The messages this summary read fit in one request, but leave almost no room for the '
+    + 'summary to be written. Raise the context size if your model can take more, then try again.';
 
 /**
  * Checks the buffer against the available context room.
@@ -464,16 +470,17 @@ const NO_ROOM_TO_WRITE = 'The request fits, but leaves almost no room for the su
  *
  * @param {string} buffer
  * @param {string} systemPrompt
- * @param {{ force?: boolean, tooLong?: string }} [options]
+ * @param {{ force?: boolean, tooLong?: string, noRoom?: string }} [options]
  * A request that fits but leaves less room than the shortest summary Recall
  * accepts is refused too (`no-room`): its answer would be thrown away as too
  * short. That only happens where nothing was held back for the reply — the
- * reserve at 0 on a connection whose context size Recall was given.
+ * reserve at 0 on a connection whose context size Recall was given. What gives
+ * it room depends on the caller too (`noRoom`).
  *
  * @returns {Promise<{ used: number, available: number, over: boolean, output: { limit: number, lowered: boolean } }>}
  *          `over` when the request was sent although it did not fit (`force`).
  */
-async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SUMMARIZE_TOO_LONG } = {}) {
+async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SUMMARIZE_TOO_LONG, noRoom = NO_ROOM_TO_WRITE } = {}) {
     // Sized against whichever connection will actually run the request — the main
     // API's context window is the wrong number when a profile is in use.
     const available = getPromptBudget()
@@ -487,15 +494,15 @@ async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SU
         // What the window has left once this request is in it: what was held
         // back for the reply — which is not always the reserve setting, see
         // getHeldBackTokens — plus whatever the buffer did not use of its share.
-        const output = fitOutputLimit(getSettings().outputBudget, available - used + getHeldBackTokens());
+        const output = fitOutputLimit(getOutputCeiling(), available - used + getHeldBackTokens());
         if (!force && outputRoomTooSmall(output, getSettings().minResponseTokens)) {
-            throw new RecallError(NO_ROOM_TO_WRITE, { kind: 'no-room' });
+            throw new RecallError(noRoom, { kind: 'no-room' });
         }
         return { used, available, over: false, output };
     }
 
     if (force) {
-        return { used, available, over: !fits, output: fitOutputLimit(getSettings().outputBudget, Infinity) };
+        return { used, available, over: !fits, output: fitOutputLimit(getOutputCeiling(), Infinity) };
     }
 
     // In words, not figures. The numbers are kept on the error, for the console
@@ -1250,7 +1257,10 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
     // be indistinguishable from one without, and the point of a sibling is that you
     // chose what changed between them.
     const buffer = buildBufferFrom(indices, basisContent, steeringNote);
-    const { output } = await enforceBudget(buffer, systemPrompt, { tooLong: REGENERATE_TOO_LONG });
+    const { output } = await enforceBudget(buffer, systemPrompt, {
+        tooLong: REGENERATE_TOO_LONG,
+        noRoom: REGENERATE_NO_ROOM,
+    });
 
     const snapshot = captureContext();
 

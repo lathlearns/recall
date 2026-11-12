@@ -415,6 +415,27 @@ export function getHeldBackTokens() {
 }
 
 /**
+ * The limit a profile request is sent with when the hard cutoff is 0. The
+ * request service has to be given one, so "no cutoff" cannot mean none there.
+ */
+const PROFILE_DEFAULT_OUTPUT = 1024;
+
+/**
+ * The most a request may ask the model to write, before it is fitted to the room
+ * the request leaves (generate.js enforceBudget): the hard cutoff, or with none
+ * set, what a profile request is sent with anyway. 0 means no limit is sent,
+ * which only the main API can do.
+ *
+ * One place, so the stand-in limit is fitted and refused like a cutoff the user
+ * set — otherwise it is the one limit that can ask for more than the window has.
+ * @returns {number}
+ */
+export function getOutputCeiling() {
+    const cutoff = Math.max(0, Number(getSettings().outputBudget) || 0);
+    return cutoff || (getActiveProfile() ? PROFILE_DEFAULT_OUTPUT : 0);
+}
+
+/**
  * Whether the user has any custom stopping strings at all.
  *
  * Read rather than assumed so that a user who has none sends exactly the payload
@@ -590,7 +611,7 @@ export async function generateViaProfile(systemPrompt, buffer, { signal = null, 
         return ConnectionManagerRequestService.sendRequest(
             profile.id,
             messages,
-            Math.max(1, Number(maxTokens) || Number(settings.outputBudget) || 1024),
+            Math.max(1, Number(maxTokens) || getOutputCeiling()),
             {
                 stream,
                 signal,
