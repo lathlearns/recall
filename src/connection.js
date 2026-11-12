@@ -12,7 +12,7 @@
  * which stays the default and the fallback.
  */
 
-import { getMaxPromptTokens, main_api, eventSource, event_types, createRawPrompt } from '../../../../../script.js';
+import { getMaxPromptTokens, getMaxContextTokens, main_api, eventSource, event_types, createRawPrompt } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { getCustomStoppingStrings } from '../../../../power-user.js';
 import { secret_state } from '../../../../secrets.js';
@@ -178,13 +178,18 @@ export function markMainApiStreamingBroken(error) {
  * @param {string} buffer
  * @param {{ signal?: AbortSignal|null, onProgress?: ((progress: {content: string, reasoning: string}) => void)|null, maxTokens?: number }} [options]
  * @returns {Promise<{ content: string, reasoning: string }>} On failure, the error carries
- *          `started` (text had arrived) and `aborted` (it was stopped, by Recall or by ST).
+ *          `started` (text had arrived), `aborted` (it was stopped, by Recall or by ST) and
+ *          `stopped` (it was ST's own Stop that stopped it).
  */
 export async function streamViaMainApi(systemPrompt, buffer, { signal = null, onProgress = null, maxTokens = 0 } = {}) {
     const controller = new AbortController();
     const forward = () => controller.abort(signal?.reason);
     signal?.addEventListener('abort', forward);
-    const stopHook = () => controller.abort(new Error('Cancelled by stop event'));
+    let stopped = false;
+    const stopHook = () => {
+        stopped = true;
+        controller.abort(new Error('Cancelled by stop event'));
+    };
     eventSource.on(event_types.GENERATION_STOPPED, stopHook);
 
     let started = false;
@@ -208,6 +213,7 @@ export async function streamViaMainApi(systemPrompt, buffer, { signal = null, on
         const failure = error instanceof Error ? error : new Error(String(error));
         failure.started = started;
         failure.aborted = controller.signal.aborted;
+        failure.stopped = stopped;
         throw failure;
     } finally {
         signal?.removeEventListener('abort', forward);
@@ -218,10 +224,11 @@ export async function streamViaMainApi(systemPrompt, buffer, { signal = null, on
 /**
  * Notes whether SillyTavern's own Stop fired, from now until `dispose`.
  *
- * ST's Stop aborts a main-API summary: the streamed request through the hook in
- * streamViaMainApi, `generateRawData` by ST's own doing. Neither error says that
- * is why, so the caller asks this, and a press of Stop is reported as one rather
- * than as the request failing.
+ * ST's Stop aborts `generateRawData` by ST's own doing, and the error does not
+ * say that is why, so the caller asks this, and a press of Stop is reported as
+ * one rather than as the request failing. Watch only for as long as that one
+ * call is out: a Stop from before it is about something else. The streamed
+ * request needs no watcher — its error says so itself (`stopped`).
  * @returns {{ readonly fired: boolean, dispose: () => void }}
  */
 export function watchGenerationStopped() {
@@ -385,6 +392,26 @@ export function getPromptBudget() {
     }
 
     return getMaxPromptTokens(settings.responseReserve);
+}
+
+/**
+ * What the window really has set aside beyond the prompt budget: the context
+ * size of whichever connection runs the request, less getPromptBudget().
+ *
+ * Not always the reserve setting. With the reserve at 0 on the main API,
+ * SillyTavern falls back to the preset's Max Response Length and holds that
+ * back instead, so the setting says 0 while the window has thousands free.
+ * Asking what was actually held back is what keeps the fitted output limit
+ * (generate.js enforceBudget) honest either way.
+ * @returns {number}
+ */
+export function getHeldBackTokens() {
+    const settings = getSettings();
+    const window = getActiveProfile() && Number(settings.profileContextSize) > 0
+        ? Number(settings.profileContextSize)
+        : getMaxContextTokens();
+
+    return Math.max(0, (Number(window) || 0) - getPromptBudget());
 }
 
 /**

@@ -329,7 +329,7 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     gen.control.run = run(true);
     gen.control.during = async step => {
         if (step !== 2) return;
-        await rebuild.stopRebuild({ now: true });
+        check('stop now: says it cancelled', await rebuild.stopRebuild({ now: true }), { cancelled: true });
         check('stop now: aborted', gen.control.run.controller.signal.aborted, true);
         check('stop now: no undo', rebuild.canUndoStop(), false);
     };
@@ -338,9 +338,13 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
 
     reset();
     gen.control.run = run(false);
-    gen.control.during = step => step === 2 ? rebuild.stopRebuild({ now: true }) : undefined;
+    let answer = null;
+    gen.control.during = async step => {
+        if (step === 2) answer = await rebuild.stopRebuild({ now: true });
+    };
     await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
     check('stop now, not cancellable: lands and is kept', [gen.control.run.controller.signal.aborted, rebuildCount()], [false, 2]);
+    check('stop now, not cancellable: says nothing was cancelled', answer, { cancelled: false });
 
     gen.control.run = null;
     gen.control.during = null;
@@ -354,7 +358,12 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     for (const now of [false, true]) {
         reset();
         const sent = gen.calls.length;
-        gen.control.before = step => step === 2 ? rebuild.stopRebuild({ now }) : undefined;
+        // Nothing is out, so there is no batch to wait for and no stop to take back.
+        gen.control.before = async step => {
+            if (step !== 2) return;
+            await rebuild.stopRebuild({ now });
+            check(`stop while sizing (${now ? 'now' : 'after'}): no undo`, rebuild.canUndoStop(), false);
+        };
         await rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
         check(`stop while sizing (${now ? 'now' : 'after'}): ended, one batch kept`, [rebuild.getRebuild(), rebuildCount()], [null, 1]);
         check(`stop while sizing (${now ? 'now' : 'after'}): batch 2 never sent`, gen.calls.length - sent, 1);
@@ -380,6 +389,19 @@ const base = { end: 'active', breaks: 'existing', batchSize: 50, review: false, 
     release();
     await running;
     check('held, then stop after this batch: ends with what landed', [rebuild.getRebuild(), rebuildCount(), gen.calls.length - sent], [null, 2, 2]);
+
+    // "Stop now" answered after the batch it was asked about had landed: there is
+    // nothing left to cancel, the batch is kept, and the caller is told so.
+    reset();
+    sent = gen.calls.length;
+    gen.control.during = step => { if (step === 2) release = rebuild.holdRebuild(); };
+    running = rebuild.startRebuild({ ...base, start: { kind: 'beginning' } });
+    await settle();
+    check('held, then stop now: nothing was cancelled', await rebuild.stopRebuild({ now: true }), { cancelled: false });
+    release();
+    await running;
+    check('held, then stop now: the landed batch is kept', [rebuild.getRebuild(), rebuildCount(), gen.calls.length - sent], [null, 2, 2]);
+    gen.control.during = null;
 
     reset();
     sent = gen.calls.length;

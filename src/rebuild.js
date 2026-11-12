@@ -783,20 +783,23 @@ export async function redoRebuildBatch(steeringNote = '', end) {
  * runs to the end — but marks it cancelled, and the batch it lands is then
  * thrown away, paid for and lost.
  * @param {{ now?: boolean }} [options]
+ * @returns {Promise<{ cancelled: boolean }>} Whether a request was cancelled. False
+ *          for a `now` that found nothing it could cancel — the batch landed
+ *          first, or its request stopped being cancellable — so the caller can
+ *          say the batch was kept after all.
  */
 export async function stopRebuild({ now = false } = {}) {
     if (!state) {
-        return;
+        return { cancelled: false };
     }
     if (state.status === 'running') {
         state.stopRequested = true;
-        if (now && getActiveRun()?.cancellable) {
-            cancelRun();
-        }
+        const cancelled = now && !!getActiveRun()?.cancellable && cancelRun();
         notify('change');
-        return;
+        return { cancelled };
     }
     await endRebuild(false);
+    return { cancelled: false };
 }
 
 /**
@@ -817,10 +820,15 @@ export function holdRebuild() {
     };
 }
 
-/** Whether a stop asked for mid-batch can still be taken back: its request was left to land. */
+/**
+ * Whether a stop asked for mid-batch can still be taken back: its request is out
+ * and was left to land. With none out — the stop came while the next batch was
+ * being sized — there is nothing to wait for, and the stop is already final.
+ */
 export function canUndoStop() {
+    const run = getActiveRun();
     return !!state?.stopRequested && state.status === 'running'
-        && !getActiveRun()?.controller?.signal?.aborted;
+        && !!run && !run.controller?.signal?.aborted;
 }
 
 /** Takes back a stop that is waiting for its batch to land; the rebuild carries on as before. */

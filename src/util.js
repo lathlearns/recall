@@ -95,9 +95,11 @@ export function clampNumber(value, min, max, fallback) {
  * `max_tokens` exceeds the context window, rather than letting the reply run
  * into the end. The buffer is sized against the reserve, not the cutoff, so on a
  * near-full one the cutoff can ask for more room than exists. Fitting the
- * request — never the setting — keeps it under, and the room left is never less
- * than the reserve, because the buffer was refused if it would have taken any of
- * that.
+ * request — never the setting — keeps it under. The room left is never less than
+ * what the window held back for the reply (connection.js getHeldBackTokens),
+ * because the buffer was refused if it would have taken any of that; where
+ * nothing was held back it can be next to nothing, and the request is refused
+ * instead (outputRoomTooSmall).
  *
  * @param {number} cutoff The hard cutoff; 0 means none is sent.
  * @param {number} room Tokens the window has left after the request.
@@ -148,4 +150,20 @@ export function roomRemedy(kind) {
         fix: 'summarize it in batches with the Rebuild button in the manager to give each request more room, '
             + 'or lower Reasoning Effort for this API',
     };
+}
+
+/**
+ * Whether a fitted limit leaves too little room to write a summary in at all.
+ *
+ * A response shorter than the minimum is thrown away as a failed generation, so
+ * a request whose limit is already below it cannot succeed: it would be paid
+ * for and discarded. Only a limit Recall lowered counts — one the user set that
+ * low themselves is theirs to keep.
+ *
+ * @param {{ limit: number, lowered: boolean }} output From fitOutputLimit.
+ * @param {number} minimum The shortest response accepted as a summary.
+ * @returns {boolean}
+ */
+export function outputRoomTooSmall(output, minimum) {
+    return !!output?.lowered && output.limit < Math.max(1, Number(minimum) || 0);
 }

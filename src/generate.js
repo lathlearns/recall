@@ -41,9 +41,10 @@ import {
     streamViaMainApi,
     markMainApiStreamingBroken,
     watchGenerationStopped,
+    getHeldBackTokens,
 } from './connection.js';
 import { shouldRetryWithoutStreaming } from './stream.js';
-import { fitOutputLimit, roomRemedy } from './util.js';
+import { fitOutputLimit, outputRoomTooSmall, roomRemedy } from './util.js';
 
 import {
     getSettings,
@@ -441,6 +442,9 @@ const REGENERATE_TOO_LONG = "The messages this summary read don't all fit in one
     + 'size, or lower "Reserved for the summary" in Advanced, then try again.';
 const BATCH_TOO_LONG = 'This batch does not fit in a request on top of the summary so far. Raise the context size '
     + 'or lower "Reserved for the summary" in Advanced, then try again.';
+// The opposite remedy from the three above, so never said in their place.
+const NO_ROOM_TO_WRITE = 'The request fits, but leaves almost no room for the summary to be written. Raise '
+    + '"Reserved for the summary" in Advanced, then try again.';
 
 /**
  * Checks the buffer against the available context room.
@@ -461,7 +465,13 @@ const BATCH_TOO_LONG = 'This batch does not fit in a request on top of the summa
  * @param {string} buffer
  * @param {string} systemPrompt
  * @param {{ force?: boolean, tooLong?: string }} [options]
- * @returns {Promise<{ used: number, available: number, output: { limit: number, lowered: boolean } }>}
+ * A request that fits but leaves less room than the shortest summary Recall
+ * accepts is refused too (`no-room`): its answer would be thrown away as too
+ * short. That only happens where nothing was held back for the reply — the
+ * reserve at 0 on a connection whose context size Recall was given.
+ *
+ * @returns {Promise<{ used: number, available: number, over: boolean, output: { limit: number, lowered: boolean } }>}
+ *          `over` when the request was sent although it did not fit (`force`).
  */
 async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SUMMARIZE_TOO_LONG } = {}) {
     // Sized against whichever connection will actually run the request — the main
@@ -472,15 +482,20 @@ async function enforceBudget(buffer, systemPrompt, { force = false, tooLong = SU
 
     const used = await countTokens(buffer);
 
-    if (used <= available) {
-        // What the window has left once this request is in it: the reserve, plus
-        // whatever the buffer did not use of its own share.
-        const reserve = Math.max(0, Number(getSettings().responseReserve) || 0);
-        return { used, available, output: fitOutputLimit(getSettings().outputBudget, available - used + reserve) };
+    const fits = used <= available;
+    if (fits) {
+        // What the window has left once this request is in it: what was held
+        // back for the reply — which is not always the reserve setting, see
+        // getHeldBackTokens — plus whatever the buffer did not use of its share.
+        const output = fitOutputLimit(getSettings().outputBudget, available - used + getHeldBackTokens());
+        if (!force && outputRoomTooSmall(output, getSettings().minResponseTokens)) {
+            throw new RecallError(NO_ROOM_TO_WRITE, { kind: 'no-room' });
+        }
+        return { used, available, over: false, output };
     }
 
     if (force) {
-        return { used, available, output: fitOutputLimit(getSettings().outputBudget, Infinity) };
+        return { used, available, over: !fits, output: fitOutputLimit(getSettings().outputBudget, Infinity) };
     }
 
     // In words, not figures. The numbers are kept on the error, for the console
@@ -651,31 +666,53 @@ async function runGeneration(buffer, systemPrompt, output) {
  *
  * Failures are reported as the profile path reports them, saying which
  * connection it was — except a press of SillyTavern's own Stop, which aborts
- * this request too and is said to be that. It is not a cancel: a rebuild ends on
- * a cancel, and ST's Stop asks nothing first, so its batch fails and can be
- * tried again instead.
+ * this request too and is said to be that (stoppedBySt). It is not a cancel: a
+ * rebuild ends on a cancel, and ST's Stop asks nothing first, so its batch fails
+ * and can be tried again instead.
  * @returns {Promise<{content: string, reasoning: string}>}
  */
 async function runViaMainApi(buffer, systemPrompt, budget) {
-    const stStop = watchGenerationStopped();
     try {
         return await requestViaMainApi(buffer, systemPrompt, budget);
     } catch (error) {
         if (error instanceof RecallError) {
             throw error;
         }
-        if (stStop.fired) {
-            throw new RecallError(
-                'SillyTavern\'s Stop was pressed, which stops Recall\'s request too. Nothing was saved.',
-                { kind: 'st-stopped' },
-            );
-        }
         console.warn('[Recall] The main API request failed', error);
-        const detail = error?.cause?.message || error?.message || String(error);
-        throw new RecallError(`${describeTarget()}\n\nThe request failed: ${detail}`, { kind: 'main-failed' });
-    } finally {
-        stStop.dispose();
+        throw requestFailed(error, 'main-failed');
     }
+}
+
+/**
+ * A request that failed, said the same way on every path: which connection it
+ * was, then what it answered.
+ * @param {unknown} error
+ * @param {string} kind
+ * @param {string} [hint] What to do about it, where the cause is known.
+ * @returns {RecallError}
+ */
+function requestFailed(error, kind, hint = '') {
+    const detail = failureDetail(error);
+    return new RecallError(`${describeTarget()}\n\nThe request failed: ${detail}${hint}`, { kind });
+}
+
+/** @param {unknown} error */
+function failureDetail(error) {
+    return error?.cause?.message || error?.message || String(error);
+}
+
+/**
+ * ST's own Stop ended the request. Only said where the abort is known to be
+ * that Stop's doing — the streamed request's error says so, and the plain one
+ * is watched for exactly as long as it is out — so a Stop pressed earlier, about
+ * something else, never renames a failure that came later.
+ * @returns {RecallError}
+ */
+function stoppedBySt() {
+    return new RecallError(
+        'SillyTavern\'s Stop was pressed, which stops Recall\'s request too. Nothing was saved.',
+        { kind: 'st-stopped' },
+    );
 }
 
 /**
@@ -701,6 +738,9 @@ async function requestViaMainApi(buffer, systemPrompt, budget) {
         } catch (error) {
             if (wasCancelled()) {
                 return { content: '', reasoning: '' };
+            }
+            if (error?.stopped) {
+                throw stoppedBySt();
             }
             if (!shouldRetryWithoutStreaming({ aborted: !!error?.aborted, started: !!error?.started })) {
                 throw error;
@@ -738,6 +778,9 @@ async function runRawMainApi(buffer, systemPrompt, budget) {
     // reported by the provider as a normal finish. See suppressStoppingStrings.
     const restoreStoppingStrings = suppressStoppingStrings();
 
+    // Watched for this call only. See stoppedBySt.
+    const stStop = watchGenerationStopped();
+
     let data;
     try {
         data = await generateRawData({
@@ -745,7 +788,10 @@ async function runRawMainApi(buffer, systemPrompt, budget) {
             systemPrompt,
             responseLength: budget > 0 ? budget : null,
         });
+    } catch (error) {
+        throw stStop.fired ? stoppedBySt() : error;
     } finally {
+        stStop.dispose();
         restoreStoppingStrings();
     }
 
@@ -807,7 +853,7 @@ async function runViaProfile(buffer, systemPrompt, budget) {
             return { content: '', reasoning: '' };
         }
 
-        const detail = error?.cause?.message || error?.message || String(error);
+        const detail = failureDetail(error);
 
         // An auth failure through a profile has one overwhelmingly likely cause,
         // and it is not the one the word suggests. The profile records which saved
@@ -822,10 +868,7 @@ async function runViaProfile(buffer, systemPrompt, budget) {
             + 'open Connection Manager, reselect the key for this profile, and save it.'
             : '';
 
-        throw new RecallError(
-            `${describeTarget()}\n\nThe request failed: ${detail}${hint}`,
-            { kind: 'profile-failed' },
-        );
+        throw requestFailed(error, 'profile-failed', hint);
     }
 }
 
@@ -1006,9 +1049,15 @@ export async function previewRequest(steeringNote = '') {
 
 /**
  * Summarize now — produce a new summary over the currently visible chat.
+ *
+ * `force` sends it even when it does not fit (enforceBudget). `onHideSkipped` is
+ * called when that left the covered messages visible although auto-hide is on,
+ * so the caller can say so.
+ * @param {string} [steeringNote]
+ * @param {{ force?: boolean, onHideSkipped?: (() => void)|null }} [options]
  * @returns {Promise<import('./store.js').RecallSummary>}
  */
-export async function summarizeNow(steeringNote = '', { force = false } = {}) {
+export async function summarizeNow(steeringNote = '', { force = false, onHideSkipped = null } = {}) {
     checkGuards({ nothingNew: true });
 
     const settings = getSettings();
@@ -1025,7 +1074,7 @@ export async function summarizeNow(steeringNote = '', { force = false } = {}) {
         throw new RecallError('Every message is hidden — there is nothing visible to summarize.', { kind: 'empty' });
     }
 
-    const { output } = await enforceBudget(buffer, systemPrompt, { force });
+    const { output, over } = await enforceBudget(buffer, systemPrompt, { force });
 
     // Captured from the buffer as it was built, never from chat.length afterwards:
     // in non-blocking mode the user can send messages while generation runs, and
@@ -1083,11 +1132,15 @@ export async function summarizeNow(steeringNote = '', { force = false } = {}) {
         addSummary(record);
         saved = true;
 
-        // Not after Send anyway. Some providers trim a request that is too big
-        // rather than refusing it, and the summary would then claim messages the
-        // model never read; hidden, those would be gone from the story. Left
-        // visible, the manager offers to sync the chat to it once it is checked.
-        if (settings.autoHide && !force) {
+        // Not when it was sent over the limit. Some providers trim a request that
+        // is too big rather than refusing it, and the summary would then claim
+        // messages the model never read; hidden, those would be gone from the
+        // story. Left visible, the manager offers to sync the chat to it once it
+        // is checked. Judged by the request that went, not by Send anyway having
+        // been pressed: one that fitted after all is hidden as usual.
+        if (settings.autoHide && over) {
+            onHideSkipped?.();
+        } else if (settings.autoHide) {
             record.hiddenIndices = await hideIndices(hideableIndices(indices));
             await persist({ immediate: true });
         }

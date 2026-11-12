@@ -702,8 +702,11 @@ touching visibility until the end.
   only throw away a batch already paid for. Between batches, with nothing out, it offers only
   Stop. While the question is open the rebuild waits: a batch already out lands and is kept,
   but no other is sent and none is acted on until it is answered, so the answer always applies
-  to the batch the user saw. A stop asked for while the next batch is still being sized ends
-  the rebuild before that batch is sent.
+  to the batch the user saw. If that batch lands, or stops being cancellable, before **Stop
+  now** is answered, there is nothing left to cancel: the batch is kept, since it is paid for,
+  and the user is told so. A stop asked for while the next batch is still being sized ends
+  the rebuild before that batch is sent; with nothing out there is nothing to wait for, so
+  that stop is final and no undo is offered.
 - **While a rebuild is in progress**, pauses included, Summarize now and Regenerate are refused
   and sending is blocked during each batch. Switching chats abandons it; its batches stay saved.
 - **The estimate** shown before starting counts the messages, prompt and reference material
@@ -767,9 +770,17 @@ up front rather than truncating.
 
 So each request is fitted as it is sent. The room it leaves is the context window minus the
 system prompt, the buffer and the padding allowance; the generation limit sent is the output
-budget or that room, whichever is less. The room is never less than the reserve, because a
-buffer that would have taken any of it was already refused. The *setting* is never changed —
-only the one request — and a short chat still gets the whole output budget.
+budget or that room, whichever is less. The room is never less than what was held back for the
+reply, because a buffer that would have taken any of it was already refused. The *setting* is
+never changed — only the one request — and a short chat still gets the whole output budget.
+
+What was held back is read from the window, not from the reserve setting, because the two can
+differ: with the reserve at 0 the host holds back its own response length on the chat's
+connection, and that room is there to be written in. Where nothing at all was held back — the
+reserve at 0 on a connection whose context size Recall was given — a full buffer leaves next
+to nothing. A request whose fitted limit is below the shortest response accepted as a summary
+(section 13) cannot succeed, so it is refused before it is sent, and the refusal says to raise
+the reserve. A limit the user set that low themselves is left alone.
 
 When a request is fitted below the output budget, the user is told as the run starts, in words
 rather than figures, that the limit was lowered for this summary so the request isn't refused.
@@ -833,8 +844,18 @@ choice:
   dialog says what it risks: some providers trim an oversized request rather than refusing it,
   and the summary would then claim messages the model never read. So a summary made this way
   is **not auto-hidden**; the user reads it, then syncs the chat to it from the manager, which
-  already offers that for an active summary whose covered messages are still visible.
+  already offers that for an active summary whose covered messages are still visible. That
+  goes by the request that was sent, not by the button: if it turns out to fit after all — the
+  context size was raised in between — it is hidden as usual, and the user is told nothing
+  was hidden only when auto-hide is on and was skipped.
 - **Cancel** does nothing.
+
+If Rebuild is opened this way and then declined, the one-off guidance goes back into the field
+it was typed in, unless something else has been typed there since.
+
+The dialog is only for someone who pressed a button. The slash command can be run by a script
+with nobody there to answer, so it reports the refusal instead and says the choice is offered
+from Summarize now.
 
 Redo and Rebuild report the refusal as an error instead, since neither has a single request to
 send anyway, and their messages were already chosen, so the error names the way to more room:
@@ -872,7 +893,9 @@ context looking complete.
 **The host's own Stop stops it too, and says so.** On the chat's own connection, the host's
 Stop aborts Recall's request as it aborts any raw generation — in non-blocking mode, stopping
 the user's own reply included. That is reported as what it was ("SillyTavern's Stop was
-pressed, which stops Recall's request too"), not as the request failing. It is not a
+pressed, which stops Recall's request too"), not as the request failing — and only when the
+Stop is what ended the request: one pressed earlier, about something else, never renames a
+failure that comes later. It is not a
 cancellation: a rebuild's own Stop asks first and the host's does not, so a rebuild batch
 stopped this way fails and can be tried again, rather than ending the rebuild.
 

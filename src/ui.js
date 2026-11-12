@@ -808,7 +808,7 @@ function stoppingText() {
  *
  * Asked with the rebuild held (requestStopRebuild), so what it describes is
  * still true when it is answered.
- * @returns {Promise<'none'|'after'|'now'>}
+ * @returns {Promise<'none'|'end'|'after'|'now'>} `end` with nothing out to wait for or cancel.
  */
 async function confirmStopRebuild() {
     const rebuild = getRebuild();
@@ -823,7 +823,7 @@ async function confirmStopRebuild() {
         const answer = await Popup.show.confirm('Stop the rebuild?',
             `${kept} This cannot be undone — carrying on later means starting a new rebuild after the last of them.`,
             { okButton: 'Stop', cancelButton: 'Keep rebuilding' });
-        return answer === POPUP_RESULT.AFFIRMATIVE ? 'now' : 'none';
+        return answer === POPUP_RESULT.AFFIRMATIVE ? 'end' : 'none';
     }
 
     const canCancel = !!getActiveRun()?.cancellable;
@@ -881,7 +881,16 @@ export async function confirmOverflow() {
  * @param {string} [note] Guidance already taken for the Summarize now.
  */
 export async function openRebuildForUnsummarised(note = '') {
-    await openRebuildDialog({ unsummarised: true, note });
+    const started = await openRebuildDialog({ unsummarised: true, note });
+
+    // Summarize now took the note out of the manager's field before it was known
+    // not to fit. A rebuild that went ahead used it; one that was declined did
+    // not, so it goes back where it was typed — unless something has been typed
+    // there since.
+    const input = q('[data-recall="steering-note"]');
+    if (!started && note && input && !String(input.value ?? '').trim()) {
+        input.value = note;
+    }
 }
 
 async function requestStopRebuild() {
@@ -889,8 +898,22 @@ async function requestStopRebuild() {
     const release = holdRebuild();
     try {
         const how = await confirmStopRebuild();
-        if (how !== 'none') {
-            await stopRebuild({ now: how === 'now' });
+        if (how === 'none') {
+            return;
+        }
+        const { cancelled } = await stopRebuild({ now: how === 'now' });
+        // "Stop now" was promised to throw the batch away. Where it could not —
+        // the request finished, or fell back to one that cannot be cancelled,
+        // while the question was open — the batch is kept, since it is paid for,
+        // and that is said rather than left to be found in the archive.
+        if (how === 'now' && !cancelled) {
+            toastr.info(
+                getActiveRun()
+                    ? 'This batch can no longer be cancelled, so the rebuild stops once it lands and the batch is kept.'
+                    : 'The batch finished before you answered, so it was kept. The rebuild has stopped.',
+                'Recall',
+                { timeOut: 10000, extendedTimeOut: 5000 },
+            );
         }
     } finally {
         release();
@@ -1031,19 +1054,19 @@ const ZERO_BASED_NOTE = 'Message numbers count from 0, the way SillyTavern numbe
  * The rebuild dialog. Every choice defaults to the last one started, and the
  * plan and estimate under it follow the choices as they change, so what the
  * button will do is visible before it is pressed.
- */
-/**
+ *
  * @param {{ unsummarised?: boolean, note?: string }} [preset] `unsummarised` starts
  *        it after the active summary and ends it at the latest message — what
  *        Summarize now would have read, had it fitted. `note` is guidance that
  *        was already taken from the manager's field for that Summarize now.
+ * @returns {Promise<boolean>} Whether the user went ahead with a rebuild.
  */
 async function openRebuildDialog(preset = {}) {
     if (getRebuild() || getActiveRun()) {
-        return;
+        return false;
     }
     if (isDetailDirty() && !(await confirmDiscardDetail())) {
-        return;
+        return false;
     }
 
     const settings = getSettings();
@@ -1444,7 +1467,7 @@ async function openRebuildDialog(preset = {}) {
     const result = await popup.show();
 
     if (result !== POPUP_RESULT.AFFIRMATIVE) {
-        return;
+        return false;
     }
 
     const choices = read();
@@ -1469,6 +1492,7 @@ async function openRebuildDialog(preset = {}) {
     } catch (error) {
         reportError(error);
     }
+    return true;
 }
 
 function describeCoverage(summary) {
@@ -1650,7 +1674,7 @@ function wireManager({ onSummarize }) {
         }
     });
 
-    on('[data-recall="rebuild"]', 'click', openRebuildDialog);
+    on('[data-recall="rebuild"]', 'click', () => openRebuildDialog());
     on('[data-recall="rebuild-continue"]', 'click', async event => {
         if (event.currentTarget.classList.contains('disabled')) {
             return;

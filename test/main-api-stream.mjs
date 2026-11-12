@@ -31,7 +31,13 @@ const stub = (path, body) => writeFileSync(join(root, path), body);
 stub('public/script.js', `
 export let main_api = 'openai';
 export function setMainApi(api) { main_api = api; }
-export function getMaxPromptTokens() { return 10000; }
+// As ST does it: an override that is not a positive number falls back to the
+// preset's own Max Response Length.
+export const context = { size: 12000, maxResponse: 2000 };
+export function getMaxContextTokens() { return context.size; }
+export function getMaxPromptTokens(override = null) {
+    return context.size - (typeof override === 'number' && override > 0 ? override : context.maxResponse);
+}
 const listeners = new Map();
 export const event_types = {
     CHAT_COMPLETION_PROMPT_READY: 'prompt_ready',
@@ -86,7 +92,8 @@ export class ChatCompletionService {
 `);
 stub('public/scripts/extensions/shared.js', 'export const ConnectionManagerRequestService = {};');
 stub('public/scripts/extensions/third-party/recall/src/settings.js', `
-export function getSettings() { return { profileId: '', outputBudget: 0, modelOverride: '' }; }
+export const settings = { profileId: '', outputBudget: 0, modelOverride: '', responseReserve: 5000 };
+export function getSettings() { return settings; }
 `);
 
 const load = path => import(pathToFileURL(join(src, path)).href);
@@ -141,6 +148,12 @@ const failureOf = async promise => promise.then(() => null, error => error);
     request.control.behaviour = 'refuse';
     const error = await failureOf(connection.streamViaMainApi('SYS', 'BUFFER'));
     check('refused: not started, not aborted', [error?.started, error?.aborted], [false, false]);
+
+    // A press of ST's Stop from before this request is about something else,
+    // and must not rename the failure.
+    await st.eventSource.emit(st.event_types.GENERATION_STOPPED);
+    const later = await failureOf(connection.streamViaMainApi('SYS', 'BUFFER'));
+    check('refused after an earlier ST stop: not said to be stopped', later?.stopped, false);
 }
 
 // 5. Broke after text arrived: not free to ask again.
@@ -157,12 +170,14 @@ const failureOf = async promise => promise.then(() => null, error => error);
     const pending = failureOf(connection.streamViaMainApi('SYS', 'BUFFER', { signal: controller.signal }));
     await new Promise(r => setTimeout(r, 10));
     controller.abort();
-    check('Recall stop: aborted', (await pending)?.aborted, true);
+    const cancelled = await pending;
+    check('Recall stop: aborted, and not by ST', [cancelled?.aborted, cancelled?.stopped], [true, false]);
 
     const pendingSt = failureOf(connection.streamViaMainApi('SYS', 'BUFFER'));
     await new Promise(r => setTimeout(r, 10));
     await st.eventSource.emit(st.event_types.GENERATION_STOPPED);
-    check('ST stop: aborted', (await pendingSt)?.aborted, true);
+    const stopped = await pendingSt;
+    check('ST stop: aborted, and says it was ST', [stopped?.aborted, stopped?.stopped], [true, true]);
     check('stop hook removed after a stop', st.eventSource.count('generation_stopped'), 0);
 
     // What lets a press of ST's Stop be reported as one, on either path.
@@ -184,6 +199,17 @@ const failureOf = async promise => promise.then(() => null, error => error);
     st.setMainApi('openai');
     connection.markMainApiStreamingBroken(new Error('400'));
     check('refused once: not again this session', connection.canStreamMainApi(), false);
+}
+
+// 8. What the window held back for the reply, which the output limit is fitted
+//    to. It is the reserve — except at 0 on the main API, where ST holds back
+//    the preset's Max Response Length instead.
+{
+    const { settings } = await load('settings.js');
+    check('reserve set: that is what was held back', connection.getHeldBackTokens(), 5000);
+    settings.responseReserve = 0;
+    check('reserve 0: ST held back Max Response Length', connection.getHeldBackTokens(), 2000);
+    settings.responseReserve = 5000;
 }
 
 rmSync(root, { recursive: true, force: true });

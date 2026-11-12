@@ -11,7 +11,7 @@
  * Run:  node test/output-limit.mjs
  */
 
-import { fitOutputLimit, roomRemedy } from '../src/util.js';
+import { fitOutputLimit, outputRoomTooSmall, roomRemedy } from '../src/util.js';
 
 const failures = [];
 
@@ -42,8 +42,17 @@ check('a redo does not point at Rebuild', /Rebuild/.test(fixes[1]), false);
 check('a rebuild points at the reserve, not at Rebuild', [/Reserved for the summary/.test(fixes[2]), /Rebuild/.test(fixes[2])], [true, false]);
 check('none says to raise the cutoff', fixes.some(fix => /Hard cutoff/i.test(fix)), false);
 
+// With nothing held back for the reply, a full buffer leaves next to nothing: a
+// request whose limit is already under the shortest summary accepted cannot
+// succeed, so it is refused before it is paid for.
+check('room under the minimum is too small', outputRoomTooSmall(fitOutputLimit(20000, 30), 50), true);
+check('room at the minimum is enough', outputRoomTooSmall(fitOutputLimit(20000, 50), 50), false);
+check('a cutoff the user set that low is theirs', outputRoomTooSmall(fitOutputLimit(40, 9000), 50), false);
+check('no cutoff sent: nothing to be too small', outputRoomTooSmall(fitOutputLimit(0, 0), 50), false);
+check('no minimum: one token is still the floor', outputRoomTooSmall(fitOutputLimit(20000, 0), 0), false);
+
 if (failures.length) {
     console.error(failures.join('\n'));
     process.exit(1);
 }
-console.log('All 13 output-limit checks pass.');
+console.log('All 18 output-limit checks pass.');

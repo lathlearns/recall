@@ -27,13 +27,20 @@ const MODULE_NAME = 'recall';
 const BUILTIN_SUMMARIZE = 'memory';
 
 /**
- * Summarize now, wired to the drawer button, the manager button and `/recall`.
+ * Summarize now, wired to the drawer button, the manager button and `/recall`
+ * (the last with `interactive` off: it reports, and never asks).
  * Refusals are user-facing text and are shown as toasts here; the manager also
  * renders them inline, since the user may not be looking at the screen.
  */
-async function handleSummarize(steeringNote = '', { force = false } = {}) {
+async function handleSummarize(steeringNote = '', { force = false, interactive = true } = {}) {
     try {
-        const record = await summarizeNow(steeringNote, { force });
+        let hideSkipped = false;
+        const record = await summarizeNow(steeringNote, {
+            force,
+            onHideSkipped: () => {
+                hideSkipped = true;
+            },
+        });
 
         // The nudge clears and re-arms only once usage has actually dropped back
         // below the threshold — see the dead zone in nudge.js.
@@ -41,17 +48,30 @@ async function handleSummarize(steeringNote = '', { force = false } = {}) {
         refreshDrawer();
 
         toastr.success(
-            force
+            hideSkipped
                 ? `Summarized messages ${record.coversFrom}–${record.coversTo}. Nothing was hidden, since it was `
                     + 'sent over the limit: read the summary in the manager, and if nothing is missing, use '
                     + '"Sync chat to this summary" there.'
                 : `Summarized messages ${record.coversFrom}–${record.coversTo}.`,
             'Recall',
-            force ? { timeOut: 15000, extendedTimeOut: 6000 } : {},
+            hideSkipped ? { timeOut: 15000, extendedTimeOut: 6000 } : {},
         );
         return record;
     } catch (error) {
         // Too big for one request: a choice, not a report (see confirmOverflow).
+        // Only asked of someone who pressed a button. `/recall` can be run by a
+        // script with nobody there to answer, and a dialog would hold it up for
+        // good — so it gets the refusal, and where the choice is offered.
+        if (error instanceof RecallError && error.kind === 'overflow' && !interactive) {
+            console.info(`[Recall] Too much to summarize: ~${error.used} tokens against ${error.available}.`);
+            toastr.warning(
+                `${error.message} Press Summarize now in Recall to summarize in batches or send it anyway.`,
+                'Recall',
+                { timeOut: 12000, extendedTimeOut: 6000 },
+            );
+            refreshDrawer();
+            return null;
+        }
         if (error instanceof RecallError && error.kind === 'overflow' && !force) {
             console.info(`[Recall] Too much to summarize: ~${error.used} tokens against ${error.available}.`);
             refreshDrawer();
@@ -186,7 +206,7 @@ jQuery(async () => {
         applyScrollbarGutter();
 
         registerMacro();
-        registerSlashCommand(handleSummarize);
+        registerSlashCommand(note => handleSummarize(note, { interactive: false }));
 
         await initDrawer({ onSummarize: handleSummarize });
 
