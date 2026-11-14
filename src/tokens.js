@@ -15,6 +15,7 @@ import { getTokenCountAsync } from '../../../../tokenizers.js';
 import { power_user } from '../../../../power-user.js';
 import { getStringHash } from '../../../../utils.js';
 import { createLimiter } from './limit.js';
+import { createEstimator } from './sizing.js';
 import { getCountingModel } from './connection.js';
 
 /** @type {Map<string, number>} */
@@ -25,10 +26,37 @@ const cache = new Map();
  * summarising model makes every cached number wrong, so all three are part of
  * the key rather than something to remember to invalidate.
  */
-function cacheKey(text) {
+function cacheKey(text, id = counterId()) {
+    return `${id}:${getStringHash(text)}`;
+}
+
+/** Which tokenizer a count made now would come from. */
+function counterId() {
     const model = getCountingModel();
-    const counter = model ? `model=${model}` : `${main_api}:${power_user?.tokenizer ?? '?'}`;
-    return `${counter}:${getStringHash(text)}`;
+    return model ? `model=${model}` : `${main_api}:${power_user?.tokenizer ?? '?'}`;
+}
+
+/** What estimateTokens goes by: fed by every real count, per tokenizer. */
+const estimator = createEstimator();
+
+/**
+ * About how many tokens a text is, without asking the tokenizer.
+ *
+ * For text that is still arriving. Counting a growing string is a cache miss
+ * every time, since every chunk makes a new string, and each miss is a request
+ * carrying the whole text so far: the live pane asked once a second, for the
+ * summary and for the reasoning, for as long as the run lasted. Where the host
+ * runs on the same device as the page, that tokenizing was the device's own work,
+ * done over and over on text nobody had finished writing.
+ *
+ * So the size is worked out from the length (createEstimator), and the saved
+ * summary gets a real count, like every other.
+ *
+ * @param {string} text
+ * @returns {number}
+ */
+export function estimateTokens(text) {
+    return estimator.estimate(counterId(), String(text ?? ''));
 }
 
 /**
@@ -108,7 +136,10 @@ export async function countTokens(text) {
         return 0;
     }
 
-    const key = cacheKey(value);
+    // Named now, not when the count lands: the connection can change while
+    // this waits its turn, and the count belongs to the tokenizer it was asked of.
+    const id = counterId();
+    const key = cacheKey(value, id);
     const known = cache.get(key);
     if (known !== undefined) {
         return known;
@@ -125,6 +156,7 @@ export async function countTokens(text) {
 
         const count = await countWithModel(value);
         cache.set(key, count);
+        estimator.learn(id, value, count);
         return count;
     });
 }
@@ -180,63 +212,4 @@ export async function paintTokens(element, text, { suffix = 'tokens', empty = 'e
 
 function format(count, suffix) {
     return `${count.toLocaleString()}${suffix ? ` ${suffix}` : ''}`;
-}
-
-/**
- * A token count for text that is still arriving.
- *
- * Counting a growing string is a cache miss every single time — the cache is
- * keyed by hash, and every chunk makes a new string — and on a Chat Completion
- * source each miss is a POST to the tokenizer endpoint. The live pane updates
- * around eight times a second, so counting on every repaint would mean eight
- * round-trips a second of ever-larger bodies, for a number nobody reads that
- * fast.
- *
- * So it counts on its own schedule and the display lags slightly behind the
- * text. The previous number stays on screen while the next is in flight rather
- * than blanking or showing a placeholder: a figure that is a second stale reads
- * as a counter, whereas one that flickers between a number and an ellipsis reads
- * as broken.
- *
- * @param {{ minIntervalMs?: number }} options
- */
-export function createStreamingCount({ minIntervalMs = 1000 } = {}) {
-    let value = null;
-    let busy = false;
-    let lastStartedAt = 0;
-
-    return {
-        /** The most recent count, or null before the first one lands. */
-        get current() {
-            return value;
-        },
-
-        /** Called when a new run starts, so one run's figure never labels another's. */
-        reset() {
-            value = null;
-            busy = false;
-            lastStartedAt = 0;
-        },
-
-        /**
-         * Starts a count if one is due. Never awaited by the caller — read
-         * `current` on the next repaint.
-         * @param {string} text
-         */
-        refresh(text) {
-            const now = Date.now();
-
-            if (busy || !text || now - lastStartedAt < minIntervalMs) {
-                return;
-            }
-
-            busy = true;
-            lastStartedAt = now;
-
-            countTokens(text)
-                .then(count => { value = count; })
-                .catch(error => console.warn('[Recall] Live token count failed', error))
-                .finally(() => { busy = false; });
-        },
-    };
 }

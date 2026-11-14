@@ -711,7 +711,19 @@ touching visibility until the end.
   and sending is blocked during each batch. Switching chats abandons it; its batches stay saved.
 - **The estimate** shown before starting counts the messages, prompt and reference material
   exactly. The summary carried from batch to batch cannot be known in advance, so it is guessed
-  from the current summary's size, and the dialog says so.
+  from the current summary's size, and the dialog says so. Each batch's messages are counted
+  together, one request to the tokenizer per batch rather than one per message, and the
+  counting stops when the plan changes or the dialog closes: a long chat would otherwise ask
+  for thousands of counts, still arriving while the first batch runs. Counting waits a moment
+  for typing to stop, here and in a pause's two end fields, since every digit typed is a
+  different text to count.
+- **A batch too big for one request is cut by length, then checked.** Where it stops fitting
+  is estimated from the messages' lengths, at the tokens per character the messages themselves
+  came to (the request less its fixed part: the chat and the reference material are often in
+  different languages). The cut batch is then counted for real, and cut again if it is still
+  over, so what is sent has always been measured; the first message is never given up on
+  without being measured too. Not by counting each dropped message, which is a request per
+  message.
 - **To revisit: moving the next end in any rebuild.** The next-batch end field could appear at
   every pause, whichever way batches are cut. Changing it would override where the next batch
   ends, and the batches after it would be cut again from there by the rule chosen (every N, or
@@ -1083,7 +1095,7 @@ On a reasoning model, the first half of a pass produces no summary at all — it
 without showing that, the pane is an empty box and a clock for most of the run.
 
 The reasoning streams into the same pane, above the summary, and folds itself to a single line
-the moment the summary proper begins: *Thought for 0:31 · 624 tokens*. It is reference once
+the moment the summary proper begins: *Thought for 0:31 · ~624 tokens*. It is reference once
 there is something better to look at, but it is not discarded, because "why did it write that"
 is a question asked *after* reading what it wrote. The fold stops being automatic once the user
 touches it, so opening it to read something does not get undone by the next chunk. The duration
@@ -1136,10 +1148,14 @@ Every size Recall shows is in tokens, including the live ones, because that is t
 budgets they are compared against.
 
 Counting text that is still arriving is a cache miss every time — the cache is keyed by content,
-and every chunk makes new content — and on many tokenizers each miss is a round-trip. So the
-live counts refresh on their own schedule, roughly once a second, and the previous figure stays
-on screen while the next is in flight. A number a second stale reads as a counter; one
-flickering between a value and a placeholder reads as broken.
+and every chunk makes new content — and on many tokenizers each miss is a round-trip carrying
+the whole text so far. Where the host's server runs on the same device as the page, a phone
+for one, that tokenizing is the device's own work. So the live sizes are **estimates, marked
+with a ~**: worked out from the text's length, at the characters per token the tokenizer has
+actually come to on everything counted before the run (the prompt and the chat's messages,
+which are in the summary's language), or about four before anything has been counted. No
+request is made for them. The saved summary and its kept reasoning get a real count, like
+every other size.
 
 ---
 

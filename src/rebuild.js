@@ -31,7 +31,7 @@ import {
     summarizeBatch,
     fitBatch,
     setRebuildLock,
-    countMessageTokens,
+    countMessagesTokens,
     measureRequestOverhead,
     cancelRun,
     getActiveRun,
@@ -394,17 +394,26 @@ export function planRebuild(options) {
  * It is guessed from the current summary's size, growing evenly from where the
  * rebuild starts — and the result is labelled as resting on that guess.
  *
+ * Each batch's messages are counted together, in one request to the tokenizer
+ * rather than one per message, and one batch at a time. `cancelled` is asked
+ * between them: the dialog's estimate is abandoned once the plan changes or the
+ * dialog closes, and must not keep counting behind the rebuild it was for.
+ *
  * @param {RebuildPlan} plan
- * @returns {Promise<{ batches: number, messages: number, sent: number, written: number, guessedFrom: number }>}
+ * @param {{ cancelled?: () => boolean }} [options]
+ * @returns {Promise<{ batches: number, messages: number, sent: number, written: number, guessedFrom: number }|null>}
+ *          Null when it was cancelled before it finished.
  */
-export async function estimateRebuild(plan) {
+export async function estimateRebuild(plan, { cancelled = () => false } = {}) {
     const overhead = await measureRequestOverhead();
-    const zero = plan.includesZero ? await countMessageTokens(0) : 0;
+    const zero = plan.includesZero ? await countMessagesTokens([0]) : 0;
 
     let messages = 0;
     for (const batch of plan.batches) {
-        const counts = await Promise.all(batch.map(countMessageTokens));
-        messages += counts.reduce((a, b) => a + b, 0) + zero;
+        if (cancelled()) {
+            return null;
+        }
+        messages += await countMessagesTokens(batch) + zero;
     }
 
     const startSize = plan.basis ? await countTokens(plan.basis.content) : await countTokens(plan.seed);
@@ -584,14 +593,14 @@ export async function measureManualBatch(which, end) {
     const seed = basis ? '' : state.plan.seed;
     const withZero = state.plan.includesZero ? [0, ...indices] : indices;
 
-    const counts = await Promise.all(indices.map(countMessageTokens));
+    const tokens = await countMessagesTokens(indices);
     const fits = await fitBatch(withZero, basis?.content ?? seed, batchNote());
     const keep = state.plan.includesZero ? fits - 1 : fits;
 
     return {
         problem: '',
         messages: indices.length,
-        tokens: counts.reduce((a, b) => a + b, 0),
+        tokens,
         stopsAt: keep < indices.length ? (indices[keep - 1] ?? null) : null,
     };
 }

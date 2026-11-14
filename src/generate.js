@@ -45,6 +45,7 @@ import {
     getOutputCeiling,
 } from './connection.js';
 import { shouldRetryWithoutStreaming } from './stream.js';
+import { cutToFit } from './sizing.js';
 import { fitOutputLimit, outputRoomTooSmall, roomRemedy, MAKE_ROOM } from './util.js';
 
 import {
@@ -1321,13 +1322,20 @@ export async function regenerateSummary(id, indicesOverride = null, steeringNote
 }
 
 /**
- * The tokens one message costs in a buffer, for planning a rebuild without
- * building every buffer it will send.
- * @param {number} index
+ * The tokens a run of messages costs in a buffer, counted together, as they are
+ * sent — for planning a rebuild without building every buffer it will send.
+ *
+ * One count for the lot, not one per message. Each count the cache has not seen
+ * is a request to the host's tokenizer, and a rebuild of a long chat asked for
+ * thousands of them in the seconds around its first batch. Where the host runs on
+ * the same device as the page — a phone — that is the device's own work.
+ *
+ * @param {number[]} indices
  * @returns {Promise<number>}
  */
-export async function countMessageTokens(index) {
-    return chat[index] ? await countTokens(formatMessage(index)) : 0;
+export async function countMessagesTokens(indices) {
+    const present = indices.filter(i => chat[i]);
+    return present.length ? await countTokens(present.map(formatMessage).join('\n\n')) : 0;
 }
 
 /**
@@ -1353,6 +1361,12 @@ export async function measureRequestOverhead() {
  * now must, it is cut where it stops fitting and the rest goes in the next one.
  * Nothing is trimmed silently: whatever is cut is still read, one batch later.
  *
+ * Where to cut is estimated from the messages' lengths and the cut buffer is then
+ * counted for real (cutToFit). Counting each dropped message instead was one
+ * tokenizer request per message, one after another — thousands for a batch far
+ * bigger than the context — and its sum was still only close to what the cut
+ * buffer comes to, which is the figure summarizeBatch then holds it to.
+ *
  * @param {number[]} indices
  * @param {string} basis
  * @param {string} [steeringNote] Counted too, so a redo with a note cannot fail the budget check it just passed.
@@ -1361,15 +1375,20 @@ export async function measureRequestOverhead() {
 export async function fitBatch(indices, basis, steeringNote = '') {
     const systemPrompt = substituteParams(assemblePrompt());
     const available = getPromptBudget() - await countTokens(systemPrompt) - BUDGET_PADDING;
-    let used = await countTokens(buildBufferFrom(indices, basis, steeringNote));
 
-    let count = indices.length;
-    while (count > 0 && used > available) {
-        count--;
-        used -= await countTokens(formatMessage(indices[count]));
+    const used = await countTokens(buildBufferFrom(indices, basis, steeringNote));
+    if (used <= available) {
+        return indices.length;
     }
 
-    return count;
+    return await cutToFit({
+        // The two characters are the blank line each message is joined with.
+        sizes: indices.map(index => (chat[index] ? formatMessage(index).length + 2 : 0)),
+        used,
+        fixed: await countTokens(buildBufferFrom([], basis, steeringNote)),
+        available,
+        measure: count => countTokens(buildBufferFrom(indices.slice(0, count), basis, steeringNote)),
+    });
 }
 
 /**

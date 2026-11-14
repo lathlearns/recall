@@ -75,7 +75,7 @@ export function cancelRun() {
     control.run.controller.abort();
     return true;
 }
-export async function countMessageTokens(index) { return chat[index] ? 10 : 0; }
+export async function countMessagesTokens(indices) { return indices.filter(i => chat[i]).length * 10; }
 export async function measureRequestOverhead() { return { system: 100, reference: 0, available: 10000 }; }
 export async function fitBatch(indices) { return Math.min(indices.length, control.fits); }
 

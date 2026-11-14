@@ -69,7 +69,8 @@ import {
 } from './connection.js';
 import { previewContextBlocks, previewPresetBlocks } from './context-blocks.js';
 import { isPresetAvailable } from './preset-blocks.js';
-import { paintTokens, createStreamingCount } from './tokens.js';
+import { paintTokens, estimateTokens } from './tokens.js';
+import { settle, TYPING_SETTLE_MS } from './sizing.js';
 import { splitTitle } from './title.js';
 import { escapeHtml, formatTimestamp, formatTokens, clampNumber, roomRemedy } from './util.js';
 
@@ -223,30 +224,17 @@ const STICK_THRESHOLD_PX = 48;
 let runTicker = null;
 
 /**
- * Token counts for the two streams, counted on their own schedule rather than
- * per repaint — see createStreamingCount for why.
- */
-const liveCount = createStreamingCount();
-const thinkCount = createStreamingCount();
-
-/**
  * The size line for text that is still arriving.
  *
- * Empty until the first real count lands, rather than falling back to a
- * character count in the meantime. Two different units alternating in the same
- * slot is worse than a slot that fills in a second late, and a number without a
- * unit beside a summary is read as tokens anyway — which for the first second it
- * would not be.
+ * An estimate, and marked as one: asking the tokenizer about text that grows
+ * with every chunk costs a request each time (estimateTokens). The summary's
+ * real count is beside it in the archive once it is saved.
  *
- * @param {number|null} tokens
  * @param {string} text
  * @returns {string}
  */
-function describeLiveSize(tokens, text) {
-    if (!text) {
-        return '';
-    }
-    return tokens === null ? '' : `${tokens.toLocaleString()} tokens`;
+function describeLiveSize(text) {
+    return text ? `~${estimateTokens(text).toLocaleString()} tokens` : '';
 }
 
 /**
@@ -462,8 +450,7 @@ function renderLivePane(run) {
     }
 
     if (size) {
-        liveCount.refresh(content);
-        size.textContent = describeLiveSize(liveCount.current, content);
+        size.textContent = describeLiveSize(content);
     }
 
     if (body) {
@@ -523,8 +510,7 @@ function renderThinking(run) {
             ? formatElapsed(thoughtUntil - run.startedAt)
             : null;
 
-        thinkCount.refresh(reasoning);
-        const size = describeLiveSize(thinkCount.current, reasoning);
+        const size = describeLiveSize(reasoning);
 
         summary.textContent = thoughtFor
             ? `Thought for ${thoughtFor}${size ? ` · ${size}` : ''}`
@@ -640,8 +626,6 @@ function formatElapsed(ms) {
 function onRunStateChanged(run) {
     if (run && runTicker === null) {
         runTicker = setInterval(renderRunState, 1000);
-        liveCount.reset();
-        thinkCount.reset();
 
         // Said as the run starts, because it is the explanation for whatever this
         // run produces — a summary cut short, or one that never gets written.
@@ -1004,6 +988,13 @@ async function measureRebuildEnd(which) {
     button?.classList.toggle('disabled', !!problem);
     if (problem) {
         line.textContent = problem;
+        return;
+    }
+
+    // Each digit typed is a different batch to count. Only the one left standing
+    // is, and the button already says whether it can be used.
+    await settle(TYPING_SETTLE_MS);
+    if (mine !== rebuildEndMeasures[which]) {
         return;
     }
 
@@ -1416,8 +1407,17 @@ async function openRebuildDialog(preset = {}) {
         estimateLine.textContent = 'Counting tokens…';
         guessLine.textContent = '';
 
-        const estimate = await estimateRebuild(plan);
+        // The plan line is immediate; the counting waits for the typing to stop,
+        // since every digit is a different plan and only the last is wanted.
+        await settle(TYPING_SETTLE_MS);
         if (mine !== generation) {
+            return;
+        }
+
+        // Abandoned as soon as the plan changes or the dialog closes, so it never
+        // goes on counting behind a newer plan, or behind the rebuild itself.
+        const estimate = await estimateRebuild(plan, { cancelled: () => mine !== generation });
+        if (!estimate || mine !== generation) {
             return;
         }
         const requests = `${estimate.batches} request${estimate.batches === 1 ? '' : 's'}`;
@@ -1463,6 +1463,8 @@ async function openRebuildDialog(preset = {}) {
     // gutter goes on the dialog.
     popup.dlg.classList.add('recall-rebuild-popup');
     const result = await popup.show();
+    // Closed either way: an estimate still counting has nobody left to tell.
+    generation++;
 
     if (result !== POPUP_RESULT.AFFIRMATIVE) {
         return;
